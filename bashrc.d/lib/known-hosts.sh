@@ -2,17 +2,23 @@
 
 # Host-Zuordnungscache fuer diese Shell.
 declare -A __kh_rows=()
+# Effektiver Benutzer fuer direkte known_hosts-Ziele ohne zugeordneten Alias.
+declare -A __kh_target_users=()
+# 1, wenn der Benutzer direkt in einem konkreten Host-Block der Benutzer-Config steht.
+declare -A __kh_target_user_explicit=()
 __kh_cache_id=''
 __kh_known_content=''
 
 __kh_cache_invalidate() {
     __kh_cache_id=''
     __kh_rows=()
+    __kh_target_users=()
+    __kh_target_user_explicit=()
 }
 
 __kh_refresh() {
     local known=$1 config=$2
-    local alias resolved field value host user port keyalias lookup hits n rc row_token
+    local alias resolved field value host user port keyalias lookup hits n rc row_token user_explicit
     local -A row_seen=()
 
     __kh_cache_invalidate
@@ -62,10 +68,71 @@ __kh_refresh() {
                 row_token="$n"$'\x1f'"$alias"$'\x1f'"$user"$'\x1f'"$lookup"
                 [[ -z ${row_seen["$row_token"]+x} ]] || continue
                 row_seen["$row_token"]=1
-                __kh_rows[$n]+="$alias"$'\t'"$user"$'\t'"$lookup"$'\n'
+                user_explicit=0
+                if [[ ${__kh_scan_alias_direct_user["$alias"]-} == "$user" ]]; then
+                    user_explicit=1
+                fi
+                __kh_rows[$n]+="$alias"$'\t'"$user"$'\t'"$lookup"$'\t'"$user_explicit"$'\n'
             fi
         done <<< "$hits"
     done
+
+    # Fuer known_hosts-Eintraege ohne explizite Alias-Zuordnung trotzdem den
+    # effektiven Benutzer aus der SSH-Konfiguration bestimmen. Dadurch greifen
+    # auch Host *-Defaults und Host-Wildcards. Der Zielhost wird dabei nicht als
+    # Alias ausgegeben.
+    local kh_line kh_line_number=0 first second raw_hosts raw_host effective_user
+    while IFS= read -r kh_line || [[ -n $kh_line ]]; do
+        ((kh_line_number+=1))
+        [[ $kh_line =~ ^[[:space:]]*(#|$) ]] && continue
+
+        read -r first second _ <<< "$kh_line"
+        if [[ $first == @* ]]; then
+            raw_hosts=$second
+        else
+            raw_hosts=$first
+        fi
+
+        [[ -n $raw_hosts ]] || continue
+        [[ -z ${__kh_rows[$kh_line_number]-} ]] || continue
+        [[ $raw_hosts != '|1|'* ]] || continue
+        [[ $raw_hosts != *','* &&
+           $raw_hosts != *'*'* &&
+           $raw_hosts != *'?'* &&
+           $raw_hosts != *'!'* ]] || continue
+        [[ -z ${__kh_target_users["$raw_hosts"]+x} ]] || continue
+
+        raw_host=$raw_hosts
+        if [[ $raw_hosts =~ ^\[([^]]+)\]:[0-9]+$ ]]; then
+            raw_host=${BASH_REMATCH[1]}
+        fi
+
+        resolved=''
+        if [[ $config == "$HOME/.ssh/config" ]]; then
+            resolved=$(command ssh -G -T "$raw_host" 2>/dev/null) || true
+        else
+            resolved=$(command ssh -G -T -F "$config" "$raw_host" 2>/dev/null) || true
+        fi
+
+        effective_user=''
+        while read -r field value; do
+            [[ $field == user ]] || continue
+            effective_user=$value
+            break
+        done <<< "$resolved"
+
+        __kh_target_users["$raw_hosts"]=${effective_user:--}
+        __kh_target_user_explicit["$raw_hosts"]=0
+
+        # Nicht markieren, wenn genau der effektive Benutzer explizit einem
+        # konkreten Host/Alias oder dessen literalem HostName zugeordnet ist.
+        # Ein User aus "Host *" oder Wildcard-Bloecken bleibt dagegen geerbt.
+        if [[ -n $effective_user &&
+              ( ${__kh_scan_alias_direct_user["$raw_host"]-} == "$effective_user" ||
+                ${__kh_scan_target_direct_user["$raw_host"]-} == "$effective_user" ) ]]; then
+            __kh_target_user_explicit["$raw_hosts"]=1
+        fi
+    done < "$known"
 
     __kh_cache_id="$known|$config"
     __kh_known_content=$(< "$known")
@@ -89,13 +156,13 @@ ssh_known_hosts() {
 
     local line line_number=0 first second third fourth remainder
     local marker hosts key_type key display_hosts target
-    local rows alias user lookup search filter_lc
+    local rows alias user lookup user_explicit search filter_lc
     local group_key seen_token gid group_count=0 i
     local sep=$'\x1f'
     local found=0
 
     local -A group_id=() key_seen=() line_seen=()
-    local -a agg_alias=() agg_target=() agg_user=() agg_lines=() agg_keys=()
+    local -a agg_alias=() agg_target=() agg_user=() agg_user_explicit=() agg_lines=() agg_keys=()
     local -a selected_ids=()
 
     local w_line=5 w_target=4 w_alias=5 w_host=5 w_user=8
@@ -156,7 +223,7 @@ ssh_known_hosts() {
         rows=${__kh_rows[$line_number]-}
 
         if [[ -n $rows ]]; then
-            while IFS=$'\t' read -r alias user lookup; do
+            while IFS=$'\t' read -r alias user lookup user_explicit; do
                 [[ -n $alias ]] || continue
 
                 target=$lookup
@@ -170,6 +237,7 @@ ssh_known_hosts() {
                     agg_alias[$gid]=$alias
                     agg_target[$gid]=$target
                     agg_user[$gid]=$user
+                    agg_user_explicit[$gid]=${user_explicit:-0}
                     agg_lines[$gid]=''
                     agg_keys[$gid]=''
                 else
@@ -198,7 +266,8 @@ ssh_known_hosts() {
             done <<< "$rows"
         else
             alias='-'
-            user='-'
+            user=${__kh_target_users["$hosts"]:--}
+            user_explicit=${__kh_target_user_explicit["$hosts"]:-0}
             target=$display_hosts
             group_key="U$sep$marker$sep$hosts"
 
@@ -209,6 +278,7 @@ ssh_known_hosts() {
                 agg_alias[$gid]=$alias
                 agg_target[$gid]=$target
                 agg_user[$gid]=$user
+                agg_user_explicit[$gid]=${user_explicit:-0}
                 agg_lines[$gid]=''
                 agg_keys[$gid]=''
             else
@@ -272,12 +342,18 @@ ssh_known_hosts() {
     fi
 
     for gid in "${selected_ids[@]}"; do
-        printf '%-*s  \e[36m%-*s  %-*s\e[0m  %-*s  \e[33m%s\e[0m\n' \
+        printf '%-*s  \e[36m%-*s  %-*s\e[0m  ' \
             "$w_line" "${agg_lines[$gid]}" \
             "$w_host" "${agg_target[$gid]}" \
-            "$w_host" "${agg_alias[$gid]}" \
-            "$w_user" "${agg_user[$gid]}" \
-            "${agg_keys[$gid]}"
+            "$w_host" "${agg_alias[$gid]}"
+
+        if [[ ${agg_user[$gid]} != '-' && ${agg_user_explicit[$gid]:-0} != 1 ]]; then
+            printf '\e[35m%-*s\e[0m' "$w_user" "${agg_user[$gid]}"
+        else
+            printf '%-*s' "$w_user" "${agg_user[$gid]}"
+        fi
+
+        printf '  \e[33m%s\e[0m\n' "${agg_keys[$gid]}"
     done
 
     return 0
