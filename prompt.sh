@@ -5,6 +5,72 @@
 
 : "${SSH_PROMPT_SHOW_COMMAND:=1}"
 
+# Einheitliches Datumsformat fuer GNU ls im Langformat (ls -l, ll usw.).
+export TIME_STYLE='+%Y-%m-%d %H:%M:%S'
+
+# Kompakte, farblich getrennte Langansicht ohne Gruppenspalte.
+unalias ll 2>/dev/null
+ll() {
+    local current_user=${USER:-$(id -un)}
+    current_user=${current_user%%@*}
+
+    command ls \
+        -oah \
+        --color=always \
+        --group-directories-first \
+        --time-style='+%Y-%m-%d %H:%M:%S' \
+        "$@" |
+    awk -v current_user="$current_user" '
+        BEGIN {
+            reset  = "\033[0m"
+            dim    = "\033[2m"
+            cyan   = "\033[36m"
+            magenta = "\033[35m"
+            red    = "\033[31m"
+            blue   = "\033[34m"
+            yellow = "\033[33m"
+
+            printf "%s%-11s %-4s %-20s %10s %-19s %s%s\n",
+                dim,
+                "RECHTE",
+                "LINK",
+                "BENUTZER",
+                "GRÖSSE",
+                "GEÄNDERT",
+                "NAME",
+                reset
+        }
+
+        /^total / || /^insgesamt / { next }
+
+        {
+            user = $3
+            sub(/@.*/, "", user)
+
+            if (user == "root") {
+                user_color = red
+            } else if (user == current_user) {
+                user_color = cyan
+            } else {
+                user_color = magenta
+            }
+
+            name = $7
+            for (i = 8; i <= NF; i++) {
+                name = name " " $i
+            }
+
+            printf "%s%-11s%s %-4s %s%-20s%s %s%10s%s %s%-10s %-8s%s %s\n",
+                dim,    $1, reset,
+                        $2,
+                user_color, user, reset,
+                yellow, $4, reset,
+                blue,   $5, $6, reset,
+                        name
+        }
+    '
+}
+
 # Genau zwei eigene Begruessungszeilen statt MOTD und "Last login".
 # Die exportierte Markierung verhindert Wiederholungen in Subshells.
 if [[ -n ${SSH_CONNECTION-} && -z ${SSHP_WELCOME_SHOWN-} ]]; then
