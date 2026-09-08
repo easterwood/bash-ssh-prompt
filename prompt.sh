@@ -11,9 +11,9 @@ if [[ -n ${SSH_CONNECTION-} && -z ${SSHP_WELCOME_SHOWN-} ]]; then
     read -r _ _ __ssh_server_address _ <<< "$SSH_CONNECTION"
     __ssh_remote_host=$(hostname -f 2>/dev/null || hostname 2>/dev/null || printf '?')
 
-    printf '\e[1;36mWELCOME\e[0m %s\n' "${USER:-$(id -un)}"
-    printf '\e[1;33mREMOTE \e[0m %s · %s\n' \
-        "$__ssh_remote_host" "${__ssh_server_address:-?}"
+    printf '\e[1;36m╭─ REMOTE\e[0m  %s\n' "$__ssh_remote_host"
+    printf '\e[1;36m╰─ USER  \e[0m  %s · IP %s\n' \
+        "${USER:-$(id -un)}" "${__ssh_server_address:-?}"
 
     export SSHP_WELCOME_SHOWN=1
     unset __ssh_server_address __ssh_remote_host
@@ -118,7 +118,7 @@ __ssh_prompt_build() {
     fi
 
     if [[ -n ${SSH_CONNECTION-} ]]; then
-        first_line='\[\e[36m\]\u@\h \[\e[0m\]'
+        first_line='\[\e[1;36m\][SSH \h]\[\e[0m\] '
     else
         first_line=''
     fi
