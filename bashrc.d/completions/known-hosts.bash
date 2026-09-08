@@ -3,16 +3,45 @@
 _ssh_known_hosts_completion() {
     local known_hosts_file=${SSH_KNOWN_HOSTS_FILE:-$HOME/.ssh/known_hosts}
     local config=${SSH_CONFIG_FILE:-$HOME/.ssh/config}
-    local cur word
-    local -a words=(--refresh --fingerprints)
+    local cur word i have_filter=0 have_fingerprints=0
+    local -a options=(--lines --zeilen --refresh --fingerprints --help)
+    local -a words=()
 
     COMPREPLY=()
-    (( COMP_CWORD == 1 )) || return 0
+    cur=${COMP_WORDS[COMP_CWORD]}
+
+    for ((i=1; i<COMP_CWORD; i++)); do
+        case ${COMP_WORDS[i]} in
+            --fingerprints)
+                have_fingerprints=1
+                ;;
+            --lines|--zeilen|--refresh|--help|-h|--)
+                ;;
+            -*)
+                ;;
+            *)
+                have_filter=1
+                ;;
+        esac
+    done
+
+    (( have_fingerprints == 0 )) || return 0
+
+    # Optionen duerfen vor oder nach dem Filter stehen.
+    if [[ $cur == -* ]]; then
+        for word in "${options[@]}"; do
+            [[ $word == "$cur"* ]] || continue
+            COMPREPLY+=("$word")
+        done
+        return 0
+    fi
+
+    # Es ist nur ein freier FILTER erlaubt.
+    (( have_filter == 0 )) || return 0
 
     __ssh_completion_cache_ensure "$known_hosts_file" "$config" || return 0
     words+=("${__ssh_completion_filter_hosts[@]}")
 
-    cur=${COMP_WORDS[COMP_CWORD]}
     for word in "${words[@]}"; do
         [[ $word == "$cur"* ]] || continue
         COMPREPLY+=("$word")

@@ -14,6 +14,7 @@ __kh_cache_invalidate() {
     __kh_rows=()
     __kh_target_users=()
     __kh_target_user_explicit=()
+    declare -F __kh_groups_reset >/dev/null && __kh_groups_reset
 }
 
 __kh_refresh() {
@@ -147,48 +148,37 @@ __kh_cache_ensure() {
     fi
 }
 
-# Pro Alias/Ziel/Benutzer wird genau eine Zeile ausgegeben.
-# Mehrere known_hosts-Zeilen und Schluesseltypen werden zusammengefasst.
-ssh_known_hosts() {
-    local known_hosts_file=${SSH_KNOWN_HOSTS_FILE:-$HOME/.ssh/known_hosts}
-    local config=${SSH_CONFIG_FILE:-$HOME/.ssh/config}
-    local filter=${1-}
+# Gemeinsames, aggregiertes Modell fuer Anzeige und Login per Zielnummer.
+declare -a __kh_group_alias=()
+declare -a __kh_group_target=()
+declare -a __kh_group_user=()
+declare -a __kh_group_user_explicit=()
+declare -a __kh_group_lines=()
+declare -a __kh_group_keys=()
+__kh_group_count=0
 
+__kh_groups_reset() {
+    __kh_group_alias=()
+    __kh_group_target=()
+    __kh_group_user=()
+    __kh_group_user_explicit=()
+    __kh_group_lines=()
+    __kh_group_keys=()
+    __kh_group_count=0
+}
+
+# Baut genau dieselben Gruppen auf, die known-hosts anzeigt. Die Gruppenreihenfolge
+# definiert zugleich die stabile Zielnummer innerhalb des aktuellen Dateistands.
+__kh_groups_build() {
+    local known_hosts_file=$1 config=$2
     local line line_number=0 first second third fourth remainder
     local marker hosts key_type key display_hosts target
-    local rows alias user lookup user_explicit search filter_lc
-    local group_key seen_token gid group_count=0 i
+    local rows alias user lookup user_explicit
+    local group_key seen_token gid
     local sep=$'\x1f'
-    local found=0
-
     local -A group_id=() key_seen=() line_seen=()
-    local -a agg_alias=() agg_target=() agg_user=() agg_user_explicit=() agg_lines=() agg_keys=()
-    local -a selected_ids=()
 
-    local w_line=5 w_target=4 w_alias=5 w_host=5 w_user=8
-
-    if (( $# > 1 )); then
-        printf 'Aufruf: known-hosts [FILTER | --refresh | --fingerprints]\n' >&2
-        return 2
-    fi
-
-    [[ -r $known_hosts_file ]] || {
-        printf 'known-hosts: %s fehlt oder ist nicht lesbar.\n' "$known_hosts_file" >&2
-        return 1
-    }
-
-    if [[ $filter == --fingerprints ]]; then
-        ssh-keygen -l -E sha256 -f "$known_hosts_file"
-        return $?
-    fi
-
-    if [[ $filter == --refresh ]]; then
-        __kh_cache_invalidate
-        __ssh_completion_cache_invalidate
-        declare -F __ssh_resolve_ips_cache_invalidate >/dev/null && __ssh_resolve_ips_cache_invalidate
-        filter=''
-    fi
-
+    __kh_groups_reset
     __kh_cache_ensure "$known_hosts_file" "$config" || return
 
     while IFS= read -r line || [[ -n $line ]]; do
@@ -231,15 +221,15 @@ ssh_known_hosts() {
 
                 group_key="A$sep$alias$sep$target$sep$user"
                 if [[ -z ${group_id["$group_key"]+x} ]]; then
-                    gid=$group_count
-                    ((group_count+=1))
+                    gid=$__kh_group_count
+                    ((__kh_group_count+=1))
                     group_id["$group_key"]=$gid
-                    agg_alias[$gid]=$alias
-                    agg_target[$gid]=$target
-                    agg_user[$gid]=$user
-                    agg_user_explicit[$gid]=${user_explicit:-0}
-                    agg_lines[$gid]=''
-                    agg_keys[$gid]=''
+                    __kh_group_alias[$gid]=$alias
+                    __kh_group_target[$gid]=$target
+                    __kh_group_user[$gid]=$user
+                    __kh_group_user_explicit[$gid]=${user_explicit:-0}
+                    __kh_group_lines[$gid]=''
+                    __kh_group_keys[$gid]=''
                 else
                     gid=${group_id["$group_key"]}
                 fi
@@ -247,20 +237,20 @@ ssh_known_hosts() {
                 seen_token="$gid$sep$line_number"
                 if [[ -z ${line_seen["$seen_token"]+x} ]]; then
                     line_seen["$seen_token"]=1
-                    if [[ -n ${agg_lines[$gid]} ]]; then
-                        agg_lines[$gid]+=",$line_number"
+                    if [[ -n ${__kh_group_lines[$gid]} ]]; then
+                        __kh_group_lines[$gid]+=",$line_number"
                     else
-                        agg_lines[$gid]=$line_number
+                        __kh_group_lines[$gid]=$line_number
                     fi
                 fi
 
                 seen_token="$gid$sep$key_type"
                 if [[ -z ${key_seen["$seen_token"]+x} ]]; then
                     key_seen["$seen_token"]=1
-                    if [[ -n ${agg_keys[$gid]} ]]; then
-                        agg_keys[$gid]+=", $key_type"
+                    if [[ -n ${__kh_group_keys[$gid]} ]]; then
+                        __kh_group_keys[$gid]+=", $key_type"
                     else
-                        agg_keys[$gid]=$key_type
+                        __kh_group_keys[$gid]=$key_type
                     fi
                 fi
             done <<< "$rows"
@@ -272,15 +262,15 @@ ssh_known_hosts() {
             group_key="U$sep$marker$sep$hosts"
 
             if [[ -z ${group_id["$group_key"]+x} ]]; then
-                gid=$group_count
-                ((group_count+=1))
+                gid=$__kh_group_count
+                ((__kh_group_count+=1))
                 group_id["$group_key"]=$gid
-                agg_alias[$gid]=$alias
-                agg_target[$gid]=$target
-                agg_user[$gid]=$user
-                agg_user_explicit[$gid]=${user_explicit:-0}
-                agg_lines[$gid]=''
-                agg_keys[$gid]=''
+                __kh_group_alias[$gid]=$alias
+                __kh_group_target[$gid]=$target
+                __kh_group_user[$gid]=$user
+                __kh_group_user_explicit[$gid]=${user_explicit:-0}
+                __kh_group_lines[$gid]=''
+                __kh_group_keys[$gid]=''
             else
                 gid=${group_id["$group_key"]}
             fi
@@ -288,49 +278,150 @@ ssh_known_hosts() {
             seen_token="$gid$sep$line_number"
             if [[ -z ${line_seen["$seen_token"]+x} ]]; then
                 line_seen["$seen_token"]=1
-                if [[ -n ${agg_lines[$gid]} ]]; then
-                    agg_lines[$gid]+=",$line_number"
+                if [[ -n ${__kh_group_lines[$gid]} ]]; then
+                    __kh_group_lines[$gid]+=",$line_number"
                 else
-                    agg_lines[$gid]=$line_number
+                    __kh_group_lines[$gid]=$line_number
                 fi
             fi
 
             seen_token="$gid$sep$key_type"
             if [[ -z ${key_seen["$seen_token"]+x} ]]; then
                 key_seen["$seen_token"]=1
-                if [[ -n ${agg_keys[$gid]} ]]; then
-                    agg_keys[$gid]+=", $key_type"
+                if [[ -n ${__kh_group_keys[$gid]} ]]; then
+                    __kh_group_keys[$gid]+=", $key_type"
                 else
-                    agg_keys[$gid]=$key_type
+                    __kh_group_keys[$gid]=$key_type
                 fi
             fi
         fi
     done < "$known_hosts_file"
+}
 
+# Pro Alias/Ziel/Benutzer wird genau eine Zeile ausgegeben.
+# Mehrere known_hosts-Zeilen und Schluesseltypen werden zusammengefasst.
+# NR ist die eindeutige Zielnummer fuer ssh-nr.
+ssh_known_hosts() {
+    local known_hosts_file=${SSH_KNOWN_HOSTS_FILE:-$HOME/.ssh/known_hosts}
+    local config=${SSH_CONFIG_FILE:-$HOME/.ssh/config}
+    local filter=''
+    local show_lines=0 refresh=0 fingerprints=0
+    local arg search filter_lc gid nr found=0
+    local -a selected_ids=()
+    local w_nr=2 w_line=5 w_target=4 w_alias=5 w_host=5 w_user=8
+
+    while (( $# )); do
+        arg=$1
+        shift
+
+        case $arg in
+            --lines|--zeilen)
+                show_lines=1
+                ;;
+            --refresh)
+                refresh=1
+                ;;
+            --fingerprints)
+                fingerprints=1
+                ;;
+            --help|-h)
+                printf 'Aufruf: known-hosts [--lines] [--refresh] [FILTER]\n'
+                printf '        known-hosts --fingerprints\n'
+                printf '\n'
+                printf '  --lines, --zeilen  known_hosts-Zeilennummern einblenden\n'
+                printf '  --refresh          Cache verwerfen und Daten neu einlesen\n'
+                printf '  --fingerprints     Original-Fingerprints mit ssh-keygen anzeigen\n'
+                return 0
+                ;;
+            --)
+                if (( $# > 1 )); then
+                    printf 'known-hosts: Es ist nur ein FILTER erlaubt.\n' >&2
+                    return 2
+                fi
+                if (( $# == 1 )); then
+                    [[ -z $filter ]] || {
+                        printf 'known-hosts: Es ist nur ein FILTER erlaubt.\n' >&2
+                        return 2
+                    }
+                    filter=$1
+                    shift
+                fi
+                ;;
+            -*)
+                printf 'known-hosts: unbekannte Option: %s\n' "$arg" >&2
+                printf 'Aufruf: known-hosts [--lines] [--refresh] [FILTER]\n' >&2
+                return 2
+                ;;
+            *)
+                if [[ -n $filter ]]; then
+                    printf 'known-hosts: Es ist nur ein FILTER erlaubt.\n' >&2
+                    return 2
+                fi
+                filter=$arg
+                ;;
+        esac
+    done
+
+    [[ -r $known_hosts_file ]] || {
+        printf 'known-hosts: %s fehlt oder ist nicht lesbar.\n' "$known_hosts_file" >&2
+        return 1
+    }
+
+    if (( fingerprints )); then
+        if (( show_lines || refresh )) || [[ -n $filter ]]; then
+            printf 'known-hosts: --fingerprints kann nicht mit FILTER, --lines oder --refresh kombiniert werden.\n' >&2
+            return 2
+        fi
+        ssh-keygen -l -E sha256 -f "$known_hosts_file"
+        return $?
+    fi
+
+    if (( refresh )); then
+        __kh_cache_invalidate
+        __kh_groups_reset
+        __ssh_completion_cache_invalidate
+        declare -F __ssh_resolve_ips_cache_invalidate >/dev/null && __ssh_resolve_ips_cache_invalidate
+    fi
+
+    __kh_groups_build "$known_hosts_file" "$config" || return
     filter_lc=${filter,,}
 
-    for ((i=0; i<group_count; i++)); do
-        search="${agg_alias[$i]} ${agg_target[$i]} ${agg_user[$i]} ${agg_keys[$i]} ${agg_lines[$i]}"
+    for ((gid=0; gid<__kh_group_count; gid++)); do
+        nr=$((gid + 1))
+        search="$nr ${__kh_group_alias[$gid]} ${__kh_group_target[$gid]} ${__kh_group_user[$gid]} ${__kh_group_keys[$gid]} ${__kh_group_lines[$gid]}"
         [[ -z $filter || ${search,,} == *"$filter_lc"* ]] || continue
 
-        selected_ids+=("$i")
+        selected_ids+=("$gid")
         found=1
 
-        ((${#agg_lines[$i]}  > w_line))   && w_line=${#agg_lines[$i]}
-        ((${#agg_alias[$i]}  > w_alias))  && w_alias=${#agg_alias[$i]}
-        ((${#agg_target[$i]} > w_target)) && w_target=${#agg_target[$i]}
-        ((${#agg_user[$i]}   > w_user))   && w_user=${#agg_user[$i]}
+        ((${#nr} > w_nr)) && w_nr=${#nr}
+        if (( show_lines )); then
+            ((${#__kh_group_lines[$gid]} > w_line)) && w_line=${#__kh_group_lines[$gid]}
+        fi
+        ((${#__kh_group_alias[$gid]}  > w_alias))  && w_alias=${#__kh_group_alias[$gid]}
+        ((${#__kh_group_target[$gid]} > w_target)) && w_target=${#__kh_group_target[$gid]}
+        ((${#__kh_group_user[$gid]}   > w_user))   && w_user=${#__kh_group_user[$gid]}
     done
 
     w_host=$w_target
     ((w_alias > w_host)) && w_host=$w_alias
 
-    printf '\e[2m%-*s  %-*s  %-*s  %-*s  %s\e[0m\n' \
-        "$w_line" 'ZEILE' \
-        "$w_host" 'ZIEL' \
-        "$w_host" 'ALIAS' \
-        "$w_user" 'BENUTZER' \
-        'SCHLÜSSEL'
+    if (( show_lines )); then
+        printf '\e[2m%-*s  %-*s  %-*s  %-*s  %-*s  %s\e[0m\n' \
+            "$w_nr" 'NR' \
+            "$w_line" 'ZEILE' \
+            "$w_host" 'ZIEL' \
+            "$w_host" 'ALIAS' \
+            "$w_user" 'BENUTZER' \
+            'SCHLÜSSEL'
+    else
+        printf '\e[2m%-*s  %-*s  %-*s  %-*s  %s\e[0m\n' \
+            "$w_nr" 'NR' \
+            "$w_host" 'ZIEL' \
+            "$w_host" 'ALIAS' \
+            "$w_user" 'BENUTZER' \
+            'SCHLÜSSEL'
+    fi
 
     if (( ! found )); then
         if [[ -n $filter ]]; then
@@ -342,18 +433,28 @@ ssh_known_hosts() {
     fi
 
     for gid in "${selected_ids[@]}"; do
-        printf '%-*s  \e[36m%-*s  %-*s\e[0m  ' \
-            "$w_line" "${agg_lines[$gid]}" \
-            "$w_host" "${agg_target[$gid]}" \
-            "$w_host" "${agg_alias[$gid]}"
+        nr=$((gid + 1))
 
-        if [[ ${agg_user[$gid]} != '-' && ${agg_user_explicit[$gid]:-0} != 1 ]]; then
-            printf '\e[35m%-*s\e[0m' "$w_user" "${agg_user[$gid]}"
+        if (( show_lines )); then
+            printf '%-*s  %-*s  \e[36m%-*s  %-*s\e[0m  ' \
+                "$w_nr" "$nr" \
+                "$w_line" "${__kh_group_lines[$gid]}" \
+                "$w_host" "${__kh_group_target[$gid]}" \
+                "$w_host" "${__kh_group_alias[$gid]}"
         else
-            printf '%-*s' "$w_user" "${agg_user[$gid]}"
+            printf '%-*s  \e[36m%-*s  %-*s\e[0m  ' \
+                "$w_nr" "$nr" \
+                "$w_host" "${__kh_group_target[$gid]}" \
+                "$w_host" "${__kh_group_alias[$gid]}"
         fi
 
-        printf '  \e[33m%s\e[0m\n' "${agg_keys[$gid]}"
+        if [[ ${__kh_group_user[$gid]} != '-' && ${__kh_group_user_explicit[$gid]:-0} != 1 ]]; then
+            printf '\e[35m%-*s\e[0m' "$w_user" "${__kh_group_user[$gid]}"
+        else
+            printf '%-*s' "$w_user" "${__kh_group_user[$gid]}"
+        fi
+
+        printf '  \e[33m%s\e[0m\n' "${__kh_group_keys[$gid]}"
     done
 
     return 0
