@@ -5,6 +5,7 @@
 # known_hosts change.
 declare -a __ssh_completion_filter_hosts=()
 declare -a __ssh_completion_connect_hosts=()
+declare -a __ssh_completion_connect_targets=()
 declare -a __ssh_completion_config_files=()
 declare -a __ssh_completion_include_patterns=()
 declare -A __ssh_completion_config_content=()
@@ -12,6 +13,8 @@ declare -A __ssh_completion_config_readable=()
 declare -A __ssh_completion_include_matches=()
 declare -A __ssh_completion_filter_seen=()
 declare -A __ssh_completion_connect_seen=()
+declare -A __ssh_completion_target_seen=()
+declare -A __ssh_completion_user_host=()
 __ssh_completion_cache_id=''
 __ssh_completion_known_content=''
 __ssh_completion_known_readable=0
@@ -20,8 +23,11 @@ __ssh_completion_cache_invalidate() {
     __ssh_completion_cache_id=''
     __ssh_completion_filter_hosts=()
     __ssh_completion_connect_hosts=()
+    __ssh_completion_connect_targets=()
     __ssh_completion_filter_seen=()
     __ssh_completion_connect_seen=()
+    __ssh_completion_target_seen=()
+    __ssh_completion_user_host=()
 }
 
 __ssh_completion_cache_valid() {
@@ -76,9 +82,44 @@ __ssh_completion_add_connect_host() {
     __ssh_completion_connect_hosts+=("$host")
 }
 
+__ssh_completion_add_user_host() {
+    local user=$1 host=$2 key target
+
+    [[ -n $user && -n $host ]] || return 0
+
+    key="$user"$'\x1f'"$host"
+    __ssh_completion_user_host["$key"]=1
+
+    target="$user@$host"
+    [[ -z ${__ssh_completion_target_seen["$target"]+x} ]] || return 0
+    __ssh_completion_target_seen["$target"]=1
+    __ssh_completion_connect_targets+=("$target")
+}
+
+# Resolve the effective SSH user for a concrete config alias. ssh -G does not
+# open a connection, but configured Match exec rules may be evaluated.
+__ssh_completion_resolve_user() {
+    local config=$1 alias=$2 resolved field value
+
+    if [[ $config == "$HOME/.ssh/config" ]]; then
+        resolved=$(command ssh -G -T "$alias" 2>/dev/null) || return 1
+    else
+        resolved=$(command ssh -G -T -F "$config" "$alias" 2>/dev/null) || return 1
+    fi
+
+    while read -r field value; do
+        if [[ $field == user && -n $value ]]; then
+            printf '%s\n' "$value"
+            return 0
+        fi
+    done <<< "$resolved"
+
+    return 1
+}
+
 __ssh_completion_refresh() {
     local known=$1 config=$2
-    local line first second hosts host file pattern current
+    local line first second hosts host file pattern current user
     local -a host_list=() watched_files=()
     local -A watched_seen=()
 
@@ -91,10 +132,15 @@ __ssh_completion_refresh() {
 
     __kh_scan_configs "$config" 1
 
-    # Explicit config aliases are always valid connection targets.
+    # Explicit config aliases are always valid connection targets. Resolve the
+    # effective User once per cache refresh so ssh/sshp can also complete from
+    # a user-name prefix, for example "ssh oster<TAB>" -> "osterwald@host".
     for host in "${__kh_scan_aliases[@]}"; do
         __ssh_completion_add_filter_host "$host"
         __ssh_completion_add_connect_host "$host"
+
+        user=$(__ssh_completion_resolve_user "$config" "$host" || true)
+        [[ -z $user ]] || __ssh_completion_add_user_host "$user" "$host"
     done
 
     # known_hosts is useful for filtering. For ssh/sshp only plain hostnames

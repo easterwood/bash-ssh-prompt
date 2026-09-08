@@ -148,7 +148,9 @@ __ssh_completion_file_argument() {
 _ssh_tools_ssh_completion() {
     local known_hosts_file=${SSH_KNOWN_HOSTS_FILE:-$HOME/.ssh/known_hosts}
     local config=${SSH_CONFIG_FILE:-$HOME/.ssh/config}
-    local cur host user_prefix host_part reply_prefix
+    local cur host target user_prefix host_part reply_prefix key
+    local have_user_match=0
+    local sep=$'\x1f'
 
     COMPREPLY=()
 
@@ -166,29 +168,57 @@ _ssh_tools_ssh_completion() {
     __ssh_completion_cache_ensure "$known_hosts_file" "$config" || return 0
 
     cur=${__ssh_completion_line_words[__ssh_completion_line_cword]-}
-    host_part=$cur
-    reply_prefix=''
 
-    if [[ $cur == *@* ]]; then
-        user_prefix=${cur%@*}
-        host_part=${cur##*@}
+    if [[ $cur != *@* ]]; then
+        # Normal host completion plus resolved user@alias targets. This allows
+        # completion to start from either side, for example:
+        #   ssh test<TAB>
+        #   ssh oster<TAB>  -> osterwald@test-alias
+        for host in "${__ssh_completion_connect_hosts[@]}"; do
+            [[ $host == "$cur"* ]] || continue
+            COMPREPLY+=("$host")
+        done
 
-        if [[ $COMP_WORDBREAKS == *@* ]]; then
-            # With '@' as a Bash word break, Readline replaces the text from
-            # '@' onward. Returning '@host' preserves the separator and leaves
-            # the already typed user name untouched.
-            reply_prefix='@'
-        else
-            # Respect a user's custom COMP_WORDBREAKS without changing it.
-            # In this case Readline replaces the complete user@host argument.
-            reply_prefix="$user_prefix@"
-        fi
+        for target in "${__ssh_completion_connect_targets[@]}"; do
+            [[ $target == "$cur"* ]] || continue
+            COMPREPLY+=("$target")
+        done
+
+        return 0
     fi
 
+    user_prefix=${cur%@*}
+    host_part=${cur##*@}
+
+    if [[ $COMP_WORDBREAKS == *@* ]]; then
+        # With '@' as a Bash word break, Readline replaces the text from '@'
+        # onward. Returning '@host' preserves the separator and leaves the
+        # already typed user name untouched.
+        reply_prefix='@'
+    else
+        # Respect a user's custom COMP_WORDBREAKS without changing it. In this
+        # case Readline replaces the complete user@host argument.
+        reply_prefix="$user_prefix@"
+    fi
+
+    # If the typed user is known from the SSH config, prefer aliases that
+    # resolve to that user. This makes "user@<TAB>" useful as a user-based
+    # lookup. If there is no matching configured alias, fall back to all hosts
+    # so an explicit user override still works.
     for host in "${__ssh_completion_connect_hosts[@]}"; do
         [[ $host == "$host_part"* ]] || continue
+        key="$user_prefix$sep$host"
+        [[ -n ${__ssh_completion_user_host["$key"]+x} ]] || continue
         COMPREPLY+=("$reply_prefix$host")
+        have_user_match=1
     done
+
+    if (( ! have_user_match )); then
+        for host in "${__ssh_completion_connect_hosts[@]}"; do
+            [[ $host == "$host_part"* ]] || continue
+            COMPREPLY+=("$reply_prefix$host")
+        done
+    fi
 
     return 0
 }
