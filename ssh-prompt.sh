@@ -3,14 +3,22 @@
 # Synchronisiert prompt.sh, installiert einen Loader in der entfernten .bashrc
 # und startet danach eine normale SSH-Sitzung (keine zusaetzliche Login-Bash).
 sshp() (
+    local force=0
+    if [[ ${1-} == --force ]]; then
+        force=1
+        shift
+    fi
+
     if (( $# != 1 )) || [[ -z ${1-} || ${1-} == -* ]]; then
-        printf 'Aufruf: sshp user@host oder sshp SSH-Config-Alias\n' >&2
+        printf 'Aufruf: sshp [--force] user@host oder SSH-Config-Alias\n' >&2
         return 2
     fi
 
     local target=$1
     local prompt_file="$HOME/.config/bash/ssh-prompt/prompt.sh"
-    local archive remote_script
+    local state_dir="$HOME/.cache/sshp"
+    local archive remote_script signature saved_signature
+    local target_crc target_size state_file temporary_state
 
     [[ -r $prompt_file ]] || {
         printf 'sshp: %s fehlt oder ist nicht lesbar.\n' "$prompt_file" >&2
@@ -21,6 +29,37 @@ sshp() (
         printf 'sshp: prompt.sh enthaelt einen Syntaxfehler.\n' >&2
         return 1
     }
+
+    command -v cksum >/dev/null 2>&1 || {
+        printf 'sshp: cksum fehlt auf dem lokalen System.\n' >&2
+        return 1
+    }
+
+    # Der Formatwert erzwingt bei kuenftigen Aenderungen am Remote-Loader
+    # einmalig eine erneute Installation.
+    signature=$(
+        {
+            printf '%s\n' 'sshp-sync-format=2'
+            cksum "$prompt_file"
+        } | cksum
+    ) || return 1
+
+    read -r target_crc target_size <<EOF
+$(printf '%s' "$target" | cksum)
+EOF
+    state_file="$state_dir/${target_crc}_${target_size}.state"
+
+    if [[ -r $state_file ]]; then
+        IFS= read -r saved_signature < "$state_file"
+    else
+        saved_signature=''
+    fi
+
+    # Keine lokale Aenderung: Die erste Verbindung ist direkt die Sitzung.
+    if (( ! force )) && [[ $saved_signature == "$signature" ]]; then
+        command ssh "$target"
+        return
+    fi
 
     archive=$(mktemp -t sshp-prompt.XXXXXX.tgz) || return 1
     trap 'rm -f -- "$archive"' EXIT
@@ -87,6 +126,13 @@ REMOTE
         printf 'sshp: Synchronisierung oder .bashrc-Aktualisierung fehlgeschlagen.\n' >&2
         return 1
     fi
+
+    # Den neuen Stand erst nach einer vollstaendig erfolgreichen
+    # Synchronisierung vermerken.
+    mkdir -p "$state_dir" || return 1
+    temporary_state=$(mktemp "$state_dir/.state.XXXXXX") || return 1
+    printf '%s\n' "$signature" > "$temporary_state" || return 1
+    mv -f "$temporary_state" "$state_file" || return 1
 
     # Verbindung 2: normale interaktive SSH-Sitzung.
     command ssh "$target"
