@@ -2,3 +2,4 @@ local.sh
 *.bak
 *.backup
 .idea
+*.iml
