@@ -36,8 +36,13 @@ sofort die einzelne interaktive Verbindung.
 ```bash
 known-hosts
 known-hosts gateway
+known-hosts --fingerprints
 ```
 
-Die Ausgabe enthält Ziel, Schlüsseltyp und SHA256-Fingerabdruck. Bei durch
+Die Standardausgabe enthält Zeile, Ziel und Schlüsseltyp und benötigt keine
+externen Prozesse. Der Teilstringfilter ignoriert Gross-/Kleinschreibung.
+`--fingerprints` zeigt alle Fingerabdrücke in der originalen OpenSSH-Ausgabe
+mit genau einem `ssh-keygen`-Aufruf. Diese Option ist nicht mit dem Filter
+kombinierbar. Bei durch
 `HashKnownHosts` geschützten Einträgen kann der ursprüngliche Hostname nicht
 rekonstruiert werden; solche Zeilen werden als gehasht markiert.

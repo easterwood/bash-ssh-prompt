@@ -152,6 +152,16 @@ Ergebnis: bestanden.
 
 ### 9. `known-hosts`-Übersicht
 
+Aktualisierung: Die Standardansicht und der Filter starten jetzt keinen
+`ssh-keygen`-Prozess mehr. `--fingerprints` startet genau einen Aufruf für die
+gesamte Datei und liefert die originale OpenSSH-Ausgabe.
+
+Reproduzierbarer Regressionstest: `bash tests/known-hosts.sh` (bestanden).
+Das Test-Doppel zählt Aufrufe und prüft Argumente; synthetische Parserdaten
+prüfen Filter, Marker und Hashanzeige. Es ist kein kryptografischer Test und
+keine Laufzeitmessung unter Git Bash. Die folgenden Prüfungen beschreiben
+zusätzlich den früheren Stand mit echten Testschlüsseln.
+
 Die `known-hosts`-Funktion wurde mit Klartext-, Port-, Marker- und gehashten
 Testeinträgen geprüft. Klartextziele können gefiltert werden; gehashte Hostnamen
 werden nicht fälschlich als lesbarer Zielname dargestellt. Schlüsseltyp und

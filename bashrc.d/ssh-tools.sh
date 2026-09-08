@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 
-# Zeigt bekannte SSH-Ziele mit Schlüsseltyp und Fingerabdruck an.
+# Standardansicht ohne externe Prozesse; Fingerabdruecke optional gesammelt.
 ssh_known_hosts() {
     local known_hosts_file=${SSH_KNOWN_HOSTS_FILE:-$HOME/.ssh/known_hosts}
     local filter=${1-}
     local line line_number=0 first second third fourth remainder
-    local marker hosts key_type key display_hosts fingerprint bits rest
+    local marker hosts key_type key display_hosts
     local found=0
 
     if (( $# > 1 )); then
-        printf 'Aufruf: known-hosts [HOSTFILTER]\n' >&2
+        printf 'Aufruf: known-hosts [HOSTFILTER | --fingerprints]\n' >&2
         return 2
     fi
 
@@ -19,11 +19,17 @@ ssh_known_hosts() {
         return 1
     }
 
-    printf '\e[2m%-6s %-42s %-16s %s\e[0m\n' \
-        'ZEILE' 'ZIEL' 'SCHLÜSSEL' 'FINGERABDRUCK'
+    if [[ $filter == --fingerprints ]]; then
+        # Originalausgabe von OpenSSH: Bits, Fingerabdruck, Ziel, Schluesseltyp.
+        ssh-keygen -l -E sha256 -f "$known_hosts_file"
+        return $?
+    fi
+
+    printf '\e[2m%-6s %-42s %s\e[0m\n' \
+        'ZEILE' 'ZIEL' 'SCHLÜSSEL'
 
     while IFS= read -r line || [[ -n $line ]]; do
-        ((line_number++))
+        ((line_number+=1))
         [[ $line =~ ^[[:space:]]*(#|$) ]] && continue
 
         read -r first second third fourth remainder <<< "$line"
@@ -52,15 +58,11 @@ ssh_known_hosts() {
             continue
         fi
 
-        fingerprint=$(printf '%s %s\n' "$key_type" "$key" |
-            ssh-keygen -lf - 2>/dev/null) || fingerprint='? ?'
-        read -r bits fingerprint rest <<< "$fingerprint"
-
         key_type=${key_type#ssh-}
         key_type=${key_type^^}
 
-        printf '\e[2m%-6d\e[0m \e[36m%-42s\e[0m \e[33m%-16s\e[0m \e[34m%s\e[0m\n' \
-            "$line_number" "$display_hosts" "$key_type" "$fingerprint"
+        printf '\e[2m%-6d\e[0m \e[36m%-42s\e[0m \e[33m%s\e[0m\n' \
+            "$line_number" "$display_hosts" "$key_type"
         found=1
     done < "$known_hosts_file"
 
@@ -71,8 +73,9 @@ ssh_known_hosts() {
             printf 'Keine Einträge gefunden.\n'
         fi
     fi
+    return 0
 }
 
-unalias known-hosts ssh-known-hosts 2>/dev/null
+unalias known-hosts ssh-known-hosts 2>/dev/null || true
 alias known-hosts='ssh_known_hosts'
 alias ssh-known-hosts='ssh_known_hosts'
