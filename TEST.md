@@ -14,6 +14,7 @@ Linux-Testumgebung geprüft. Alle automatisierten Prüfungen waren erfolgreich.
 | Installation und Sicherung der `.bashrc` | Bestanden |
 | Mehrdatei-Synchronisierung | Bestanden (SSH simuliert) |
 | Änderungserkennung pro Ziel | Bestanden |
+| `known-hosts`-Übersicht und Filter | Bestanden |
 | ZIP-Integrität | Bestanden |
 
 ## Testumgebung
@@ -43,6 +44,7 @@ Folgende Dateien wurden einzeln mit `bash -n` geprüft:
 - `bashrc.d/environment.sh`
 - `bashrc.d/history.sh`
 - `bashrc.d/listing.sh`
+- `bashrc.d/ssh-tools.sh`
 - `bashrc.d/prompt-core.sh`
 - `bashrc.d/prompt-local.sh`
 
@@ -148,7 +150,16 @@ Ergebnis: bestanden.
 | `ssh server uname -a` | natives `ssh` | Bestanden |
 | `command ssh server` | natives `ssh` | Bestanden |
 
-### 9. Paketintegrität
+### 9. `known-hosts`-Übersicht
+
+Die `known-hosts`-Funktion wurde mit Klartext-, Port-, Marker- und gehashten
+Testeinträgen geprüft. Klartextziele können gefiltert werden; gehashte Hostnamen
+werden nicht fälschlich als lesbarer Zielname dargestellt. Schlüsseltyp und
+SHA256-Fingerabdruck werden aus dem gespeicherten Schlüssel erzeugt.
+
+Ergebnis: bestanden.
+
+### 10. Paketintegrität
 
 Das ZIP-Archiv wurde mit `unzip -t` vollständig geprüft.
 

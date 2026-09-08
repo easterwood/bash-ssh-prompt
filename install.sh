@@ -9,7 +9,7 @@ backup="$HOME/.bashrc.before-modular-config.$timestamp"
 for file in \
     bashrc.sh prompt.sh ssh-prompt.sh .git-prompt-colors.sh \
     bashrc.d/environment.sh bashrc.d/history.sh bashrc.d/listing.sh \
-    bashrc.d/prompt-core.sh bashrc.d/prompt-local.sh; do
+    bashrc.d/ssh-tools.sh bashrc.d/prompt-core.sh bashrc.d/prompt-local.sh; do
     bash -n "$config_root/$file"
 done
 
