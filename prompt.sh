@@ -1,179 +1,24 @@
 #!/usr/bin/env bash
 
-# Eigenstaendiger Prompt fuer SSH-Sitzungen ohne bash-git-prompt.
 [[ $- == *i* ]] || return 0
-
 : "${SSH_PROMPT_SHOW_COMMAND:=1}"
 
-# Einheitliches Datumsformat fuer GNU ls im Langformat (ls -l, ll usw.).
-export TIME_STYLE='+%Y-%m-%d %H:%M:%S'
+__remote_prompt_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+source "$__remote_prompt_root/bashrc.d/listing.sh"
+source "$__remote_prompt_root/bashrc.d/prompt-core.sh"
+unset __remote_prompt_root
 
-# Kompakte, farblich getrennte Langansicht ohne Gruppenspalte.
-unalias ll 2>/dev/null
-ll() {
-    local current_user=${USER:-$(id -un)}
-    current_user=${current_user%%@*}
-
-    command ls \
-        -oah \
-        --color=always \
-        --group-directories-first \
-        --time-style='+%Y-%m-%d %H:%M:%S' \
-        "$@" |
-    awk -v current_user="$current_user" '
-        BEGIN {
-            reset  = "\033[0m"
-            dim    = "\033[2m"
-            cyan   = "\033[36m"
-            magenta = "\033[35m"
-            red    = "\033[31m"
-            blue   = "\033[34m"
-            yellow = "\033[33m"
-
-            printf "%s%-11s %-4s %-20s %10s %-19s %s%s\n",
-                dim,
-                "RECHTE",
-                "LINK",
-                "BENUTZER",
-                "GRÖSSE",
-                "GEÄNDERT",
-                "NAME",
-                reset
-        }
-
-        /^total / || /^insgesamt / { next }
-
-        {
-            user = $3
-            sub(/@.*/, "", user)
-
-            if (user == "root") {
-                user_color = red
-            } else if (user == current_user) {
-                user_color = cyan
-            } else {
-                user_color = magenta
-            }
-
-            name = $7
-            for (i = 8; i <= NF; i++) {
-                name = name " " $i
-            }
-
-            printf "%s%-11s%s %-4s %s%-20s%s %s%10s%s %s%-10s %-8s%s %s\n",
-                dim,    $1, reset,
-                        $2,
-                user_color, user, reset,
-                yellow, $4, reset,
-                blue,   $5, $6, reset,
-                        name
-        }
-    '
-}
-
-# Genau zwei eigene Begruessungszeilen statt MOTD und "Last login".
-# Die exportierte Markierung verhindert Wiederholungen in Subshells.
 if [[ -n ${SSH_CONNECTION-} && -z ${SSHP_WELCOME_SHOWN-} ]]; then
     read -r _ _ __ssh_server_address _ <<< "$SSH_CONNECTION"
     __ssh_remote_host=$(hostname -f 2>/dev/null || hostname 2>/dev/null || printf '?')
-
     printf '\e[1;36m╭─ REMOTE\e[0m  %s\n' "$__ssh_remote_host"
     printf '\e[1;36m╰─ USER  \e[0m  %s · IP %s\n' \
         "${USER:-$(id -un)}" "${__ssh_server_address:-?}"
-
     export SSHP_WELCOME_SHOWN=1
     unset __ssh_server_address __ssh_remote_host
 fi
 
-__cmd_timer_now_us() {
-    local t sec usec
-    if [[ -n ${EPOCHREALTIME-} ]]; then
-        t=${EPOCHREALTIME/,/.}
-        sec=${t%%.*}
-        usec=${t#*.}000000
-        usec=${usec:0:6}
-        REPLY=$((10#$sec * 1000000 + 10#$usec))
-    else
-        REPLY=$(date +%s%6N)
-    fi
-}
-
-__cmd_set_window_title() {
-    local cmd=$1 dir
-    cmd=${cmd//$'\e'/}
-    cmd=${cmd//$'\a'/}
-    cmd=${cmd//$'\r'/ }
-    cmd=${cmd//$'\n'/ ; }
-    cmd=${cmd//$'\t'/ }
-
-    if [[ $PWD == "$HOME" ]]; then
-        dir='~'
-    elif [[ $PWD == / ]]; then
-        dir='/'
-    else
-        dir=${PWD##*/}
-    fi
-    printf '\033]0;%s — %s\007' "$cmd" "$dir"
-}
-
-__cmd_timer_debug() {
-    local current_command=$BASH_COMMAND history_line cmd
-    case "$current_command" in
-        __cmd_timer_stop|__ssh_prompt_build|__cmd_timer_arm) return ;;
-    esac
-
-    trap - DEBUG
-    history_line=$(LC_ALL=C HISTTIMEFORMAT='' builtin history 1 2>/dev/null)
-    if [[ $history_line =~ ^[[:space:]]*[0-9]+(\*|[[:space:]])[[:space:]]+(.*)$ ]]; then
-        cmd=${BASH_REMATCH[2]}
-    else
-        cmd=$current_command
-    fi
-    cmd=${cmd#"${cmd%%[![:space:]]*}"}
-    cmd=${cmd%"${cmd##*[![:space:]]}"}
-    __cmd_last_command=$cmd
-    __cmd_set_window_title "$cmd"
-    __cmd_timer_now_us
-    __cmd_timer_start_us=$REPLY
-}
-
-__cmd_timer_stop() {
-    local rc=$? elapsed_us total_s
-    trap - DEBUG
-    __cmd_last_exit=$rc
-
-    if [[ -n ${__cmd_timer_start_us-} ]]; then
-        __cmd_timer_now_us
-        elapsed_us=$((REPLY - __cmd_timer_start_us))
-        __cmd_elapsed_us=$elapsed_us
-        unset __cmd_timer_start_us
-
-        if (( elapsed_us < 1000 )); then
-            __cmd_duration='<1ms'
-        elif (( elapsed_us < 1000000 )); then
-            printf -v __cmd_duration '%dms' "$(((elapsed_us + 500) / 1000))"
-        else
-            total_s=$((elapsed_us / 1000000))
-            if (( total_s < 60 )); then
-                printf -v __cmd_duration '%d.%03ds' "$total_s" "$(((elapsed_us / 1000) % 1000))"
-            elif (( total_s < 3600 )); then
-                printf -v __cmd_duration '%dm%02ds' "$((total_s / 60))" "$((total_s % 60))"
-            else
-                printf -v __cmd_duration '%dh%02dm%02ds' "$((total_s / 3600))" "$(((total_s / 60) % 60))" "$((total_s % 60))"
-            fi
-        fi
-    fi
-    return "$rc"
-}
-
-__cmd_timer_arm() {
-    if [[ -n ${__cmd_last_command-} ]]; then
-        __cmd_set_window_title "$__cmd_last_command"
-    fi
-    trap '__cmd_timer_debug' DEBUG
-}
-
-__ssh_prompt_build() {
+__remote_prompt_build() {
     local rc=${__cmd_last_exit:-0} status='' first_line symbol symbol_color
 
     if (( rc != 0 )); then
@@ -207,11 +52,10 @@ __ssh_prompt_build() {
     PS1+="${first_line}${status}\n\t ${symbol_color}${symbol}\[\e[0m\] "
 }
 
-# Eigene Hooks genau einmal und in definierter Reihenfolge installieren.
 if [[ $(declare -p PROMPT_COMMAND 2>/dev/null) == 'declare -a'* ]]; then
-    PROMPT_COMMAND=(__cmd_timer_stop __ssh_prompt_build __cmd_timer_arm)
+    PROMPT_COMMAND=(__cmd_timer_stop __remote_prompt_build __cmd_timer_arm)
 else
-    PROMPT_COMMAND='__cmd_timer_stop;__ssh_prompt_build;__cmd_timer_arm'
+    PROMPT_COMMAND='__cmd_timer_stop;__remote_prompt_build;__cmd_timer_arm'
 fi
 
-__ssh_prompt_build
+__remote_prompt_build

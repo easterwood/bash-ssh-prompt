@@ -1,34 +1,180 @@
-# Pruefprotokoll
+# Testbericht
 
-Stand: 08.09.2026. Getestet unter Linux mit GNU Bash 5.2.37.
-Die interaktiven Tests verwenden ein Pseudoterminal ueber Python/pexpect.
+## Zusammenfassung
 
-## Ergebnisse
+Die modulare Bash-Konfiguration wurde am 8. September 2026 in einer isolierten
+Linux-Testumgebung geprüft. Alle automatisierten Prüfungen waren erfolgreich.
 
-35 Prompt-Pruefungen und 22 Installations-/Transferpruefungen bestanden.
-Die SSH-Aufrufe wurden lokal simuliert; es wurde kein echter Server kontaktiert.
+| Bereich | Ergebnis |
+|---|---|
+| Syntax aller Shell-Dateien | Bestanden |
+| Modularer lokaler Loader | Bestanden |
+| Lokale `bash-git-prompt`-Anbindung | Bestanden (mit Test-Doppel) |
+| Remote-Prompt und `ll` | Bestanden |
+| Installation und Sicherung der `.bashrc` | Bestanden |
+| Mehrdatei-Synchronisierung | Bestanden (SSH simuliert) |
+| Änderungserkennung pro Ziel | Bestanden |
+| ZIP-Integrität | Bestanden |
 
-| Bereich | Geprueft |
-| --- | --- |
-| Anzeige und Status | Fehler mit Exit-Code und Dauer; schnelle Erfolge ohne Status; Erfolge ab 100 ms; Erhalt von `$?`; vollstaendige Argumente/Anfuehrungszeichen. |
-| Zeitmessung | Keine Eingabe-Wartezeit; Befehlslisten, Pipelines, Schleifen und Funktionen; Zeitformatgrenzen; simulierter Komma-Dezimaltrenner; GNU-date- und grober Sekunden-Fallback. |
-| Fenstertitel | Setzen vor und nach dem Befehl; Wiederherstellung nach einem vom Programm gesetzten Titel; Abschalten von Titel und Befehlszeile. |
-| Sonderfaelle | Ctrl-C waehrend des Befehls; Syntaxfehler; leeres Enter nach Fehlern; `functrace`; erneutes Laden; nicht-interaktives Laden ohne Wirkung; korrekter Status bei reinen Subshells und Funktionsdefinitionen ohne erfundene Laufzeit. |
-| Angezeigter Text | Ignorierte History-Befehle werden nicht offengelegt; Text mit `$(...)` wird bei der Prompt-Anzeige nicht erneut ausgefuehrt. |
-| Installation | HOME mit Leerzeichen; Erhalt des lokalen Prompts; Sicherung der `.bashrc`; keine doppelte Ladezeile; Sicherung einer selbst bearbeiteten Prompt-Datei beim Update. |
-| Simulierter SSH-Transfer | Genau `prompt.sh` und `rc`; Ziel ohne Git im PATH; HOME mit Leerzeichen; unveraenderte Ziel-`.bashrc`; Prompt in der interaktiven Zielshell aktiv; kein Login bei Transferfehler; Weitergabe des Sitzungs-Exit-Codes; Ablehnung ungueltiger Aufrufe. |
+## Testumgebung
 
-Zusaetzlich werden alle ausgelieferten `.sh`-Dateien mit `bash -n` und das
-ZIP auf Lesbarkeit und Uebereinstimmung der enthaltenen Dateien geprueft.
+| Komponente | Version |
+|---|---|
+| Betriebssystem | Linux, x86-64 |
+| Bash | GNU Bash 5.2.21 |
+| GNU coreutils (`ls`) | 9.4 |
+| AWK | mawk 1.3.4 (2024-01-23) |
+| ZIP | Info-ZIP 3.0 |
 
-## Grenzen der Pruefung
+Git Bash unter Windows und die tatsächlichen Zielserver waren nicht Bestandteil
+der ausführbaren Testumgebung.
 
-Nicht auf Windows/Git Bash, einem echten SSH-Ziel, Bash 4 oder jedem
-Terminalemulator ausgefuehrt. Die Fallbacks wurden unter Bash 5.2 durch
-Entfernen von EPOCHREALTIME bzw. Einschraenken des PATH getestet. Der
-Komma-Dezimaltrenner wurde durch einen kontrollierten Testwert simuliert.
+## Durchgeführte Prüfungen
 
-Nicht jede Bash-Syntaxkombination wird vom DEBUG-basierten Timer vollstaendig
-erfasst. Insbesondere reine Subshell-Eingaben sind in README.md als Grenze
-beschrieben. Die genaue Darstellung deines lokalen Custom-Themes kann nicht
-verglichen werden, weil die Theme-Datei nicht Bestandteil deiner Nachricht war.
+### 1. Bash-Syntax
+
+Folgende Dateien wurden einzeln mit `bash -n` geprüft:
+
+- `bashrc.sh`
+- `prompt.sh`
+- `ssh-prompt.sh`
+- `.git-prompt-colors.sh`
+- `install.sh`
+- `bashrc.d/environment.sh`
+- `bashrc.d/history.sh`
+- `bashrc.d/listing.sh`
+- `bashrc.d/prompt-core.sh`
+- `bashrc.d/prompt-local.sh`
+
+Ergebnis: keine Syntaxfehler.
+
+### 2. Entfernung der Duplikate
+
+Die gemeinsamen Definitionen wurden im gesamten Paket gesucht.
+
+| Definition | Einziger Speicherort |
+|---|---|
+| `__cmd_timer_now_us` und weitere Timer-Funktionen | `bashrc.d/prompt-core.sh` |
+| `ll` | `bashrc.d/listing.sh` |
+| `TIME_STYLE` | `bashrc.d/listing.sh` |
+| Lokale Git-Prompt-Anbindung | `bashrc.d/prompt-local.sh` |
+
+Der Remote-Prompt lädt `listing.sh` und `prompt-core.sh`, statt deren Inhalt zu
+duplizieren.
+
+### 3. Lokale Konfiguration
+
+Ein temporäres Home-Verzeichnis und eine minimale Test-Implementierung von
+`bash-git-prompt` wurden erzeugt. Anschließend wurde die installierte `.bashrc`
+in einer interaktiven Bash geladen.
+
+Geprüft wurden:
+
+- alle Module werden in der vorgesehenen Reihenfolge geladen;
+- `ll`, Timer, `sshp` und der `ssh`-Wrapper sind definiert;
+- das Theme `Custom` ist aktiv;
+- `.git-prompt-colors.sh` wird aus dem Git-Projekt geladen;
+- eine optionale `local.sh` ist nicht erforderlich.
+
+Ergebnis: bestanden.
+
+### 4. Installer
+
+Der Installer wurde mit einer bereits vorhandenen `.bashrc` in einem temporären
+Home-Verzeichnis ausgeführt.
+
+Geprüft wurden:
+
+- die bisherige `.bashrc` wird mit Zeitstempel gesichert;
+- die neue `.bashrc` enthält nur den Loader auf das Git-Checkout;
+- der erzeugte Loader besteht die Syntaxprüfung;
+- Pfade werden Shell-sicher geschrieben.
+
+Ergebnis: bestanden.
+
+### 5. Remote-Prompt
+
+`prompt.sh` wurde in einer interaktiven Bash mit simulierten SSH-Variablen
+geladen.
+
+Geprüft wurden:
+
+- `prompt-core.sh` und `listing.sh` werden relativ zu `prompt.sh` gefunden;
+- der Remote-Prompt-Builder wird installiert;
+- die gemeinsame `ll`-Funktion ist verfügbar;
+- `ll` kann eine Datei ohne Fehler darstellen;
+- der Begrüßungsblock wird durch `SSHP_WELCOME_SHOWN` nicht wiederholt.
+
+Ergebnis: bestanden.
+
+### 6. `ll`-Darstellung
+
+Geprüft wurden:
+
+- Kopfzeile mit Rechte-, Link-, Benutzer-, Größen-, Datums- und Namensspalte;
+- keine Gruppenspalte;
+- Zeitformat `YYYY-MM-DD HH:MM:SS`;
+- menschenlesbare Dateigrößen;
+- `root` wird rot dargestellt;
+- der aktuelle Benutzer und fremde Benutzer verwenden unterschiedliche Farben.
+
+Ergebnis: bestanden.
+
+### 7. SSH-Synchronisierung
+
+Der ausführbare `ssh`-Client wurde durch ein lokales Test-Doppel ersetzt. Das
+Remote-Skript wurde dabei in einem separaten temporären Home-Verzeichnis
+ausgeführt.
+
+Geprüft wurden:
+
+- beim ersten Aufruf entstehen eine Synchronisations- und eine Login-Verbindung;
+- ohne lokale Änderung entsteht beim zweiten Aufruf nur die Login-Verbindung;
+- `prompt.sh`, `listing.sh` und `prompt-core.sh` werden übertragen;
+- der Loader wird nur einmal in die Remote-`.bashrc` geschrieben;
+- der lokale Synchronisationsstand wird erst nach erfolgreicher Übertragung
+  gespeichert.
+
+Beobachtete Verbindungsanzahl: `2`, danach `1`.
+
+Ergebnis: bestanden.
+
+### 8. `ssh`-Wrapper
+
+| Aufruf | Erwarteter Pfad | Ergebnis |
+|---|---|---|
+| `ssh server` | `sshp server` | Bestanden |
+| `ssh -p 2222 server` | natives `ssh` | Bestanden |
+| `ssh server uname -a` | natives `ssh` | Bestanden |
+| `command ssh server` | natives `ssh` | Bestanden |
+
+### 9. Paketintegrität
+
+Das ZIP-Archiv wurde mit `unzip -t` vollständig geprüft.
+
+Ergebnis: keine beschädigten Einträge.
+
+## Noch manuell zu prüfen
+
+Folgende Prüfungen können nur in der tatsächlichen Umgebung durchgeführt werden:
+
+1. Installation in Git Bash unter Windows.
+2. Zusammenspiel mit der real installierten Version von `bash-git-prompt`.
+3. Verbindung zu einem tatsächlichen Zielserver über Gateway oder Jump Host.
+4. Darstellung der Farben und Unicode-Zeichen im verwendeten Terminal.
+5. Verhalten bei kennwortbasierter SSH-Anmeldung.
+6. Verfügbarkeit der verwendeten GNU-`ls`-Optionen auf allen Zielservern.
+
+## Manueller Abnahmetest
+
+```bash
+bash -n ~/.bashrc
+source ~/.bashrc
+ll
+ssh SERVER
+exit
+ssh SERVER
+```
+
+Beim ersten SSH-Aufruf nach einer lokalen Änderung werden zwei Verbindungen
+aufgebaut. Der unmittelbar folgende unveränderte Aufruf benötigt nur eine.
