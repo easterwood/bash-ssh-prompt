@@ -39,7 +39,7 @@ sshp() (
     # einmalig eine erneute Installation.
     signature=$(
         {
-            printf '%s\n' 'sshp-sync-format=2'
+            printf '%s\n' 'sshp-sync-format=3'
             cksum "$prompt_file"
         } | cksum
     ) || return 1
@@ -57,7 +57,7 @@ EOF
 
     # Keine lokale Aenderung: Die erste Verbindung ist direkt die Sitzung.
     if (( ! force )) && [[ $saved_signature == "$signature" ]]; then
-        command ssh "$target"
+        command ssh -o WarnWeakCrypto=no "$target"
         return
     fi
 
@@ -72,7 +72,7 @@ EOF
     read -r -d '' remote_script <<'REMOTE' || true
 set -eu
 
-for command_name in tar bash grep mktemp; do
+for command_name in tar bash grep mktemp touch; do
     command -v "$command_name" >/dev/null 2>&1 || {
         printf "sshp: %s fehlt auf dem Ziel.\n" "$command_name" >&2
         exit 1
@@ -85,6 +85,9 @@ prompt_file="$prompt_dir/prompt.sh"
 bashrc="$HOME/.bashrc"
 backup="$HOME/.bashrc.before-sshp"
 start_marker="# >>> sshp managed prompt >>>"
+
+# Unterdrueckt MOTD-/Insights-Hinweise und "Last login" fuer diesen Benutzer.
+touch "$HOME/.hushlogin"
 
 mkdir -p "$prompt_dir"
 tar --no-same-owner -xzf - -C "$prompt_dir"
@@ -121,7 +124,8 @@ fi
 REMOTE
 
     # Verbindung 1: Prompt uebertragen und Loader einrichten.
-    if ! command ssh -T -o RemoteCommand=none "$target" "$remote_script" \
+    if ! command ssh -T -o RemoteCommand=none -o WarnWeakCrypto=no \
+        "$target" "$remote_script" \
         < "$archive"; then
         printf 'sshp: Synchronisierung oder .bashrc-Aktualisierung fehlgeschlagen.\n' >&2
         return 1
@@ -135,5 +139,5 @@ REMOTE
     mv -f "$temporary_state" "$state_file" || return 1
 
     # Verbindung 2: normale interaktive SSH-Sitzung.
-    command ssh "$target"
+    command ssh -o WarnWeakCrypto=no "$target"
 )

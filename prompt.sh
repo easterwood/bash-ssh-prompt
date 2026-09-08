@@ -5,6 +5,20 @@
 
 : "${SSH_PROMPT_SHOW_COMMAND:=1}"
 
+# Genau zwei eigene Begruessungszeilen statt MOTD und "Last login".
+# Die exportierte Markierung verhindert Wiederholungen in Subshells.
+if [[ -n ${SSH_CONNECTION-} && -z ${SSHP_WELCOME_SHOWN-} ]]; then
+    read -r _ _ __ssh_server_address _ <<< "$SSH_CONNECTION"
+    __ssh_remote_host=$(hostname -f 2>/dev/null || hostname 2>/dev/null || printf '?')
+
+    printf '\e[1;36mWELCOME\e[0m %s\n' "${USER:-$(id -un)}"
+    printf '\e[1;33mREMOTE \e[0m %s · %s\n' \
+        "$__ssh_remote_host" "${__ssh_server_address:-?}"
+
+    export SSHP_WELCOME_SHOWN=1
+    unset __ssh_server_address __ssh_remote_host
+fi
+
 __cmd_timer_now_us() {
     local t sec usec
     if [[ -n ${EPOCHREALTIME-} ]]; then
@@ -120,7 +134,7 @@ __ssh_prompt_build() {
     fi
 
     if (( SSH_PROMPT_SHOW_COMMAND )) && [[ -n ${__cmd_last_command-} ]]; then
-        PS1="\[\e[2m\]last: ${__cmd_last_command}\[\e[0m\]\n"
+        PS1="\[\e[2m\]letzter: ${__cmd_last_command}\[\e[0m\]\n"
     else
         PS1=''
     fi
