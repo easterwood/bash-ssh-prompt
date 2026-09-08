@@ -25,7 +25,14 @@ complete -F _ssh_known_hosts_completion known-hosts
 complete -F _ssh_known_hosts_completion ssh-known-hosts
 complete -F _ssh_known_hosts_completion ssh_known_hosts
 
+# Keep user@host as one Readline completion word. Bash includes '@' in
+# COMP_WORDBREAKS by default; leaving it there makes Readline replace '@host'
+# as a separate fragment and can remove the '@' during completion.
+COMP_WORDBREAKS=${COMP_WORDBREAKS//@/}
+
 # sshp is treated like ssh: the first destination argument gets host completion.
+# Remove an older completion spec first so this registration is unambiguous.
+complete -r ssh sshp 2>/dev/null || true
 complete -F _ssh_tools_ssh_completion ssh
 complete -F _ssh_tools_ssh_completion sshp
 

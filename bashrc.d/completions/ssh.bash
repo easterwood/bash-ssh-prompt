@@ -11,10 +11,39 @@ __ssh_completion_option_takes_arg() {
     return 1
 }
 
-__ssh_completion_is_destination_position() {
-    local i word expect_arg=0 options_done=0
+# Bash normally contains '@' in COMP_WORDBREAKS. Therefore
+#
+#   ssh user@ho<TAB>
+#
+# may arrive as COMP_WORDS=(ssh user @ ho), not as one word. Return the
+# index at which the destination currently being completed starts.
+__ssh_completion_destination_start() {
+    local cword=$COMP_CWORD
 
-    for ((i=1; i<COMP_CWORD; i++)); do
+    if (( cword >= 2 )) && [[ ${COMP_WORDS[cword-1]-} == @ ]]; then
+        printf '%d\n' "$((cword - 2))"
+        return 0
+    fi
+
+    # Cursor directly after user@ can be represented with '@' as the current
+    # completion word.
+    if (( cword >= 1 )) && [[ ${COMP_WORDS[cword]-} == @ ]]; then
+        printf '%d\n' "$((cword - 1))"
+        return 0
+    fi
+
+    printf '%d\n' "$cword"
+}
+
+__ssh_completion_is_destination_position() {
+    local i word expect_arg=0 options_done=0 destination_start
+
+    destination_start=$(__ssh_completion_destination_start) || return 1
+
+    # Only inspect words before the destination currently being completed.
+    # This is important for user@host because Bash can split that token around
+    # '@' before invoking the completion function.
+    for ((i=1; i<destination_start; i++)); do
         word=${COMP_WORDS[i]}
 
         if (( expect_arg )); then
@@ -40,7 +69,8 @@ __ssh_completion_is_destination_position() {
             continue
         fi
 
-        # First non-option word is the destination.
+        # First non-option word before the current destination is an already
+        # supplied destination.
         return 1
     done
 
@@ -64,7 +94,7 @@ __ssh_completion_file_argument() {
 _ssh_tools_ssh_completion() {
     local known_hosts_file=${SSH_KNOWN_HOSTS_FILE:-$HOME/.ssh/known_hosts}
     local config=${SSH_CONFIG_FILE:-$HOME/.ssh/config}
-    local cur host prefix host_part
+    local cur host prefix host_part reply_prefix
 
     COMPREPLY=()
 
@@ -77,16 +107,27 @@ _ssh_tools_ssh_completion() {
     cur=${COMP_WORDS[COMP_CWORD]}
     prefix=''
     host_part=$cur
+    reply_prefix=''
 
-    # ssh user@ho<TAB>
-    if [[ $cur == *@* ]]; then
+    # ssh-tools removes '@' from COMP_WORDBREAKS when it is loaded. Thus
+    # user@host normally arrives as a single completion word and can be
+    # replaced atomically without Readline dropping the '@'. The split forms
+    # below remain as a fallback in case COMP_WORDBREAKS is changed later.
+    if [[ $cur == @ ]]; then
+        host_part=''
+        reply_prefix='@'
+    elif [[ $cur == *@* ]]; then
         prefix=${cur%@*}@
         host_part=${cur##*@}
+        reply_prefix=$prefix
+    elif (( COMP_CWORD >= 1 )) && [[ ${COMP_WORDS[COMP_CWORD-1]-} == @ ]]; then
+        host_part=$cur
+        reply_prefix='@'
     fi
 
     for host in "${__ssh_completion_connect_hosts[@]}"; do
         [[ $host == "$host_part"* ]] || continue
-        COMPREPLY+=("$prefix$host")
+        COMPREPLY+=("$reply_prefix$host")
     done
 
     return 0
