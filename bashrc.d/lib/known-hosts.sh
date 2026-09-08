@@ -118,6 +118,7 @@ ssh_known_hosts() {
     if [[ $filter == --refresh ]]; then
         __kh_cache_invalidate
         __ssh_completion_cache_invalidate
+        declare -F __ssh_resolve_ips_cache_invalidate >/dev/null && __ssh_resolve_ips_cache_invalidate
         filter=''
     fi
 

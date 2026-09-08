@@ -652,6 +652,7 @@ ssh_known_hosts_clean() {
         if (( known_changes > 0 || config_changes > 0 )); then
             declare -F __kh_cache_invalidate >/dev/null && __kh_cache_invalidate
             declare -F __ssh_completion_cache_invalidate >/dev/null && __ssh_completion_cache_invalidate
+            declare -F __ssh_resolve_ips_cache_invalidate >/dev/null && __ssh_resolve_ips_cache_invalidate
         fi
 
         printf '\nBereinigung abgeschlossen.\n'

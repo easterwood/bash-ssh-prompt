@@ -1,3 +1,4 @@
 local.sh
 *.bak
 *.backup
+.idea
