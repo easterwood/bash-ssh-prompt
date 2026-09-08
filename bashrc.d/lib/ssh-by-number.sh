@@ -1,20 +1,76 @@
 #!/usr/bin/env bash
 
 # Login ueber die eindeutige NR-Spalte von known-hosts.
-# Zusaetzliche Argumente werden wie bei "ssh HOST ..." als Remote-Kommando
-# hinter dem Ziel an OpenSSH weitergereicht.
+# Nach der Zielaufloesung wird sshp verwendet, damit ssh-nr dasselbe
+# Verbindungsverhalten wie ein direkter sshp-Aufruf hat.
+
+__ssh_by_number_run_sshp() {
+    local kind rc arg command_line='sshp'
+    local had_expand_aliases=0
+
+    if alias sshp >/dev/null 2>&1; then
+        kind=alias
+    else
+        kind=$(type -t sshp 2>/dev/null || true)
+    fi
+
+    case $kind in
+        function|file|builtin)
+            # Ueber eine Variable aufrufen, damit ein eventuell gleichnamiger
+            # Alias beim Parsen dieser Datei nicht versehentlich expandiert.
+            local runner=sshp
+            "$runner" "$@"
+            return $?
+            ;;
+        alias)
+            # Aliase werden vor Parameterexpansion verarbeitet und koennen
+            # deshalb nicht ueber "$runner" aufgerufen werden. Die Argumente
+            # werden mit %q shell-sicher an einen eval-Aufruf angehaengt.
+            shopt -q expand_aliases && had_expand_aliases=1
+            shopt -s expand_aliases
+
+            for arg in "$@"; do
+                printf -v command_line '%s %q' "$command_line" "$arg"
+            done
+
+            eval "$command_line"
+            rc=$?
+
+            (( had_expand_aliases )) || shopt -u expand_aliases
+            return "$rc"
+            ;;
+        *)
+            printf 'ssh-nr: sshp ist weder als Funktion, Alias noch als Kommando verfuegbar.\n' >&2
+            return 127
+            ;;
+    esac
+}
+
 ssh_by_number() {
     local known_hosts_file=${SSH_KNOWN_HOSTS_FILE:-$HOME/.ssh/known_hosts}
     local config=${SSH_CONFIG_FILE:-$HOME/.ssh/config}
     local nr=${1-}
     local gid alias target host port=''
-    local -a ssh_args=()
+    local show_banner=0
+    local -a sshp_args=()
+
+    while [[ ${1-} == --banner || ${1-} == --no-quiet || ${1-} == --quiet ]]; do
+        case $1 in
+            --banner|--no-quiet) show_banner=1 ;;
+            --quiet)             show_banner=0 ;;
+        esac
+        shift
+    done
+
+    nr=${1-}
 
     case $nr in
         --help|-h|'')
-            printf 'Aufruf: ssh-nr NR [REMOTE-KOMMANDO ...]\n'
+            printf 'Aufruf: ssh-nr [--banner] NR [SSHP-ARGUMENTE ...]\n'
             printf '        ssh-nr --list\n'
             printf '\nNR ist die eindeutige Zielnummer aus der ersten Spalte von known-hosts.\n'
+            printf 'Das aufgeloeste Ziel wird anschliessend ueber sshp verbunden.\n'
+            printf 'Standardmaessig ist SSH quiet (-q); --banner bzw. --no-quiet zeigt den Banner.\n'
             [[ -n $nr ]] && return 0 || return 2
             ;;
         --list|-l)
@@ -33,6 +89,8 @@ ssh_by_number() {
         return 2
     }
     shift
+
+    (( show_banner )) && sshp_args+=(--banner)
 
     [[ -r $known_hosts_file ]] || {
         printf 'ssh-nr: %s fehlt oder ist nicht lesbar.\n' "$known_hosts_file" >&2
@@ -55,13 +113,15 @@ ssh_by_number() {
     # User, Port, ProxyJump, IdentityFile usw. exakt wie in ~/.ssh/config.
     if [[ $alias != '-' ]]; then
         if [[ $config != "$HOME/.ssh/config" ]]; then
-            ssh_args+=(-F "$config")
+            sshp_args+=(-F "$config")
         fi
-        command ssh "${ssh_args[@]}" "$alias" "$@"
+        sshp_args+=("$alias")
+        sshp_args+=("$@")
+        __ssh_by_number_run_sshp "${sshp_args[@]}"
         return $?
     fi
 
-    # Direkte known_hosts-Ziele muessen in eine gueltige ssh-Zielsyntax
+    # Direkte known_hosts-Ziele muessen in eine gueltige SSH-Zielsyntax
     # ueberfuehrt werden. Marker, Hashes und Hostlisten sind nicht eindeutig.
     case $target in
         @*|'[gehashter Hostname]'*|*','*|*'*'*|*'?'*|*'!'*)
@@ -78,9 +138,11 @@ ssh_by_number() {
     fi
 
     if [[ $config != "$HOME/.ssh/config" ]]; then
-        ssh_args+=(-F "$config")
+        sshp_args+=(-F "$config")
     fi
-    [[ -z $port ]] || ssh_args+=(-p "$port")
+    [[ -z $port ]] || sshp_args+=(-p "$port")
+    sshp_args+=("$host")
+    sshp_args+=("$@")
 
-    command ssh "${ssh_args[@]}" "$host" "$@"
+    __ssh_by_number_run_sshp "${sshp_args[@]}"
 }

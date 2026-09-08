@@ -12,6 +12,8 @@ source "$__ssh_tools_dir/lib/ssh-config.sh"
 source "$__ssh_tools_dir/lib/known-hosts.sh"
 # shellcheck source=lib/known-hosts-clean.sh
 source "$__ssh_tools_dir/lib/known-hosts-clean.sh"
+# shellcheck source=lib/ssh-command.sh
+source "$__ssh_tools_dir/lib/ssh-command.sh"
 # shellcheck source=lib/ssh-by-number.sh
 source "$__ssh_tools_dir/lib/ssh-by-number.sh"
 # shellcheck source=lib/ssh-resolve-ips.sh

@@ -165,9 +165,18 @@ _ssh_tools_ssh_completion() {
     __ssh_completion_file_argument && return 0
 
     __ssh_completion_is_destination_position || return 0
-    __ssh_completion_cache_ensure "$known_hosts_file" "$config" || return 0
 
     cur=${__ssh_completion_line_words[__ssh_completion_line_cword]-}
+
+    # Eigene Wrapper-Schalter. OpenSSH selbst kennt diese Long-Options nicht;
+    # sie werden vor dem eigentlichen Aufruf entfernt.
+    if [[ $cur == --* ]]; then
+        [[ --banner == "$cur"* ]] && COMPREPLY+=(--banner)
+        [[ --no-quiet == "$cur"* ]] && COMPREPLY+=(--no-quiet)
+        return 0
+    fi
+
+    __ssh_completion_cache_ensure "$known_hosts_file" "$config" || return 0
 
     if [[ $cur != *@* ]]; then
         # Normal host completion plus resolved user@alias targets. This allows
