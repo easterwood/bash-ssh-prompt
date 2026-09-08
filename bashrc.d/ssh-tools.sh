@@ -251,8 +251,8 @@ ssh_known_hosts() {
             # zusammenfassen. Fuer gehashte Hosts dient der echte Hash als
             # Gruppenschluessel, damit verschiedene unbekannte Hosts nicht
             # versehentlich zusammenfallen.
-            alias='—'
-            user='—'
+            alias='-'
+            user='-'
             target=$display_hosts
             group_key="U$sep$marker$sep$hosts"
 
