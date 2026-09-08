@@ -141,3 +141,13 @@ REMOTE
     # Verbindung 2: normale interaktive SSH-Sitzung.
     command ssh -o WarnWeakCrypto=no "$target"
 )
+
+# Ein einfacher interaktiver SSH-Aufruf verwendet automatisch sshp.
+# Optionen und Remote-Befehle werden unveraendert an OpenSSH weitergegeben.
+ssh() {
+    if (( $# == 1 )) && [[ -n ${1-} && ${1-} != -* ]]; then
+        sshp "$1"
+    else
+        command ssh "$@"
+    fi
+}
