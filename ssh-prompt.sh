@@ -1,17 +1,97 @@
 #!/usr/bin/env bash
 
+# Gleichnamige Aliase entfernen. Aliase werden vor der Funktionsaufloesung
+# expandiert und wuerden die Wrapper unten sonst verdecken.
+unalias ssh sshp 2>/dev/null || true
+
+# OpenSSH-Optionen, deren Argument als separates Wort folgen kann. Wird nur
+# gebraucht, um Optionen sicher vom Ziel zu trennen.
+__sshp_option_takes_arg() {
+    case $1 in
+        -B|-b|-c|-D|-E|-e|-F|-I|-i|-J|-L|-l|-m|-O|-o|-P|-p|-Q|-R|-S|-W|-w)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+__sshp_usage() {
+    printf 'Aufruf: sshp [--force] [SSH-OPTIONEN ...] user@host\n'
+    printf '        sshp [--force] [SSH-OPTIONEN ...] SSH-Config-Alias\n'
+    printf '\n'
+    printf '  --force   Prompt-Dateien uebertragen, auch wenn die Signatur passt\n'
+    printf '  --help    Diese Hilfe anzeigen\n'
+    printf '\n'
+    printf 'SSH-Optionen werden unveraendert an OpenSSH durchgereicht und gelten\n'
+    printf 'sowohl fuer die Synchronisations- als auch fuer die Login-Verbindung.\n'
+    printf 'Ein Remote-Kommando wird nicht unterstuetzt, weil sshp immer eine\n'
+    printf 'interaktive Sitzung oeffnet. Dafuer "command ssh" verwenden.\n'
+}
+
 sshp() (
     local force=0
-    if [[ ${1-} == --force ]]; then
-        force=1
+    local target='' arg option expect_arg=0
+    # Eigene Optionen stehen bewusst vorn: bei -o gewinnt in OpenSSH die erste
+    # Angabe, dadurch bleibt WarnWeakCrypto=no auch bei eigenen -o erhalten.
+    local -a ssh_options=(-o WarnWeakCrypto=no)
+
+    while (( $# )); do
+        arg=$1
         shift
-    fi
-    if (( $# != 1 )) || [[ -z ${1-} || ${1-} == -* ]]; then
-        printf 'Aufruf: sshp [--force] user@host oder SSH-Config-Alias\n' >&2
+
+        if (( expect_arg )); then
+            ssh_options+=("$arg")
+            expect_arg=0
+            continue
+        fi
+
+        case $arg in
+            --force)
+                force=1
+                continue
+                ;;
+            --help|-h)
+                __sshp_usage
+                return 0
+                ;;
+            --)
+                target=${1-}
+                (( $# )) && shift
+                break
+                ;;
+            -*)
+                ssh_options+=("$arg")
+                option=${arg:0:2}
+                if __sshp_option_takes_arg "$option" && (( ${#arg} == 2 )); then
+                    expect_arg=1
+                fi
+                continue
+                ;;
+        esac
+
+        # Das erste Wort, das keine Option ist, ist das Ziel.
+        target=$arg
+        break
+    done
+
+    if (( expect_arg )); then
+        printf 'sshp: Zur letzten Option fehlt das Argument.\n' >&2
+        __sshp_usage >&2
         return 2
     fi
 
-    local target=$1
+    if [[ -z $target || $target == -* ]]; then
+        printf 'sshp: Es wird genau ein SSH-Ziel benoetigt.\n' >&2
+        __sshp_usage >&2
+        return 2
+    fi
+
+    if (( $# )); then
+        printf 'sshp: Ein Remote-Kommando wird nicht unterstuetzt: %s\n' "$1" >&2
+        printf 'Dafuer "command ssh %s %s ..." verwenden.\n' "$target" "$1" >&2
+        return 2
+    fi
+
     local config_root=${BASH_CONFIG_ROOT:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)}
     local state_dir="$HOME/.cache/sshp"
     local archive remote_script signature saved_signature
@@ -52,7 +132,7 @@ EOF
     [[ ! -r $state_file ]] || IFS= read -r saved_signature < "$state_file"
 
     if (( ! force )) && [[ ${saved_signature-} == "$signature" ]]; then
-        command ssh -o WarnWeakCrypto=no "$target"
+        command ssh "${ssh_options[@]}" "$target"
         return
     fi
 
@@ -104,7 +184,7 @@ LOADER
 fi
 REMOTE
 
-    if ! command ssh -T -o RemoteCommand=none -o WarnWeakCrypto=no \
+    if ! command ssh -T -o RemoteCommand=none "${ssh_options[@]}" \
         "$target" "$remote_script" < "$archive"; then
         printf 'sshp: Synchronisierung oder .bashrc-Aktualisierung fehlgeschlagen.\n' >&2
         return 1
@@ -114,7 +194,7 @@ REMOTE
     temporary_state=$(mktemp "$state_dir/.state.XXXXXX") || return 1
     printf '%s\n' "$signature" > "$temporary_state" || return 1
     mv -f "$temporary_state" "$state_file" || return 1
-    command ssh -o WarnWeakCrypto=no "$target"
+    command ssh "${ssh_options[@]}" "$target"
 )
 
 ssh() {

@@ -26,10 +26,6 @@ Set these before sourcing, in `local.sh`, or per command.
 | `SSH_RESOLVE_IP_TIMEOUT` | `3` | `ssh-resolve-ips` | Reverse-DNS timeout in seconds. Must be a positive integer |
 | `SSH_KNOWN_HOSTS_CLEAN_TIMEOUT` | `3` | `known-hosts-clean` | `ssh-keyscan` timeout in seconds. Must be a positive integer |
 | `SSH_PROMPT_SHOW_COMMAND` | `1` | `prompt.sh` | `0` hides the dim `letzter: <command>` line in the remote prompt |
-| `SSH_TOOLS_QUIET` | `1` | `bashrc.d/lib/ssh-command.sh` | `0`, `false`, `no` or `off` disables the `-q` default for the whole shell. **Currently inactive** — see [architecture.md#known-limitations](architecture.md#known-limitations) |
-
-`SSH_TOOLS_QUIET` is the only one of these that does not currently take effect
-with the shipped load order.
 
 ### Internal variables
 
@@ -42,8 +38,6 @@ Not meant to be set by hand, but useful when debugging:
 | `__cmd_elapsed_us` | Duration of the last command in microseconds |
 | `__cmd_duration` | Formatted duration, e.g. `247ms` |
 | `__cmd_timer_start_us` | Start timestamp, unset after each measurement |
-| `__SSH_TOOLS_WRAPPER_BYPASS` | Recursion guard in the `ssh`/`sshp` wrapper layer |
-| `__ssh_tools_transport_captured` | Marks that the original `ssh`/`sshp` have been captured, so re-sourcing is harmless |
 
 ## Files and directories
 
@@ -53,7 +47,7 @@ Not meant to be set by hand, but useful when debugging:
 |---|---|---|
 | `~/.bashrc` | `install.sh` | Three-line loader for the checkout |
 | `~/.bashrc.before-modular-config.<timestamp>` | `install.sh` | Backup of the previous `~/.bashrc` |
-| `~/.cache/sshp/<crc>_<size>.state` | `sshp` | Sync signature per destination |
+| `~/.cache/sshp/<crc>_<size>.state` | `sshp` | Sync signature, keyed by the destination string (options are not part of the key) |
 | `<checkout>/local.sh` | you | Untracked machine-local settings, loaded last |
 | `~/.ssh/known_hosts.bak.<timestamp>` | `known-hosts-clean --apply` | Backup, only when the file actually changes |
 | `~/.ssh/config.bak.<timestamp>` | `known-hosts-clean --apply` | Backup, only when the file actually changes |

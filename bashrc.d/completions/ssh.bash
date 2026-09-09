@@ -168,11 +168,10 @@ _ssh_tools_ssh_completion() {
 
     cur=${__ssh_completion_line_words[__ssh_completion_line_cword]-}
 
-    # Eigene Wrapper-Schalter. OpenSSH selbst kennt diese Long-Options nicht;
-    # sie werden vor dem eigentlichen Aufruf entfernt.
-    if [[ $cur == --* ]]; then
-        [[ --banner == "$cur"* ]] && COMPREPLY+=(--banner)
-        [[ --no-quiet == "$cur"* ]] && COMPREPLY+=(--no-quiet)
+    # sshp kennt einen eigenen Long-Switch, OpenSSH selbst nicht.
+    if [[ $cur == --* && ${__ssh_completion_line_words[0]-} == *sshp ]]; then
+        [[ --force == "$cur"* ]] && COMPREPLY+=(--force)
+        [[ --help == "$cur"* ]] && COMPREPLY+=(--help)
         return 0
     fi
 

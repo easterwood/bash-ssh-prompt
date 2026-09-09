@@ -116,7 +116,7 @@ contents, so editing that file invalidates the cache automatically.
 ## `ssh-nr`
 
 ```
-ssh-nr [--banner] NR [SSHP-ARGUMENTE ...]
+ssh-nr NR [SSH-OPTIONEN ...]
 ssh-nr --list
 ssh-nr --help
 ```
@@ -151,10 +151,18 @@ with `printf %q` and `eval` so arguments stay shell-safe.
 Numbers must be positive integers; an invalid or out-of-range number returns a
 message pointing you back at `known-hosts`.
 
-> `--banner` and any extra arguments are forwarded to `sshp`, which in the
-> current code base only accepts a single destination. See
-> [architecture.md#known-limitations](architecture.md#known-limitations) — in
-> practice use `ssh-nr N` on its own.
+Any options you add are inserted **before** the destination, next to the ones
+`ssh-nr` supplies itself: `-F "$SSH_CONFIG_FILE"` when a non-default config is
+in use, and `-p <port>` for an alias-less target on a non-standard port.
+
+```bash
+ssh-nr 2 -v                    # verbose, port and config still applied
+SSH_CONFIG_FILE=~/.ssh/config.customer ssh-nr 1
+```
+
+Since `sshp` forwards options to both its connections, the sync and the login
+use identical settings. A remote command is not possible here — `sshp` rejects
+anything after the destination; use `command ssh` for that.
 
 ---
 
@@ -340,8 +348,8 @@ What it completes:
 - **Only at the destination position.** Options and their arguments are skipped;
   once a destination has been given, nothing more is offered.
 - **Filenames** after `-F`, `-i`, `-E`, `-I` and `-S`.
-- **`--banner` and `--no-quiet`** when the current word starts with `--`. These
-  are wrapper switches, not OpenSSH options.
+- **`--force` and `--help`**, but only when the command word is `sshp` — these
+  are `sshp`'s own switches and are not offered for `ssh`.
 - **Config aliases** and **plain `known_hosts` hostnames**. Entries such as
   `[host]:2222`, wildcard patterns and marker lines are excluded, because they
   are not valid `ssh` destinations.
@@ -382,7 +390,7 @@ pressing `TAB` does not fork processes just to validate the cache.
 |---|---|
 | `known-hosts` | `--lines`, `--zeilen`, `--refresh`, `--fingerprints`, `--help`; one filter from the filter-host list. Nothing after `--fingerprints`, and nothing once a filter is present |
 | `known-hosts-clean` | `--apply`, `--help` at the first position only |
-| `ssh-nr` | Quiet switches first, then the valid target numbers `1..n`; also `--help` and `--list` |
+| `ssh-nr` | The valid target numbers `1..n` at the first position; also `--help` and `--list` |
 | `ssh-resolve-ips` | `--refresh`, `--help` at the first position only |
 
 `ssh-nr` completion builds the same grouping as `known-hosts`, so the offered

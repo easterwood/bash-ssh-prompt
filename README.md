@@ -90,6 +90,7 @@ known-hosts --fingerprints   # original ssh-keygen fingerprint output
 
 ssh-nr 4                # log in to target number 4 from the list above
 ssh myserver            # single argument -> routed through sshp
+sshp -p 2222 myserver   # OpenSSH options are passed through
 sshp --force myserver   # force a prompt re-sync before logging in
 
 ssh-resolve-ips         # reverse-DNS for all IPs in config + known_hosts
@@ -123,7 +124,6 @@ bashrc.d/
     known-hosts.sh         known-hosts overview and grouping model
     known-hosts-clean.sh   known-hosts-clean
     ssh-by-number.sh       ssh-nr
-    ssh-command.sh         Quiet-by-default wrappers for ssh/sshp
     ssh-resolve-ips.sh     ssh-resolve-ips
   completions/             Bash completion for all of the above
 

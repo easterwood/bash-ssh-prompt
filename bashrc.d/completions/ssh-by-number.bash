@@ -3,30 +3,17 @@
 _ssh_by_number_completion() {
     local known_hosts_file=${SSH_KNOWN_HOSTS_FILE:-$HOME/.ssh/known_hosts}
     local config=${SSH_CONFIG_FILE:-$HOME/.ssh/config}
-    local cur nr i first_nr_word=1
+    local cur nr
 
     COMPREPLY=()
     cur=${COMP_WORDS[COMP_CWORD]}
 
-    # Vor der Zielnummer koennen die Quiet-Schalter stehen.
-    for ((i=1; i<COMP_CWORD; i++)); do
-        case ${COMP_WORDS[i]} in
-            --banner|--no-quiet|--quiet)
-                ((first_nr_word+=1))
-                ;;
-            *)
-                break
-                ;;
-        esac
-    done
-
-    (( COMP_CWORD == first_nr_word )) || return 0
+    # Die Zielnummer ist immer das erste Argument.
+    (( COMP_CWORD == 1 )) || return 0
 
     if [[ $cur == -* ]]; then
         [[ --help == "$cur"* ]] && COMPREPLY+=(--help)
         [[ --list == "$cur"* ]] && COMPREPLY+=(--list)
-        [[ --banner == "$cur"* ]] && COMPREPLY+=(--banner)
-        [[ --no-quiet == "$cur"* ]] && COMPREPLY+=(--no-quiet)
         return 0
     fi
 

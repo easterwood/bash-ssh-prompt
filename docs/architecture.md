@@ -13,23 +13,25 @@
        │    ├─ lib/ssh-config.sh     │
        │    ├─ lib/known-hosts.sh    │ libraries
        │    ├─ lib/known-hosts-clean.sh
-       │    ├─ lib/ssh-command.sh    │ defines ssh()/sshp() wrappers
        │    ├─ lib/ssh-by-number.sh  │
        │    ├─ lib/ssh-resolve-ips.sh┘
        │    ├─ completions/*.bash
        │    └─ aliases + complete registrations
        ├─ bashrc.d/prompt-core.sh    command timer, window title
        ├─ bashrc.d/prompt-local.sh   bash-git-prompt wiring
-       ├─ ssh-prompt.sh              sshp + ssh() wrapper   <-- overrides above
+       ├─ ssh-prompt.sh              sshp + ssh() wrapper
        └─ local.sh                   optional, untracked
 ```
 
 `bashrc.sh` guards on `[[ $- == *i* ]]`, so non-interactive shells (scripts,
 `scp`, `rsync`) exit the file immediately.
 
-The one thing to know about this order: `ssh-prompt.sh` is loaded **after**
-`ssh-tools.sh`, so its `ssh()` and `sshp()` definitions replace the wrappers
-from `lib/ssh-command.sh`. See [Known limitations](#known-limitations).
+`ssh()` and `sshp()` are defined in exactly one place, `ssh-prompt.sh`. It
+starts with `unalias ssh sshp`, because aliases are expanded before function
+lookup and would otherwise shadow the wrappers at the interactive prompt. The
+completion registrations for both names live in `ssh-tools.sh`, which is loaded
+earlier — the order does not matter there, since `complete -F` only stores a
+function name.
 
 ## `PROMPT_COMMAND` composition
 
@@ -72,7 +74,8 @@ keeps the trap from firing for each function call inside a pipeline.
 | `__kh_clean_*` | `known-hosts-clean` state |
 | `__ssh_completion_*` | Shared completion cache and helpers |
 | `__ssh_resolve_ips_*` | `ssh-resolve-ips` internals and DNS cache |
-| `__ssh_tools_*` | `ssh`/`sshp` wrapper layer |
+| `__ssh_tools_dir` | Loader-local path helper in `ssh-tools.sh`, unset again at the end |
+| `__sshp_*` | `sshp` helpers: option table and usage text |
 | `_ssh_*_completion` | Functions registered with `complete -F` |
 | `ssh_known_hosts`, `ssh_by_number`, … | Public functions behind the hyphenated aliases |
 
@@ -154,29 +157,6 @@ Validation uses only Bash builtins (`$(< file)`, `compgen -G`), so pressing
 `TAB` does not fork processes just to decide whether the cache is still good.
 `known-hosts --refresh` clears the first three at once.
 
-## The wrapper layer — `lib/ssh-command.sh`
-
-This file is designed to sit on top of whatever `ssh`/`sshp` already exist:
-
-- It captures the original definitions **once**, guarded by
-  `__ssh_tools_transport_captured`, so re-sourcing `ssh-tools.sh` is harmless.
-  A function is copied to `__ssh_tools_original_<name>` by rewriting the first
-  token of its `declare -f` output; an alias body is stored verbatim; the
-  external path is remembered via `type -P`.
-- It removes conflicting aliases, because aliases are expanded before function
-  lookup and would shadow the wrappers at the interactive prompt.
-- `__SSH_TOOLS_WRAPPER_BYPASS` guards against recursion when a captured alias or
-  function itself calls `ssh`.
-- `__ssh_tools_prepare_transport_args` walks the argument list and removes only
-  its own switches (`--banner`, `--no-quiet`, `--quiet`) and only *before* the
-  destination. Arguments belonging to a remote command are never touched. It
-  knows which OpenSSH options take a separate argument so that
-  `ssh -p 2222 --banner host` is parsed correctly.
-- The intended behaviour is `-q` by default, overridable per call with
-  `--banner`/`--no-quiet` or per shell with `SSH_TOOLS_QUIET=0`.
-
-With the shipped load order none of this takes effect — see below.
-
 ## Testing
 
 ```bash
@@ -215,26 +195,26 @@ logins, and GNU `ls` option availability on every target.
 
 ## Known limitations
 
-### 1. The two `ssh`/`sshp` wrappers collide
+### 1. `sshp` opens interactive logins only
 
-`bashrc.sh` sources `ssh-prompt.sh` after `bashrc.d/ssh-tools.sh`. Both define
-`ssh()` and `sshp()`, so the later definitions win and the whole
-`lib/ssh-command.sh` layer is inert. Consequences:
+`sshp` forwards OpenSSH options but rejects anything after the destination,
+because it always ends in an interactive login — syncing a prompt for
+`host uname -a` would be pointless. Use `command ssh` for one-off commands.
 
-- `-q` is **not** applied by default;
-- `--banner`, `--no-quiet` and `--quiet` are not recognised (completion still
-  offers `--banner` and `--no-quiet`);
-- `SSH_TOOLS_QUIET` has no effect;
-- `ssh-nr`'s extra arguments — `--banner`, and `-F`/`-p` for targets without a
-  config alias — are rejected by `sshp`, which accepts only `[--force] DEST`.
+The `ssh()` wrapper is also deliberately narrow: it routes to `sshp` only for a
+bare single-argument call, so `ssh -p 2222 host` still goes to native OpenSSH
+and gets no synced prompt. Call `sshp -p 2222 host` explicitly if you want it.
 
-Simply swapping the two `source` lines is **not** sufficient: the wrapper then
-calls `sshp -q DEST`, and `sshp` rejects a leading `-`. A proper fix needs
-either `sshp` extended to pass options through to `command ssh`, or
-`lib/ssh-command.sh` changed so it does not inject `-q` into `sshp`.
+Finally, the sync state is keyed by the destination string alone. `sshp web01`
+and `sshp -F other-config web01` share one state entry, so if two configs map
+the same alias to different machines, use `--force`.
 
-Practical workaround today: use `ssh-nr N` without extra arguments, and reach
-non-standard ports through a `~/.ssh/config` alias rather than `-p`.
+> Earlier versions shipped a second wrapper layer in `bashrc.d/lib/ssh-command.sh`
+> that added `-q` by default plus `--banner`/`--no-quiet`/`--quiet` and
+> `SSH_TOOLS_QUIET`. Because `ssh-prompt.sh` is sourced later and redefines
+> `ssh()`/`sshp()`, that layer was never active. It has been removed together
+> with its switches and their completions; option handling now lives in `sshp`
+> itself.
 
 ### 2. `bashrc.d/environment.sh` is machine-specific
 

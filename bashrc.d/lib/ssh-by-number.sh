@@ -51,26 +51,15 @@ ssh_by_number() {
     local config=${SSH_CONFIG_FILE:-$HOME/.ssh/config}
     local nr=${1-}
     local gid alias target host port=''
-    local show_banner=0
     local -a sshp_args=()
-
-    while [[ ${1-} == --banner || ${1-} == --no-quiet || ${1-} == --quiet ]]; do
-        case $1 in
-            --banner|--no-quiet) show_banner=1 ;;
-            --quiet)             show_banner=0 ;;
-        esac
-        shift
-    done
-
-    nr=${1-}
 
     case $nr in
         --help|-h|'')
-            printf 'Aufruf: ssh-nr [--banner] NR [SSHP-ARGUMENTE ...]\n'
+            printf 'Aufruf: ssh-nr NR [SSH-OPTIONEN ...]\n'
             printf '        ssh-nr --list\n'
             printf '\nNR ist die eindeutige Zielnummer aus der ersten Spalte von known-hosts.\n'
             printf 'Das aufgeloeste Ziel wird anschliessend ueber sshp verbunden.\n'
-            printf 'Standardmaessig ist SSH quiet (-q); --banner bzw. --no-quiet zeigt den Banner.\n'
+            printf 'SSH-Optionen werden vor dem Ziel an sshp uebergeben.\n'
             [[ -n $nr ]] && return 0 || return 2
             ;;
         --list|-l)
@@ -89,8 +78,6 @@ ssh_by_number() {
         return 2
     }
     shift
-
-    (( show_banner )) && sshp_args+=(--banner)
 
     [[ -r $known_hosts_file ]] || {
         printf 'ssh-nr: %s fehlt oder ist nicht lesbar.\n' "$known_hosts_file" >&2
@@ -115,8 +102,8 @@ ssh_by_number() {
         if [[ $config != "$HOME/.ssh/config" ]]; then
             sshp_args+=(-F "$config")
         fi
-        sshp_args+=("$alias")
         sshp_args+=("$@")
+        sshp_args+=("$alias")
         __ssh_by_number_run_sshp "${sshp_args[@]}"
         return $?
     fi
@@ -141,8 +128,8 @@ ssh_by_number() {
         sshp_args+=(-F "$config")
     fi
     [[ -z $port ]] || sshp_args+=(-p "$port")
-    sshp_args+=("$host")
     sshp_args+=("$@")
+    sshp_args+=("$host")
 
     __ssh_by_number_run_sshp "${sshp_args[@]}"
 }

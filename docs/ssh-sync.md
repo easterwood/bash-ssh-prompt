@@ -8,25 +8,61 @@ exactly one SSH connection.
 ## Usage
 
 ```bash
-sshp HOST                 # SSH config alias
-sshp user@host            # explicit user
-sshp --force HOST         # re-sync even if the signature matches
+sshp HOST                                # SSH config alias
+sshp user@host                           # explicit user
+sshp --force HOST                        # re-sync even if the signature matches
+sshp -p 2222 HOST                        # OpenSSH options are passed through
+sshp -J jump.example.com -i ~/.ssh/id_ed25519 db01
+sshp --help
 ```
 
-Exactly one destination is required. Anything else — zero arguments, several
-arguments, or a destination starting with `-` — prints a usage line and returns
-exit code `2`:
+Exactly one destination is required, and it must come after any options.
+`--force` and `--help` are `sshp`'s own switches; everything else starting with
+`-` is forwarded verbatim to OpenSSH. `--` ends option parsing, so the next word
+is taken as the destination.
 
-```
-Aufruf: sshp [--force] user@host oder SSH-Config-Alias
-```
+Errors all return exit code `2` with a usage block:
 
-> `sshp` does **not** accept OpenSSH options such as `-p` or `-F`. If you need
-> them, use `command ssh` directly. This also limits `ssh-nr` for some targets —
-> see [architecture.md#known-limitations](architecture.md#known-limitations).
+| Situation | Message |
+|---|---|
+| No destination given | `sshp: Es wird genau ein SSH-Ziel benoetigt.` |
+| An option's argument is missing (e.g. a trailing `-p`) | `sshp: Zur letzten Option fehlt das Argument.` |
+| Words remain after the destination | `sshp: Ein Remote-Kommando wird nicht unterstuetzt: …` |
+
+A remote command is rejected on purpose: `sshp` always ends in an interactive
+login, so `sshp host uname -a` would sync the prompt for nothing. Use
+`command ssh host uname -a` instead.
 
 The whole function body is a subshell (`sshp() ( … )`), so its `local`
 variables, `trap` and working state cannot leak into your interactive shell.
+
+## Option pass-through
+
+Options are collected into one array that is used for **both** the sync
+connection and the login connection, so `-p`, `-F`, `-J`, `-i` and friends apply
+consistently — a target on a non-standard port syncs over that same port.
+
+`sshp`'s own options are placed first:
+
+```
+sync:   ssh -T -o RemoteCommand=none -o WarnWeakCrypto=no <your options> HOST
+login:  ssh -o WarnWeakCrypto=no <your options> HOST
+```
+
+The order matters. For `-o` settings OpenSSH keeps the **first** value it sees,
+so `RemoteCommand=none` cannot be overridden by a `RemoteCommand` in your
+config, while your own `-o` settings still win over anything the config file
+supplies later.
+
+`__sshp_option_takes_arg` knows which OpenSSH options consume the following
+word (`-B -b -c -D -E -e -F -I -i -J -L -l -m -O -o -P -p -Q -R -S -W -w`), so
+both `-p 2222` and the attached form `-p2222` are parsed correctly and the
+destination is never mistaken for an option argument.
+
+> The stored sync state is keyed by the **destination string only**, not by the
+> options. `sshp web01` and `sshp -F other-config web01` therefore share one
+> state entry. If two configs map the same alias to different machines, force a
+> re-sync with `--force`.
 
 ## The `ssh()` wrapper
 
@@ -51,6 +87,16 @@ a remote command goes to the real OpenSSH client untouched:
 | `ssh -p 2222 server` | native `ssh` |
 | `ssh server uname -a` | native `ssh` |
 | `command ssh server` | native `ssh` |
+
+The wrapper is deliberately conservative and was left alone when `sshp` gained
+option pass-through: `sshp -p 2222 server` now works, but `ssh -p 2222 server`
+still goes straight to OpenSSH, so tunnels (`-N -L …`) and one-off commands
+behave exactly as they always did. Call `sshp` explicitly when you want the
+synced prompt with options.
+
+`ssh-prompt.sh` runs `unalias ssh sshp` before defining the two functions,
+because aliases are expanded before function lookup and a distribution-supplied
+`alias ssh=…` would otherwise shadow them.
 
 ## Which files are synced
 
@@ -89,18 +135,19 @@ The three files are packed with `tar -czf` into a `mktemp` archive, removed
 again by an `EXIT` trap, and streamed on standard input to:
 
 ```bash
-command ssh -T -o RemoteCommand=none -o WarnWeakCrypto=no "$target" "$remote_script" < "$archive"
+command ssh -T -o RemoteCommand=none "${ssh_options[@]}" "$target" "$remote_script" < "$archive"
 ```
 
 - `-T` disables pseudo-terminal allocation for the sync connection.
 - `RemoteCommand=none` neutralises a `RemoteCommand` in your SSH config that
   would otherwise swallow the script.
-- `WarnWeakCrypto=no` suppresses the weak-crypto warning (also passed on the
-  login connection).
+- `ssh_options` starts with `-o WarnWeakCrypto=no` and then holds whatever you
+  passed on the command line.
 
-The login connection is a separate, plain `command ssh` call afterwards. This is
-why the first call after a change opens **two** connections and prompts twice
-for a password if you are not using keys or a control master.
+The login connection is a separate `command ssh "${ssh_options[@]}" "$target"`
+call afterwards. This is why the first call after a change opens **two**
+connections and prompts twice for a password if you are not using keys or a
+control master.
 
 ## What the remote script does
 
