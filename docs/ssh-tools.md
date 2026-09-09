@@ -33,17 +33,17 @@ to your shell, grouped by purpose, so you do not have to read `docs/` to
 remember what exists.
 
 ```
-Prompt und Anzeige
-  ll                  Verzeichnisinhalt mit ausgerichteten Spalten und farbigem Besitzer
+Prompt and display
+  ll                  Directory listing with aligned columns and a colour-coded owner
 
-SSH-Verbindung
-  ssh                 OpenSSH-Wrapper; einfache Logins laufen ueber sshp
-  sshp                Prompt-Dateien zum Ziel uebertragen und einloggen
-  ssh-nr              Login ueber die Zielnummer aus known-hosts
+SSH connection
+  ssh                 OpenSSH wrapper; plain logins are routed through sshp
+  sshp                Copy the prompt files to the destination and log in
+  ssh-nr              Log in by the target number from known-hosts
 
-SSH-Uebersicht
-  known-hosts         Bekannte SSH-Ziele mit Alias, Benutzer und Zielnummer
-  ssh-resolve-ips     IPs aus SSH-Config und known_hosts per Reverse-DNS aufloesen
+SSH overview
+  known-hosts         Known SSH targets with alias, user and target number
+  ssh-resolve-ips     Reverse-DNS for IPs from the SSH config and known_hosts
 ...
 ```
 
@@ -105,27 +105,27 @@ alias, `known_hosts` lookup key and effective user. Multiple `known_hosts` lines
 and multiple key types for the same target are merged into a single row.
 
 ```
-NR  ZIEL                  ALIAS         BENUTZER  SCHLÜSSEL
+NR  TARGET                ALIAS         USER      KEYS
 1   web01.example.com     web01         deploy    ED25519, RSA
 2   10.0.0.9              -             alex      ED25519
 3   [db.example.com]:2222 db-prod       postgres  ED25519
-4   [gehashter Hostname]  -             -         ED25519
+4   [hashed hostname]     -             -         ED25519
 ```
 
 | Column | Meaning |
 |---|---|
 | `NR` | Stable target number for the current file state — this is what `ssh-nr` takes |
-| `ZEILE` | `known_hosts` line numbers, comma-separated (only with `--lines`) |
-| `ZIEL` | The lookup key: hostname, `[host]:port`, or a marker such as `@cert-authority` |
+| `LINE` | `known_hosts` line numbers, comma-separated (only with `--lines`) |
+| `TARGET` | The lookup key: hostname, `[host]:port`, or a marker such as `@cert-authority` |
 | `ALIAS` | Matching `~/.ssh/config` alias, or `-` if the entry has none |
-| `BENUTZER` | Effective SSH user, or `-` if none could be determined |
-| `SCHLÜSSEL` | Key types, normalised (leading `ssh-` stripped, uppercased) |
+| `USER` | Effective SSH user, or `-` if none could be determined |
+| `KEYS` | Key types, normalised (leading `ssh-` stripped, uppercased) |
 
 ### Options
 
 | Option | Effect |
 |---|---|
-| `--lines`, `--zeilen` | Add the `ZEILE` column with `known_hosts` line numbers |
+| `--lines` | Add the `LINE` column with `known_hosts` line numbers |
 | `--refresh` | Discard the in-shell caches and re-read everything |
 | `--fingerprints` | Run `ssh-keygen -l -E sha256` once over the whole file and print its original output |
 | `--help`, `-h` | Usage |
@@ -149,11 +149,11 @@ known-hosts 2222        # by port in the lookup key
 ```
 
 When nothing matches, the header is still printed followed by
-`Keine lesbaren Einträge für "<filter>" gefunden.`
+`No readable entries found for "<filter>".`
 
 ### Colour semantics
 
-`ZIEL` and `ALIAS` are cyan, key types are yellow, and the user column is
+`TARGET` and `ALIAS` are cyan, key types are yellow, and the user column is
 **magenta when the user is inherited** rather than explicitly configured. A
 plain (uncoloured) user means it comes from a concrete `Host` block in your own
 config. A magenta user was inherited from a `Host *` block, a wildcard pattern
@@ -163,7 +163,7 @@ account you think it is.
 ### Hashed entries
 
 If `HashKnownHosts` is enabled, the original hostname cannot be recovered from
-the file. Such lines are shown as `[gehashter Hostname]`, and they are never
+the file. Such lines are shown as `[hashed hostname]`, and they are never
 displayed as if they were a readable hostname. They are also excluded from
 filtering by name, for the same reason.
 
@@ -536,7 +536,7 @@ pressing `TAB` does not fork processes just to validate the cache.
 
 | Command | Completes |
 |---|---|
-| `known-hosts` | `--lines`, `--zeilen`, `--refresh`, `--fingerprints`, `--help`; one filter from the filter-host list. Nothing after `--fingerprints`, and nothing once a filter is present |
+| `known-hosts` | `--lines`, `--refresh`, `--fingerprints`, `--help`; one filter from the filter-host list. Nothing after `--fingerprints`, and nothing once a filter is present |
 | `known-hosts-clean` | `--apply`, `--help` at the first position only |
 | `ssh-nr` | The valid target numbers `1..n` at the first position; also `--help` and `--list` |
 | `ssh-resolve-ips` | `--refresh`, `--help` at the first position only |

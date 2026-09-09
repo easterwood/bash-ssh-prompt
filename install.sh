@@ -16,7 +16,7 @@ done
 
 if [[ -e $bashrc ]]; then
     cp -p "$bashrc" "$backup"
-    printf 'Sicherung: %s\n' "$backup"
+    printf 'Backup: %s\n' "$backup"
 fi
 
 printf -v quoted_root '%q' "$config_root"
@@ -27,4 +27,4 @@ printf -v quoted_root '%q' "$config_root"
 } > "$bashrc"
 
 bash -n "$bashrc"
-printf 'Installiert. Neu laden mit: source %q\n' "$bashrc"
+printf 'Installed. Reload with: source %q\n' "$bashrc"

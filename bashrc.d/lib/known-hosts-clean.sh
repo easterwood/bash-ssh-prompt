@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-# Bereinigung fuer known_hosts und die primaere SSH-Benutzerkonfiguration.
-# Standardmaessig nur Dry-Run; mit --apply werden nach Backups beide Dateien
-# geschrieben. Include-Dateien aus der SSH-Konfiguration werden nicht veraendert.
+# Cleanup for known_hosts and the primary SSH user configuration.
+# Dry run by default; with --apply both files are written after backups have
+# been made. Include files of the SSH configuration are left untouched.
 declare -A __kh_clean_seen=()
 declare -A __kh_clean_target_checked=()
 declare -A __kh_clean_target_keep=()
@@ -25,10 +25,10 @@ __kh_clean_scan_type_for() {
 }
 
 # Return:
-#   0 = Key stimmt
-#   1 = Key stimmt nicht / nicht mehr vorhanden
-#   2 = Host nicht erreichbar / kein Key geliefert
-#   3 = Keytyp nicht unterstuetzt
+#   0 = key matches
+#   1 = key does not match / no longer present
+#   2 = host unreachable / no key returned
+#   3 = key type not supported
 __kh_clean_check_entry() {
     local host=$1 port=$2 keytype=$3 stored_key=$4 timeout=$5
     local scan_type scanned current_key
@@ -65,9 +65,9 @@ __kh_clean_reset_state() {
     __kh_clean_endpoint_unreachable=()
 }
 
-# Merkt sich das Ergebnis eines pruefbaren known_hosts-Eintrags pro Lookup-Ziel.
-# Ein Ziel gilt spaeter nur dann als veraltet, wenn mindestens ein Eintrag
-# MISMATCH/UNREACHABLE war und kein Eintrag fuer dieses Ziel behalten wird.
+# Records the result of a checkable known_hosts entry per lookup target.
+# A target only counts as stale later if at least one entry was
+# MISMATCH/UNREACHABLE and no entry for that target is kept.
 __kh_clean_record_target_result() {
     local lookup=$1 result=$2
 
@@ -107,10 +107,10 @@ __kh_clean_finalize_targets() {
     done
 }
 
-# Schreibt eine known_hosts-Zeile genau einmal in die temporaere Datei.
-# Kommentare bzw. unterschiedliche Abstaende ausserhalb der relevanten Felder
-# beeinflussen die Duplikaterkennung nicht.
-# Return 10 bedeutet: exaktes Duplikat, Zeile wurde bewusst nicht geschrieben.
+# Writes a known_hosts line to the temporary file exactly once.
+# Comments or differing whitespace outside the relevant fields do not affect
+# duplicate detection.
+# Return 10 means: exact duplicate, the line was deliberately not written.
 __kh_clean_keep_line() {
     local line=$1 tmp=$2
     local marker='' hosts keytype stored_key rest identity
@@ -121,7 +121,7 @@ __kh_clean_keep_line() {
         read -r marker hosts keytype stored_key rest <<< "$line"
     fi
 
-    # Unvollstaendige Eintraege unveraendert behalten.
+    # Keep incomplete entries unchanged.
     if [[ -z $hosts || -z $keytype || -z $stored_key ]]; then
         printf '%s\n' "$line" >> "$tmp"
         return $?
@@ -138,11 +138,11 @@ __kh_clean_keep_line() {
     printf '%s\n' "$line" >> "$tmp"
 }
 
-# Loest einen konkreten Host-Alias so auf, wie known-hosts es ebenfalls tut.
-# Ergebnisse:
-#   __kh_clean_resolved_host    tatsaechliches Verbindungsziel
-#   __kh_clean_resolved_port    effektiver Port
-#   __kh_clean_resolved_lookup  known_hosts-Lookup inkl. HostKeyAlias/Port
+# Resolves a concrete host alias the same way known-hosts does.
+# Results:
+#   __kh_clean_resolved_host    actual connection target
+#   __kh_clean_resolved_port    effective port
+#   __kh_clean_resolved_lookup  known_hosts lookup incl. HostKeyAlias/port
 __kh_clean_resolve_alias() {
     local config=$1 alias=$2
     local resolved field value host='' port=22 keyalias=''
@@ -176,13 +176,12 @@ __kh_clean_resolve_alias() {
     return 0
 }
 
-# Prueft ein Config-Ziel, wenn known_hosts fuer dieses Ziel keine belastbare
-# Entscheidung geliefert hat. Es genuegt irgendein von ssh-keyscan gelieferter
-# Host-Key; die eigentliche Key-Uebereinstimmung wird weiterhin ueber
-# known_hosts geprueft. Ergebnisse werden pro Host/Port gecacht.
+# Checks a config target when known_hosts did not yield a reliable decision for
+# it. Any host key returned by ssh-keyscan is enough; the actual key match is
+# still verified through known_hosts. Results are cached per host/port.
 # Return:
-#   0 = erreichbar / mindestens ein Host-Key geliefert
-#   2 = nicht erreichbar / kein Host-Key geliefert
+#   0 = reachable / at least one host key returned
+#   2 = unreachable / no host key returned
 __kh_clean_check_endpoint() {
     local host=$1 port=$2 timeout=$3
     local endpoint scanned
@@ -212,14 +211,14 @@ __kh_clean_check_endpoint() {
     return 2
 }
 
-# Zerlegt eine Host-Zeile der SSH-Konfiguration in konkrete, sicher
-# bearbeitbare Aliase. Bei Wildcards/Negationen/Quotes wird nichts umgeschrieben.
-# Ergebnisarrays:
-#   __kh_clean_cfg_tokens       alle Host-Tokens
-#   __kh_clean_cfg_keep_tokens  nicht zu entfernende Tokens
-#   __kh_clean_cfg_drop_tokens  zu entfernende Tokens
+# Splits a Host line of the SSH configuration into concrete aliases that are
+# safe to edit. Nothing is rewritten for wildcards/negations/quotes.
+# Result arrays:
+#   __kh_clean_cfg_tokens       all host tokens
+#   __kh_clean_cfg_keep_tokens  tokens that are not to be removed
+#   __kh_clean_cfg_drop_tokens  tokens that are to be removed
 # Globals:
-#   __kh_clean_cfg_complex      1 bei komplexer Host-Zeile
+#   __kh_clean_cfg_complex      1 for a complex Host line
 __kh_clean_classify_host_line() {
     local config=$1 content=$2 timeout=$3
     local keyword token lookup host port
@@ -242,7 +241,7 @@ __kh_clean_classify_host_line() {
     for token in "${words[@]:1}"; do
         __kh_clean_cfg_tokens+=("$token")
 
-        # Nur einfache, konkrete Host-Aliase automatisch aendern.
+        # Only change simple, concrete host aliases automatically.
         if [[ -z $token || $token == '!'* ||
               $token == *'*'* || $token == *'?'* || $token == *'['* ||
               $token == *'"'* || $token == *"'"* ||
@@ -253,7 +252,7 @@ __kh_clean_classify_host_line() {
         fi
 
         if ! __kh_clean_resolve_alias "$config" "$token"; then
-            # Kann ssh -G den Alias nicht auswerten, wird er aus Sicherheitsgruenden behalten.
+            # If ssh -G cannot evaluate the alias, it is kept for safety.
             __kh_clean_cfg_keep_tokens+=("$token")
             continue
         fi
@@ -269,17 +268,17 @@ __kh_clean_classify_host_line() {
             continue
         fi
 
-        # Wurde das Ziel anhand eines pruefbaren known_hosts-Eintrags bewertet
-        # und nicht als veraltet markiert, bleibt die Config bestehen. Das gilt
-        # insbesondere bei einem gueltigen oder nicht unterstuetzten Keytyp.
+        # If the target was judged from a checkable known_hosts entry and was
+        # not marked stale, the config stays as it is. That applies in
+        # particular to a valid or unsupported key type.
         if [[ -n ${__kh_clean_target_checked["$lookup"]+x} ]]; then
             __kh_clean_cfg_keep_tokens+=("$token")
             continue
         fi
 
-        # Fuer Config-Ziele ohne pruefbaren known_hosts-Eintrag (z. B. noch nie
-        # verbunden oder nur gehashter Eintrag) wird die Erreichbarkeit direkt
-        # ueber das tatsaechliche HostName/Port-Ziel geprueft.
+        # For config targets without a checkable known_hosts entry (never
+        # connected, or a hashed entry only) reachability is checked directly
+        # against the actual HostName/port target.
         if __kh_clean_check_endpoint "$host" "$port" "$timeout"; then
             __kh_clean_cfg_keep_tokens+=("$token")
         else
@@ -292,8 +291,8 @@ __kh_clean_classify_host_line() {
     return 0
 }
 
-# Erstellt die bereinigte Version der primaeren SSH-Konfiguration.
-# Include-Dateien werden bewusst nicht veraendert.
+# Builds the cleaned version of the primary SSH configuration.
+# Include files are deliberately left untouched.
 __kh_clean_build_config() {
     local config=$1 tmp=$2 timeout=$3
     local line code content header_keyword indent comment
@@ -348,9 +347,9 @@ __kh_clean_build_config() {
         ((changes+=${#__kh_clean_cfg_drop_tokens[@]}))
 
         if ((${#__kh_clean_cfg_keep_tokens[@]} == 0)); then
-            # Gesamten Host-Block entfernen, nicht nur die Direktiven. Dadurch
-            # bleiben auch auskommentierte blockbezogene Optionen wie
-            # #IdentityFile oder #RemoteCommand nicht verwaist zurueck.
+            # Remove the whole Host block, not just the directives. That way
+            # commented-out block options such as #IdentityFile or
+            # #RemoteCommand are not left behind orphaned either.
             block_end=${#lines[@]}
             for ((j=i+1; j<${#lines[@]}; j++)); do
                 code=${lines[$j]%%#*}
@@ -368,8 +367,8 @@ __kh_clean_build_config() {
             continue
         fi
 
-        # Mehrere konkrete Aliase in einer Host-Zeile: nur die veralteten
-        # Aliase entfernen und den Block fuer die verbleibenden behalten.
+        # Several concrete aliases on one Host line: remove only the stale
+        # aliases and keep the block for the remaining ones.
         indent=${line%%[![:space:]]*}
         comment=''
         [[ $line == *'#'* ]] && comment=${line#*#}
@@ -390,23 +389,23 @@ __kh_clean_build_config() {
 
 __kh_clean_usage() {
     cat <<'EOF_USAGE'
-Aufruf: known-hosts-clean [--apply]
+Usage: known-hosts-clean [--apply]
 
-Prueft nicht gehashte known_hosts-Eintraege mit ssh-keyscan und entfernt
-passende veraltete Host-Aliase aus der primaeren SSH-Konfiguration.
-Ohne --apply wird nur angezeigt, was entfernt wuerde.
-Mit --apply werden vor Aenderungen Backups angelegt.
+Checks non-hashed known_hosts entries with ssh-keyscan and removes the matching
+stale host aliases from the primary SSH configuration.
+Without --apply it only shows what would be removed.
+With --apply, backups are created before any change.
 
-Ein Config-Alias wird entfernt, wenn sein aufgeloestes known_hosts-Ziel nach
-der Key-Pruefung veraltet ist. Gibt es fuer den Alias keinen pruefbaren
-known_hosts-Eintrag, wird HostName/Port direkt mit ssh-keyscan geprueft und ein
-nicht erreichbares Ziel ebenfalls entfernt. Komplexe Host-Muster und
-Include-Dateien werden nicht automatisch geaendert.
+A config alias is removed when its resolved known_hosts target is stale after
+the key check. If there is no checkable known_hosts entry for the alias,
+HostName/port is checked directly with ssh-keyscan and an unreachable target is
+removed as well. Complex host patterns and include files are not changed
+automatically.
 
-Umgebungsvariablen:
-  SSH_KNOWN_HOSTS_FILE           Pfad zu known_hosts
-  SSH_CONFIG_FILE                Primaere SSH-Konfiguration
-  SSH_KNOWN_HOSTS_CLEAN_TIMEOUT  ssh-keyscan Timeout in Sekunden (Standard: 3)
+Environment variables:
+  SSH_KNOWN_HOSTS_FILE           Path to known_hosts
+  SSH_CONFIG_FILE                Primary SSH configuration
+  SSH_KNOWN_HOSTS_CLEAN_TIMEOUT  ssh-keyscan timeout in seconds (default: 3)
 EOF_USAGE
 }
 
@@ -440,19 +439,19 @@ ssh_known_hosts_clean() {
     }
 
     [[ $timeout =~ ^[1-9][0-9]*$ ]] || {
-        printf 'known-hosts-clean: ungueltiger Timeout: %s\n' "$timeout" >&2
+        printf 'known-hosts-clean: invalid timeout: %s\n' "$timeout" >&2
         return 2
     }
 
     [[ -f $known_hosts_file && -r $known_hosts_file ]] || {
-        printf 'known-hosts-clean: known_hosts nicht gefunden oder nicht lesbar: %s\n' \
+        printf 'known-hosts-clean: known_hosts not found or not readable: %s\n' \
             "$known_hosts_file" >&2
         return 1
     }
 
     if [[ -e $config ]]; then
         [[ -f $config && -r $config ]] || {
-            printf 'known-hosts-clean: SSH-Konfiguration nicht lesbar: %s\n' "$config" >&2
+            printf 'known-hosts-clean: SSH configuration not readable: %s\n' "$config" >&2
             return 1
         }
         config_exists=1
@@ -460,46 +459,46 @@ ssh_known_hosts_clean() {
 
     if (( apply )); then
         [[ -w $known_hosts_file ]] || {
-            printf 'known-hosts-clean: known_hosts ist nicht beschreibbar: %s\n' \
+            printf 'known-hosts-clean: known_hosts is not writable: %s\n' \
                 "$known_hosts_file" >&2
             return 1
         }
         if (( config_exists )) && [[ ! -w $config ]]; then
-            printf 'known-hosts-clean: SSH-Konfiguration ist nicht beschreibbar: %s\n' \
+            printf 'known-hosts-clean: SSH configuration is not writable: %s\n' \
                 "$config" >&2
             return 1
         fi
     fi
 
     command -v ssh-keyscan >/dev/null 2>&1 || {
-        printf 'known-hosts-clean: ssh-keyscan wurde nicht gefunden.\n' >&2
+        printf 'known-hosts-clean: ssh-keyscan was not found.\n' >&2
         return 1
     }
     command -v ssh >/dev/null 2>&1 || {
-        printf 'known-hosts-clean: ssh wurde nicht gefunden.\n' >&2
+        printf 'known-hosts-clean: ssh was not found.\n' >&2
         return 1
     }
     command -v awk >/dev/null 2>&1 || {
-        printf 'known-hosts-clean: awk wurde nicht gefunden.\n' >&2
+        printf 'known-hosts-clean: awk was not found.\n' >&2
         return 1
     }
 
     tmp_known=$(mktemp) || {
-        printf 'known-hosts-clean: temporaere Datei konnte nicht angelegt werden.\n' >&2
+        printf 'known-hosts-clean: could not create the temporary file.\n' >&2
         return 1
     }
     if (( config_exists )); then
         tmp_config=$(mktemp) || {
             rm -f -- "$tmp_known"
-            printf 'known-hosts-clean: temporaere Config-Datei konnte nicht angelegt werden.\n' >&2
+            printf 'known-hosts-clean: could not create the temporary config file.\n' >&2
             return 1
         }
     fi
 
     __kh_clean_reset_state
 
-    # Prospektive known_hosts-Datei immer ohne zu entfernende Eintraege bauen.
-    # Im Dry-Run wird sie lediglich nicht zurueckgeschrieben.
+    # Always build the prospective known_hosts file without the entries that
+    # are to be removed. In a dry run it is simply not written back.
     while IFS= read -r line || [[ -n $line ]]; do
         line=${line%$'\r'}
 
@@ -513,8 +512,9 @@ ssh_known_hosts_clean() {
             read -r marker_name marker_hosts marker_keytype marker_key marker_rest <<< "$line"
             printf '%s\n' 'SKIP    marker entry'
 
-            # Ein einfacher Marker-Eintrag fuer dasselbe Lookup-Ziel wird bewusst
-            # behalten und verhindert daher das automatische Entfernen der Config.
+            # A simple marker entry for the same lookup target is kept on
+            # purpose and therefore prevents the config from being removed
+            # automatically.
             if [[ -n $marker_hosts && $marker_hosts != '|1|'* &&
                   $marker_hosts != *','* && $marker_hosts != *'*'* &&
                   $marker_hosts != *'?'* && $marker_hosts != *'!'* ]]; then
@@ -595,7 +595,7 @@ ssh_known_hosts_clean() {
         __kh_clean_finalize_targets
 
         if (( config_exists )); then
-            printf '\nSSH-Konfiguration pruefen: %s\n' "$config"
+            printf '\nChecking the SSH configuration: %s\n' "$config"
             __kh_clean_build_config "$config" "$tmp_config" "$timeout" || rc=1
             config_changes=$__kh_clean_config_changes
         fi
@@ -603,7 +603,7 @@ ssh_known_hosts_clean() {
 
     if (( rc != 0 )); then
         rm -f -- "$tmp_known" "$tmp_config"
-        printf 'known-hosts-clean: temporaere Ausgabe konnte nicht geschrieben werden.\n' >&2
+        printf 'known-hosts-clean: could not write the temporary output.\n' >&2
         return "$rc"
     fi
 
@@ -614,7 +614,7 @@ ssh_known_hosts_clean() {
             backup_known="${known_hosts_file}.bak.$stamp"
             if ! command cp -- "$known_hosts_file" "$backup_known"; then
                 rm -f -- "$tmp_known" "$tmp_config"
-                printf 'known-hosts-clean: known_hosts-Backup konnte nicht angelegt werden.\n' >&2
+                printf 'known-hosts-clean: could not create the known_hosts backup.\n' >&2
                 return 1
             fi
         fi
@@ -623,7 +623,7 @@ ssh_known_hosts_clean() {
             backup_config="${config}.bak.$stamp"
             if ! command cp -- "$config" "$backup_config"; then
                 rm -f -- "$tmp_known" "$tmp_config"
-                printf 'known-hosts-clean: Config-Backup konnte nicht angelegt werden.\n' >&2
+                printf 'known-hosts-clean: could not create the config backup.\n' >&2
                 return 1
             fi
         fi
@@ -632,7 +632,7 @@ ssh_known_hosts_clean() {
             if ! command cat -- "$tmp_known" > "$known_hosts_file"; then
                 [[ -n $backup_known ]] && command cp -- "$backup_known" "$known_hosts_file" 2>/dev/null || true
                 rm -f -- "$tmp_known" "$tmp_config"
-                printf 'known-hosts-clean: known_hosts konnte nicht geschrieben werden; Backup wurde wiederhergestellt.\n' >&2
+                printf 'known-hosts-clean: could not write known_hosts; the backup was restored.\n' >&2
                 return 1
             fi
         fi
@@ -642,7 +642,7 @@ ssh_known_hosts_clean() {
                 [[ -n $backup_known ]] && command cp -- "$backup_known" "$known_hosts_file" 2>/dev/null || true
                 [[ -n $backup_config ]] && command cp -- "$backup_config" "$config" 2>/dev/null || true
                 rm -f -- "$tmp_known" "$tmp_config"
-                printf 'known-hosts-clean: SSH-Konfiguration konnte nicht geschrieben werden; Backups wurden wiederhergestellt.\n' >&2
+                printf 'known-hosts-clean: could not write the SSH configuration; the backups were restored.\n' >&2
                 return 1
             fi
         fi
@@ -654,17 +654,17 @@ ssh_known_hosts_clean() {
             declare -F __ssh_completion_cache_invalidate >/dev/null && __ssh_completion_cache_invalidate
         fi
 
-        printf '\nBereinigung abgeschlossen.\n'
-        printf 'known_hosts: %d Aenderung(en)\n' "$known_changes"
-        printf 'SSH config:  %d Alias-Aenderung(en)\n' "$config_changes"
+        printf '\nCleanup finished.\n'
+        printf 'known_hosts: %d change(s)\n' "$known_changes"
+        printf 'SSH config:  %d alias change(s)\n' "$config_changes"
         [[ -z $backup_known ]] || printf 'Backup known_hosts: %s\n' "$backup_known"
         [[ -z $backup_config ]] || printf 'Backup SSH config:  %s\n' "$backup_config"
     else
         rm -f -- "$tmp_known" "$tmp_config"
-        printf '\nDRY RUN - es wurden keine Dateien veraendert.\n'
-        printf 'known_hosts: %d Aenderung(en) wuerden vorgenommen\n' "$known_changes"
-        printf 'SSH config:  %d Alias-Aenderung(en) wuerden vorgenommen\n\n' "$config_changes"
-        printf 'Zum tatsaechlichen Bereinigen:\n'
+        printf '\nDRY RUN - no files were changed.\n'
+        printf 'known_hosts: %d change(s) would be made\n' "$known_changes"
+        printf 'SSH config:  %d alias change(s) would be made\n\n' "$config_changes"
+        printf 'To actually clean up:\n'
         printf '  known-hosts-clean --apply\n'
     fi
 

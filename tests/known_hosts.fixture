@@ -1,4 +1,4 @@
-# Synthetische Parserdaten, absichtlich keine gueltigen kryptografischen Keys.
+# Synthetic parser data, deliberately not valid cryptographic keys.
 server.example.com,[server.example.com]:2222 ssh-ed25519 TESTKEY
 @cert-authority *.example.net ssh-ed25519 TESTKEY
 |1|TESTSALT|TESTHASH ssh-ed25519 TESTKEY

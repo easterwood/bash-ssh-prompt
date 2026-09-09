@@ -167,15 +167,15 @@ All arguments are passed straight through to `ls`, which always runs with:
 `-o` means the group column is omitted by design. `TIME_STYLE` is also exported
 globally, so a plain `ls -l` uses the same timestamp format.
 
-Output columns, with a dim German header row:
+Output columns, with a dim header row:
 
 | Column | Contents |
 |---|---|
-| `RECHTE` | Permission bits, dim |
+| `PERMS` | Permission bits, dim |
 | `LINK` | Hard-link count |
-| `BENUTZER` | Owner — red for `root`, cyan for the current user, magenta for anyone else |
-| `GRÖSSE` | Human-readable size, yellow |
-| `GEÄNDERT` | `YYYY-MM-DD HH:MM:SS`, blue |
+| `USER` | Owner — red for `root`, cyan for the current user, magenta for anyone else |
+| `SIZE` | Human-readable size, yellow |
+| `MODIFIED` | `YYYY-MM-DD HH:MM:SS`, blue |
 | `NAME` | Filename, keeping `ls` colours; spaces and `->` link targets survive |
 
 A domain suffix is stripped from the owner name (`alex@corp` → `alex`) before

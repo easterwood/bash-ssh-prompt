@@ -8,10 +8,9 @@ The distinctive feature is `sshp`: it copies the prompt files to a remote host
 before logging in, so you get the same prompt, command timer and `ll` listing on
 every server you connect to — without installing anything there by hand.
 
-> **Note on language:** this documentation is in English, but the shell scripts
-> themselves print German messages and use German column headers
-> (`ZIEL`, `BENUTZER`, `SCHLÜSSEL`, …). Command names, options and environment
-> variables are the same in both languages.
+> **Note on language:** documentation, messages and column headers are all in
+> English. Earlier versions shipped a German UI; the German option synonym
+> `--zeilen` for `known-hosts --lines` no longer exists.
 
 ## Features
 
@@ -162,7 +161,7 @@ bash tests/known-hosts.sh   # known-hosts parser regression test
 bash-commands --check       # every documented command is really defined
 ```
 
-`TEST.md` (German) records a manual test run of the whole package from
+`TEST.md` records a manual test run of the whole package from
 8 September 2026. See [docs/architecture.md#testing](docs/architecture.md#testing).
 
 ## Safety notes

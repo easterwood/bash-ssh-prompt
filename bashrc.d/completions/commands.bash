@@ -36,7 +36,7 @@ _bash_commands_completion() {
         esac
     done
 
-    # Nach --check ist kein weiteres Argument sinnvoll.
+    # No further argument is meaningful after --check.
     (( have_check == 0 )) || return 0
 
     if [[ $cur == -* ]]; then
@@ -47,7 +47,7 @@ _bash_commands_completion() {
         return 0
     fi
 
-    # Es ist nur ein freier FILTER erlaubt.
+    # Only a single free-form FILTER is allowed.
     (( have_filter == 0 )) || return 0
 
     for word in "${names[@]}"; do

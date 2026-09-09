@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# Reverse-DNS-Cache fuer diese Shell. Ein --refresh verwirft nur die DNS-
-# Ergebnisse; known_hosts und SSH-Config werden bei jedem Aufruf neu gelesen.
+# Reverse-DNS cache for this shell. A --refresh only discards the DNS results;
+# known_hosts and the SSH config are re-read on every call.
 declare -A __ssh_resolve_ips_dns_cache=()
 
 __ssh_resolve_ips_cache_invalidate() {
@@ -35,8 +35,8 @@ __ssh_resolve_ips_is_ip() {
     __ssh_resolve_ips_is_ipv4 "$1" || __ssh_resolve_ips_is_ipv6 "$1"
 }
 
-# Extrahiert aus einem known_hosts-Hosttoken die IP. Unterstuetzt auch
-# [IPv4]:Port und [IPv6]:Port. Andere Hostnamen werden ignoriert.
+# Extracts the IP from a known_hosts host token. Also supports [IPv4]:port and
+# [IPv6]:port. Other hostnames are ignored.
 __ssh_resolve_ips_extract_ip() {
     local token=$1 host
 
@@ -65,8 +65,8 @@ __ssh_resolve_ips_run_with_timeout() {
     fi
 }
 
-# Rueckwaertsaufloesung mit portablen Backends. Fuer Git Bash/Windows ist
-# PowerShell der zuverlaessigste Fallback, da nur der Hostname ausgegeben wird.
+# Reverse resolution with portable backends. On Git Bash/Windows, PowerShell is
+# the most reliable fallback because it prints the hostname only.
 __ssh_resolve_ips_lookup_uncached() {
     local ip=$1 timeout_seconds=$2 output='' ps_script=''
 
@@ -171,7 +171,7 @@ __ssh_resolve_ips_lookup() {
         return 0
     fi
 
-    # Sentinel fuer einen fehlgeschlagenen PTR-Lookup.
+    # Sentinel for a failed PTR lookup.
     __ssh_resolve_ips_dns_cache["$ip"]=$'\x1e'
     return 1
 }
@@ -187,9 +187,9 @@ __ssh_resolve_ips_display_path() {
 
 # ssh-resolve-ips [FILTER | --refresh | --help]
 #
-# Zeigt jede gefundene IP einmal und fasst Referenzen aus SSH-Config und
-# known_hosts zusammen. Reverse-DNS-Ergebnisse werden innerhalb der Shell
-# gecacht; --refresh erzwingt neue PTR-Lookups.
+# Shows every IP found once and merges the references from the SSH config and
+# known_hosts. Reverse-DNS results are cached within the shell; --refresh forces
+# fresh PTR lookups.
 ssh_resolve_ips() {
     local known=${SSH_KNOWN_HOSTS_FILE:-$HOME/.ssh/known_hosts}
     local config=${SSH_CONFIG_FILE:-$HOME/.ssh/config}
@@ -206,15 +206,15 @@ ssh_resolve_ips() {
     local w_ip=2 w_hostname=8 w_config=6 w_known=11
 
     if (( $# > 1 )); then
-        printf 'Aufruf: ssh-resolve-ips [FILTER | --refresh | --help]\n' >&2
+        printf 'Usage: ssh-resolve-ips [FILTER | --refresh | --help]\n' >&2
         return 2
     fi
 
     case $filter in
         --help|-h)
-            printf 'Aufruf: ssh-resolve-ips [FILTER | --refresh | --help]\n'
-            printf 'Loest IPs aus known_hosts und SSH-Config per Reverse-DNS auf.\n'
-            printf 'Umgebungsvariable: SSH_RESOLVE_IP_TIMEOUT (Standard: 3 Sekunden).\n'
+            printf 'Usage: ssh-resolve-ips [FILTER | --refresh | --help]\n'
+            printf 'Resolves IPs from known_hosts and the SSH config via reverse DNS.\n'
+            printf 'Environment variable: SSH_RESOLVE_IP_TIMEOUT (default: 3 seconds).\n'
             return 0
             ;;
         --refresh)
@@ -224,12 +224,12 @@ ssh_resolve_ips() {
     esac
 
     [[ $timeout_seconds =~ ^[1-9][0-9]*$ ]] || {
-        printf 'ssh-resolve-ips: ungueltiger Timeout: %s\n' "$timeout_seconds" >&2
+        printf 'ssh-resolve-ips: invalid timeout: %s\n' "$timeout_seconds" >&2
         return 2
     }
 
-    # Hilfslogik lokal ueber die globalen Ergebnisarrays: IP in stabiler
-    # Reihenfolge anlegen und Referenzen deduplizieren.
+    # Local helper logic on top of the global result arrays: record the IP in a
+    # stable order and deduplicate the references.
     __ssh_resolve_ips_add_ip() {
         local add_ip=$1
         [[ -n ${ip_seen["$add_ip"]+x} ]] || {
@@ -266,15 +266,15 @@ ssh_resolve_ips() {
         fi
     }
 
-    # Benutzer-Config und deren Includes scannen. Systemweite ssh_config wird
-    # bewusst nicht als Benutzerbestand behandelt.
+    # Scan the user config and its includes. The system-wide ssh_config is
+    # deliberately not treated as part of the user's own inventory.
     __kh_scan_reset
     if [[ -r $config ]]; then
         __kh_scan_file "$config" "$HOME/.ssh" 0
     fi
 
-    # Effektives HostName fuer jeden konkreten Config-Alias aufloesen. Damit
-    # werden auch IPs erfasst, die aus einer allgemeineren Host-Regel stammen.
+    # Resolve the effective HostName for every concrete config alias. That also
+    # catches IPs coming from a more general Host rule.
     for alias in "${__kh_scan_aliases[@]}"; do
         if [[ $config == "$HOME/.ssh/config" ]]; then
             resolved=$(command ssh -G -T "$alias" 2>/dev/null) || continue
@@ -295,8 +295,8 @@ ssh_resolve_ips() {
         fi
     done
 
-    # Zusaetzlich rohe Host-/HostName-IP-Literale lesen. So erscheinen auch
-    # Angaben aus Host-Mustern, fuer die kein konkreter Alias existiert.
+    # Additionally read raw Host/HostName IP literals. That way entries from
+    # host patterns without a concrete alias show up as well.
     for file in "${__kh_scan_files[@]}"; do
         [[ -r $file ]] || continue
         display_file=$(__ssh_resolve_ips_display_path "$file")
@@ -354,8 +354,8 @@ ssh_resolve_ips() {
         done < "$file"
     done
 
-    # known_hosts: Hostfeld kann mehrere Namen/IPs enthalten. Gehashte Hosts
-    # koennen naturgemaess nicht auf eine IP zurueckgefuehrt werden.
+    # known_hosts: the host field may contain several names/IPs. Hashed hosts
+    # cannot, by their nature, be traced back to an IP.
     if [[ -r $known ]]; then
         line_number=0
         while IFS= read -r line || [[ -n $line ]]; do
@@ -381,12 +381,12 @@ ssh_resolve_ips() {
         done < "$known"
     fi
 
-    # Keine lokalen Hilfsfunktionen in der interaktiven Shell zuruecklassen.
+    # Do not leave local helper functions behind in the interactive shell.
     unset -f __ssh_resolve_ips_add_ip \
              __ssh_resolve_ips_add_config_ref \
              __ssh_resolve_ips_add_known_line
 
-    # PTR-Lookups nur einmal pro IP. Fehlende PTR-Records werden als '-' gezeigt.
+    # PTR lookups only once per IP. Missing PTR records are shown as '-'.
     for ip in "${ip_order[@]}"; do
         if __ssh_resolve_ips_lookup "$ip" "$timeout_seconds"; then
             hostnames["$ip"]=$__ssh_resolve_ips_lookup_result
@@ -419,9 +419,9 @@ ssh_resolve_ips() {
 
     if ((${#selected[@]} == 0)); then
         if [[ -n $filter ]]; then
-            printf 'Keine IP-Eintraege fuer "%s" gefunden.\n' "$filter"
+            printf 'No IP entries found for "%s".\n' "$filter"
         else
-            printf 'Keine IP-Eintraege in SSH-Config oder known_hosts gefunden.\n'
+            printf 'No IP entries found in the SSH config or known_hosts.\n'
         fi
         return 0
     fi

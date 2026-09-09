@@ -16,8 +16,8 @@ source "$__ssh_tools_dir/lib/known-hosts-clean.sh"
 source "$__ssh_tools_dir/lib/ssh-by-number.sh"
 # shellcheck source=lib/ssh-resolve-ips.sh
 source "$__ssh_tools_dir/lib/ssh-resolve-ips.sh"
-# ssh-resolve-hosts nutzt Hilfsfunktionen aus ssh-resolve-ips.sh und muss
-# deshalb danach geladen werden.
+# ssh-resolve-hosts uses helpers from ssh-resolve-ips.sh and therefore has to
+# be loaded after it.
 # shellcheck source=lib/ssh-resolve-hosts.sh
 source "$__ssh_tools_dir/lib/ssh-resolve-hosts.sh"
 # shellcheck source=completions/ssh-hosts.bash

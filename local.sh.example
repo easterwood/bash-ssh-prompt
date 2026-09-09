@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 
-# Optionale, nicht versionierte Einstellungen oder Geheimnisse.
-# Diese Datei bei Bedarf als local.sh kopieren.
+# Optional, untracked settings or secrets.
+# Copy this file to local.sh if you need it.

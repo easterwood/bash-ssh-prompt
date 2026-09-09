@@ -13,7 +13,7 @@ prompt_callback() {
     fi
 }
 
-# Timer muss vor bash-git-prompt ausgeführt werden.
+# The timer has to run before bash-git-prompt.
 if [[ $(declare -p PROMPT_COMMAND 2>/dev/null) == 'declare -a'* ]]; then
     PROMPT_COMMAND=(__cmd_timer_stop "${PROMPT_COMMAND[@]}")
 else
@@ -29,7 +29,7 @@ if [[ -r "$HOME/.bash-git-prompt/gitprompt.sh" ]]; then
     source "$HOME/.bash-git-prompt/gitprompt.sh"
 fi
 
-# DEBUG-Hook als letzte Prompt-Aktion aktivieren.
+# Arm the DEBUG hook as the last prompt action.
 if [[ $(declare -p PROMPT_COMMAND 2>/dev/null) == 'declare -a'* ]]; then
     PROMPT_COMMAND+=(__cmd_timer_arm)
 else

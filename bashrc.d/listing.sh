@@ -24,11 +24,14 @@ ll() {
             yellow  = "\033[33m"
 
             printf "%s%-11s %-4s %-20s %10s %-19s %s%s\n",
-                dim, "RECHTE", "LINK", "BENUTZER", "GRÖSSE",
-                "GEÄNDERT", "NAME", reset
+                dim, "PERMS", "LINK", "USER", "SIZE",
+                "MODIFIED", "NAME", reset
         }
 
-        /^total / || /^insgesamt / { next }
+        # The ls summary line is localized: "total" in C and English locales,
+        # "insgesamt" in German ones. It is also the only line with exactly two
+        # fields, so both spellings are dropped without touching real entries.
+        NF == 2 && ($1 == "total" || $1 == "insgesamt") { next }
 
         {
             user = $3

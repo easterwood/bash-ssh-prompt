@@ -176,7 +176,7 @@ asserts that:
 - a filtered view also runs with zero calls;
 - `--fingerprints` makes exactly **one** call, with the expected arguments;
 - a filter matches a plaintext host and excludes the `@cert-authority` line;
-- the unfiltered view shows both `[gehashter Hostname]` and `cert-authority`;
+- the unfiltered view shows both `[hashed hostname]` and `cert-authority`;
 - combining `--fingerprints` with a filter fails.
 
 The fixture contains three synthetic lines — a plaintext host with an extra
@@ -194,7 +194,7 @@ To syntax-check everything, including the files `install.sh` skips:
 find . -name '*.sh' -o -name '*.bash' | xargs -n1 bash -n
 ```
 
-`TEST.md` in the repository root (German) is the report of a manual test run
+`TEST.md` in the repository root is the report of a manual test run
 from 8 September 2026, covering the installer, the local and remote prompts, the
 `ll` layout, multi-file sync with a stubbed `ssh` client, per-target change
 detection, and the `known-hosts` overview. It also lists what could not be
@@ -248,12 +248,13 @@ It describes a `~/.config/bash/ssh-prompt/` layout and references a
 `PROMPT_SYNC_FILE` variable that no code reads. It is a historical reference
 file; use `install.sh`.
 
-### 5. German UI, English documentation
+### 5. English UI and documentation
 
-All user-visible strings, column headers (`ZIEL`, `BENUTZER`, `SCHLÜSSEL`,
-`RECHTE`, `GEÄNDERT`), usage texts and the remote prompt's `letzter:` label are
-German. Option names and environment variables are language-neutral, and
-`--zeilen` exists as a German synonym for `--lines`.
+All user-visible strings, column headers (`TARGET`, `USER`, `KEYS`, `PERMS`,
+`MODIFIED`), usage texts and the remote prompt's `last:` label are English. The
+project used to ship a German UI; if you rely on the former German option
+synonym `--zeilen` for `known-hosts`, note that it has been removed in favour of
+`--lines`.
 
 ### 6. GNU tooling assumptions
 
@@ -279,7 +280,7 @@ maintenance will remove valid entries. Always read the dry run, and raise
 ### 9. Hashed `known_hosts` entries are opaque
 
 With `HashKnownHosts` enabled the hostname cannot be recovered. Such entries are
-shown as `[gehashter Hostname]`, cannot be filtered by name, cannot be reached
+shown as `[hashed hostname]`, cannot be filtered by name, cannot be reached
 via `ssh-nr`, and are skipped by `known-hosts-clean`, `ssh-resolve-ips` and
 `ssh-resolve-hosts`.
 

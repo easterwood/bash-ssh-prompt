@@ -4,7 +4,7 @@ _ssh_known_hosts_completion() {
     local known_hosts_file=${SSH_KNOWN_HOSTS_FILE:-$HOME/.ssh/known_hosts}
     local config=${SSH_CONFIG_FILE:-$HOME/.ssh/config}
     local cur word i have_filter=0 have_fingerprints=0
-    local -a options=(--lines --zeilen --refresh --fingerprints --help)
+    local -a options=(--lines --refresh --fingerprints --help)
     local -a words=()
 
     COMPREPLY=()
@@ -15,7 +15,7 @@ _ssh_known_hosts_completion() {
             --fingerprints)
                 have_fingerprints=1
                 ;;
-            --lines|--zeilen|--refresh|--help|-h|--)
+            --lines|--refresh|--help|-h|--)
                 ;;
             -*)
                 ;;
@@ -27,7 +27,7 @@ _ssh_known_hosts_completion() {
 
     (( have_fingerprints == 0 )) || return 0
 
-    # Optionen duerfen vor oder nach dem Filter stehen.
+    # Options may appear before or after the filter.
     if [[ $cur == -* ]]; then
         for word in "${options[@]}"; do
             [[ $word == "$cur"* ]] || continue
@@ -36,7 +36,7 @@ _ssh_known_hosts_completion() {
         return 0
     fi
 
-    # Es ist nur ein freier FILTER erlaubt.
+    # Only a single free-form FILTER is allowed.
     (( have_filter == 0 )) || return 0
 
     __ssh_completion_cache_ensure "$known_hosts_file" "$config" || return 0

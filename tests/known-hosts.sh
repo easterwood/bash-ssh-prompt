@@ -17,6 +17,6 @@ ssh_known_hosts --fingerprints
 output=$(ssh_known_hosts SERVER)
 [[ $output == *server.example.com* && $output != *cert-authority* ]]
 output=$(ssh_known_hosts)
-[[ $output == *'[gehashter Hostname]'* && $output == *cert-authority* ]]
+[[ $output == *'[hashed hostname]'* && $output == *cert-authority* ]]
 if ssh_known_hosts --fingerprints server 2>/dev/null; then exit 1; fi
-printf 'PASS: Standard/Filter 0 Prozesse, Fingerabdruecke 1 Aufruf; Filter und Hashanzeige.\n'
+printf 'PASS: default/filter spawn 0 processes, fingerprints spawn 1 call; filter and hash display.\n'

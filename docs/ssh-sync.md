@@ -31,9 +31,9 @@ Errors all return exit code `2` with a usage block:
 
 | Situation | Message |
 |---|---|
-| No destination given | `sshp: Es wird genau ein SSH-Ziel benoetigt.` |
-| An option's argument is missing (e.g. a trailing `-p`) | `sshp: Zur letzten Option fehlt das Argument.` |
-| Words remain after the destination | `sshp: Ein Remote-Kommando wird nicht unterstuetzt: …` |
+| No destination given | `sshp: exactly one SSH destination is required.` |
+| An option's argument is missing (e.g. a trailing `-p`) | `sshp: the argument for the last option is missing.` |
+| Words remain after the destination | `sshp: a remote command is not supported: …` |
 
 A remote command is rejected on purpose: `sshp` always ends in an interactive
 login, so `sshp host uname -a` would sync the prompt for nothing. Use
@@ -113,16 +113,16 @@ option list of the **installed** OpenSSH client, so you do not have to leave the
 wrapper to look up a flag:
 
 ```
-Aufruf: sshp [--force] [SSH-OPTIONEN ...] user@host
-        sshp [--force] [SSH-OPTIONEN ...] SSH-Config-Alias
+Usage: sshp [--force] [SSH-OPTIONS ...] user@host
+       sshp [--force] [SSH-OPTIONS ...] SSH-config-alias
 
-  --force   Prompt-Dateien uebertragen, auch wenn die Signatur passt
-  --help    Diese Hilfe anzeigen
+  --force   Copy the prompt files even if the signature matches
+  --help    Show this help
 
-SSH-Optionen werden unveraendert an OpenSSH durchgereicht und gelten
+SSH options are passed through to OpenSSH unchanged and apply to
 ...
 
-Durchgereichte Optionen von /usr/bin/ssh (OpenSSH_9.6p1, OpenSSL 3.0.13):
+Options passed through to /usr/bin/ssh (OpenSSH_9.6p1, OpenSSL 3.0.13):
 
   usage: ssh [-46AaCfGgKkMNnqsTtVvXxYy] [-B bind_interface]
              [-b bind_address] [-c cipher_spec] ...
@@ -227,18 +227,18 @@ interactive SSH sessions, will accept the sync but not show the prompt.
 
 ## Troubleshooting
 
-**"sshp: `<path>` fehlt oder ist nicht lesbar."**
+**"sshp: `<path>` is missing or not readable."**
 One of the three sync files is missing from the checkout. Check
 `BASH_CONFIG_ROOT` and that you did not delete or move anything.
 
-**"sshp: cksum fehlt auf dem lokalen System."**
+**"sshp: cksum is missing on the local system."**
 No `cksum` in `PATH`. Install GNU coreutils.
 
-**"sshp: `<tool>` fehlt auf dem Ziel."**
+**"sshp: `<tool>` is missing on the destination."**
 The remote host lacks one of the five required tools. Either install it or use
 `command ssh` for that host.
 
-**"sshp: Synchronisierung oder .bashrc-Aktualisierung fehlgeschlagen."**
+**"sshp: sync or .bashrc update failed."**
 The sync connection failed or the remote script errored out. Nothing was saved
 locally, so the next attempt will retry. Reproduce the sync connection by hand
 to see the real error:

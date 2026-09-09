@@ -13,5 +13,5 @@ source "$BASH_CONFIG_ROOT/bashrc.d/prompt-core.sh"
 source "$BASH_CONFIG_ROOT/bashrc.d/prompt-local.sh"
 source "$BASH_CONFIG_ROOT/ssh-prompt.sh"
 
-# Nicht versionierte, rechnerbezogene Ausnahmen sind optional.
+# Untracked, machine-specific overrides are optional.
 [[ ! -r "$BASH_CONFIG_ROOT/local.sh" ]] || source "$BASH_CONFIG_ROOT/local.sh"

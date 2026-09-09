@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 
-# Gemeinsame Aufrufschicht fuer ssh und sshp.
-# Standardmaessig werden Verbindungen mit -q gestartet. Mit --banner bzw.
-# --no-quiet kann die stille Ausgabe fuer einen einzelnen Aufruf deaktiviert
-# werden. SSH_TOOLS_QUIET=0 deaktiviert den Default fuer die gesamte Shell.
+# Shared invocation layer for ssh and sshp.
+# By default connections are started with -q. --banner or --no-quiet turns the
+# quiet output off for a single call. SSH_TOOLS_QUIET=0 turns the default off
+# for the whole shell.
 #
-# Bereits vorhandene ssh-/sshp-Funktionen oder -Aliase werden beim ersten
-# Laden gesichert und anschliessend durch die Wrapper unten aufgerufen.
+# Pre-existing ssh/sshp functions or aliases are saved on first load and are
+# then called by the wrappers below.
 
-# Optionen, deren Argument als separates Wort folgen kann. Das wird nur
-# benoetigt, damit --banner auch nach Optionen wie "-p 22" erkannt wird,
-# ohne versehentlich Remote-Kommandoargumente zu veraendern.
+# Options whose argument may follow as a separate word. This is only needed so
+# --banner is recognised after options such as "-p 22" without accidentally
+# changing remote command arguments.
 __ssh_tools_option_takes_arg() {
     case $1 in
         -B|-b|-c|-D|-E|-e|-F|-I|-i|-J|-L|-l|-m|-O|-o|-P|-p|-Q|-R|-S|-W|-w)
@@ -20,8 +20,8 @@ __ssh_tools_option_takes_arg() {
     return 1
 }
 
-# Originale Befehle nur einmal sichern. Das macht erneutes "source ssh-tools.sh"
-# in derselben Shell gefahrlos.
+# Save the original commands only once. That makes re-sourcing ssh-tools.sh in
+# the same shell harmless.
 if [[ -z ${__ssh_tools_transport_captured+x} ]]; then
     declare -gA __ssh_tools_original_kind=()
     declare -gA __ssh_tools_original_alias=()
@@ -44,8 +44,8 @@ if [[ -z ${__ssh_tools_transport_captured+x} ]]; then
             function)
                 definition=$(declare -f "$name") || return 1
                 private_name="__ssh_tools_original_${name}"
-                # "declare -f" beginnt mit dem Funktionsnamen. Nur diesen
-                # Namen ersetzen; der Funktionskoerper bleibt unveraendert.
+                # "declare -f" starts with the function name. Replace only
+                # that name; the function body stays unchanged.
                 eval "$private_name${definition#"$name"}"
                 __ssh_tools_original_kind["$name"]='function'
                 ;;
@@ -61,16 +61,16 @@ if [[ -z ${__ssh_tools_transport_captured+x} ]]; then
     __ssh_tools_capture_original ssh
     __ssh_tools_capture_original sshp
 
-    # Aliase muessen weg, damit die gleichnamigen Wrapper-Funktionen bei der
-    # interaktiven Eingabe nicht vor der Funktionsaufloesung expandiert werden.
+    # The aliases have to go so the wrapper functions of the same name are not
+    # expanded before function resolution during interactive input.
     unalias ssh sshp 2>/dev/null || true
     unset -f ssh sshp 2>/dev/null || true
 
     __ssh_tools_transport_captured=1
 fi
 
-# Direkten externen Befehl aufrufen. Wird auch als Rekursionsschutz verwendet,
-# falls ein gesicherter Alias z. B. selbst mit "ssh ..." beginnt.
+# Call the external command directly. This also guards against recursion if a
+# saved alias itself starts with "ssh ...", for example.
 __ssh_tools_invoke_base() {
     local name=$1
     shift
@@ -81,7 +81,7 @@ __ssh_tools_invoke_base() {
         return $?
     fi
 
-    printf '%s: kein externer Basisbefehl gefunden.\n' "$name" >&2
+    printf '%s: no external base command found.\n' "$name" >&2
     return 127
 }
 
@@ -110,15 +110,15 @@ __ssh_tools_invoke_original() {
             __ssh_tools_invoke_base "$name" "$@"
             ;;
         *)
-            printf '%s: weder als urspruenglicher Befehl, Funktion noch Alias verfuegbar.\n' \
+            printf '%s: available neither as the original command, a function nor an alias.\n' \
                 "$name" >&2
             return 127
             ;;
     esac
 }
 
-# Bereitet die Argumente vor und entfernt nur unsere eigenen Schalter vor dem
-# SSH-Ziel. Argumente des Remote-Kommandos bleiben unveraendert.
+# Prepares the arguments and removes only our own switches ahead of the SSH
+# destination. Remote command arguments stay unchanged.
 declare -a __ssh_tools_transport_args=()
 __ssh_tools_transport_quiet=1
 
@@ -177,8 +177,8 @@ __ssh_tools_prepare_transport_args() {
 }
 
 ssh() {
-    # Ein bereits gesicherter Alias/Funktionskoerper kann intern wieder "ssh"
-    # aufrufen. In diesem Fall direkt zum externen OpenSSH-Befehl durchreichen.
+    # An already saved alias or function body may itself call "ssh" again. In
+    # that case, pass straight through to the external OpenSSH command.
     if [[ ${__SSH_TOOLS_WRAPPER_BYPASS:-0} == 1 ]]; then
         __ssh_tools_invoke_base ssh "$@"
         return $?
@@ -195,16 +195,16 @@ ssh() {
 
 sshp() {
     if [[ ${__SSH_TOOLS_WRAPPER_BYPASS:-0} == 1 ]]; then
-        # Bei einem rekursiven Aufruf gibt es fuer sshp nicht zwingend einen
-        # externen Basisbefehl. Falls vorhanden, diesen verwenden.
+        # On a recursive call there is not necessarily an external base
+        # command for sshp. Use it if there is one.
         __ssh_tools_invoke_base sshp "$@"
         return $?
     fi
 
     __ssh_tools_prepare_transport_args "$@"
 
-    # Bypass waehrend des Original-sshp-Aufrufs verhindert ein zweites -q,
-    # falls dessen Funktion/Alias intern den neuen ssh-Wrapper aufruft.
+    # Bypassing during the original sshp call prevents a second -q in case its
+    # function or alias internally calls the new ssh wrapper.
     local __SSH_TOOLS_WRAPPER_BYPASS=1
     if (( __ssh_tools_transport_quiet )); then
         __ssh_tools_invoke_original sshp -q "${__ssh_tools_transport_args[@]}"

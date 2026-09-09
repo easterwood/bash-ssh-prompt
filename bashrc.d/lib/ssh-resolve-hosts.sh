@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
 
-# Gegenstueck zu ssh-resolve-ips: zeigt zu jedem Hostnamen aus SSH-Config und
-# known_hosts die zugehoerigen IP-Adressen.
+# Counterpart to ssh-resolve-ips: shows the IP addresses belonging to every
+# hostname from the SSH config and known_hosts.
 #
-# Diese Datei setzt lib/ssh-resolve-ips.sh voraus und nutzt daraus die
-# IP-Erkennung, den Timeout-Wrapper und die Pfaddarstellung. Die Reihenfolge
-# der source-Zeilen in bashrc.d/ssh-tools.sh ist deshalb relevant.
+# This file requires lib/ssh-resolve-ips.sh and reuses its IP detection, its
+# timeout wrapper and its path rendering. The order of the source lines in
+# bashrc.d/ssh-tools.sh therefore matters.
 
-# Vorwaerts-DNS-Cache fuer diese Shell. --refresh verwirft nur die DNS-
-# Ergebnisse; known_hosts und SSH-Config werden bei jedem Aufruf neu gelesen.
+# Forward-DNS cache for this shell. --refresh only discards the DNS results;
+# known_hosts and the SSH config are re-read on every call.
 declare -A __ssh_resolve_hosts_dns_cache=()
 
 __ssh_resolve_hosts_cache_invalidate() {
     __ssh_resolve_hosts_dns_cache=()
 }
 
-# Extrahiert aus einem Host-Token einen aufloesbaren Hostnamen. Unterstuetzt
-# auch [host]:Port. IP-Literale und Muster werden bewusst uebersprungen: die
-# IP-Seite deckt ssh-resolve-ips ab.
+# Extracts a resolvable hostname from a host token. Also supports [host]:port.
+# IP literals and patterns are skipped on purpose: the IP side is covered by
+# ssh-resolve-ips.
 __ssh_resolve_hosts_extract_name() {
     local token=$1 host
 
@@ -36,14 +36,14 @@ __ssh_resolve_hosts_extract_name() {
     return 0
 }
 
-# Vorwaertsaufloesung mit portablen Backends. Die Ausgabe darf Rohzeilen
-# enthalten; der Aufrufer filtert auf gueltige IPs. Fuer Git Bash/Windows ist
-# PowerShell der zuverlaessigste Fallback.
+# Forward resolution with portable backends. The output may contain raw lines;
+# the caller filters for valid IPs. On Git Bash/Windows, PowerShell is the most
+# reliable fallback.
 __ssh_resolve_hosts_lookup_uncached() {
     local name=$1 timeout_seconds=$2 output='' ps_script=''
 
     if command -v getent >/dev/null 2>&1; then
-        # getent ahosts liefert je Adressfamilie mehrere Zeilen.
+        # getent ahosts returns several lines per address family.
         output=$(
             __ssh_resolve_ips_run_with_timeout "$timeout_seconds" \
                 getent ahosts "$name" 2>/dev/null |
@@ -101,7 +101,7 @@ __ssh_resolve_hosts_lookup_uncached() {
     fi
 
     if command -v nslookup >/dev/null 2>&1; then
-        # Die erste Adresse gehoert zum Resolver selbst und wird uebersprungen.
+        # The first address belongs to the resolver itself and is skipped.
         output=$(
             __ssh_resolve_ips_run_with_timeout "$timeout_seconds" \
                 nslookup "$name" 2>/dev/null |
@@ -131,7 +131,7 @@ __ssh_resolve_hosts_lookup_uncached() {
 
 __ssh_resolve_hosts_lookup_result=''
 
-# Ergebnis ist eine kommaseparierte Liste, IPv4 vor IPv6.
+# The result is a comma-separated list, IPv4 before IPv6.
 __ssh_resolve_hosts_lookup() {
     local name=$1 timeout_seconds=$2 cached candidate joined=''
     local ipv4_list='' ipv6_list=''
@@ -179,7 +179,7 @@ __ssh_resolve_hosts_lookup() {
     fi
 
     if [[ -z $joined ]]; then
-        # Sentinel fuer eine fehlgeschlagene Aufloesung.
+        # Sentinel for a failed resolution.
         __ssh_resolve_hosts_dns_cache["$name"]=$'\x1e'
         return 1
     fi
@@ -191,9 +191,9 @@ __ssh_resolve_hosts_lookup() {
 
 # ssh-resolve-hosts [FILTER | --refresh | --help]
 #
-# Zeigt jeden gefundenen Hostnamen einmal und fasst Referenzen aus SSH-Config
-# und known_hosts zusammen. DNS-Ergebnisse werden innerhalb der Shell gecacht;
-# --refresh erzwingt neue Lookups.
+# Shows every hostname found once and merges the references from the SSH config
+# and known_hosts. DNS results are cached within the shell; --refresh forces
+# fresh lookups.
 ssh_resolve_hosts() {
     local known=${SSH_KNOWN_HOSTS_FILE:-$HOME/.ssh/known_hosts}
     local config=${SSH_CONFIG_FILE:-$HOME/.ssh/config}
@@ -210,16 +210,16 @@ ssh_resolve_hosts() {
     local w_name=8 w_ip=2 w_config=6 w_known=11
 
     if (( $# > 1 )); then
-        printf 'Aufruf: ssh-resolve-hosts [FILTER | --refresh | --help]\n' >&2
+        printf 'Usage: ssh-resolve-hosts [FILTER | --refresh | --help]\n' >&2
         return 2
     fi
 
     case $filter in
         --help|-h)
-            printf 'Aufruf: ssh-resolve-hosts [FILTER | --refresh | --help]\n'
-            printf 'Loest Hostnamen aus known_hosts und SSH-Config per DNS zu IPs auf.\n'
-            printf 'Gegenstueck zu ssh-resolve-ips, das den umgekehrten Weg geht.\n'
-            printf 'Umgebungsvariable: SSH_RESOLVE_HOST_TIMEOUT (Standard: 3 Sekunden).\n'
+            printf 'Usage: ssh-resolve-hosts [FILTER | --refresh | --help]\n'
+            printf 'Resolves hostnames from known_hosts and the SSH config to IPs via DNS.\n'
+            printf 'Counterpart to ssh-resolve-ips, which goes the other way round.\n'
+            printf 'Environment variable: SSH_RESOLVE_HOST_TIMEOUT (default: 3 seconds).\n'
             return 0
             ;;
         --refresh)
@@ -229,12 +229,12 @@ ssh_resolve_hosts() {
     esac
 
     [[ $timeout_seconds =~ ^[1-9][0-9]*$ ]] || {
-        printf 'ssh-resolve-hosts: ungueltiger Timeout: %s\n' "$timeout_seconds" >&2
+        printf 'ssh-resolve-hosts: invalid timeout: %s\n' "$timeout_seconds" >&2
         return 2
     }
 
     declare -F __ssh_resolve_ips_is_ip >/dev/null || {
-        printf 'ssh-resolve-hosts: lib/ssh-resolve-ips.sh wurde nicht geladen.\n' >&2
+        printf 'ssh-resolve-hosts: lib/ssh-resolve-ips.sh has not been loaded.\n' >&2
         return 1
     }
 
@@ -274,15 +274,15 @@ ssh_resolve_hosts() {
         fi
     }
 
-    # Benutzer-Config und deren Includes scannen. Die systemweite ssh_config
-    # gilt bewusst nicht als Benutzerbestand.
+    # Scan the user config and its includes. The system-wide ssh_config
+    # deliberately does not count as part of the user's own inventory.
     __kh_scan_reset
     if [[ -r $config ]]; then
         __kh_scan_file "$config" "$HOME/.ssh" 0
     fi
 
-    # Effektives HostName je konkretem Alias aufloesen. Damit werden auch
-    # Hostnamen erfasst, die aus einer allgemeineren Host-Regel stammen.
+    # Resolve the effective HostName per concrete alias. That also catches
+    # hostnames coming from a more general Host rule.
     for alias in "${__kh_scan_aliases[@]}"; do
         if [[ $config == "$HOME/.ssh/config" ]]; then
             resolved=$(command ssh -G -T "$alias" 2>/dev/null) || continue
@@ -303,8 +303,8 @@ ssh_resolve_hosts() {
         fi
     done
 
-    # Zusaetzlich rohe Host-/HostName-Literale lesen. So erscheinen auch
-    # Angaben aus Host-Mustern, fuer die kein konkreter Alias existiert.
+    # Additionally read raw Host/HostName literals. That way entries from host
+    # patterns without a concrete alias show up as well.
     for file in "${__kh_scan_files[@]}"; do
         [[ -r $file ]] || continue
         display_file=$(__ssh_resolve_ips_display_path "$file")
@@ -359,8 +359,8 @@ ssh_resolve_hosts() {
         done < "$file"
     done
 
-    # known_hosts: Hostfeld kann mehrere Namen enthalten. Gehashte Eintraege
-    # koennen naturgemaess nicht aufgeloest werden.
+    # known_hosts: the host field may contain several names. Hashed entries
+    # cannot, by their nature, be resolved.
     if [[ -r $known ]]; then
         line_number=0
         while IFS= read -r line || [[ -n $line ]]; do
@@ -386,12 +386,12 @@ ssh_resolve_hosts() {
         done < "$known"
     fi
 
-    # Keine lokalen Hilfsfunktionen in der interaktiven Shell zuruecklassen.
+    # Do not leave local helper functions behind in the interactive shell.
     unset -f __ssh_resolve_hosts_add_name \
              __ssh_resolve_hosts_add_config_ref \
              __ssh_resolve_hosts_add_known_line
 
-    # Lookups nur einmal pro Hostname. Fehlende Antworten werden als '-' gezeigt.
+    # Lookups only once per hostname. Missing answers are shown as '-'.
     for name in "${name_order[@]}"; do
         if __ssh_resolve_hosts_lookup "$name" "$timeout_seconds"; then
             addresses["$name"]=$__ssh_resolve_hosts_lookup_result
@@ -424,9 +424,9 @@ ssh_resolve_hosts() {
 
     if ((${#selected[@]} == 0)); then
         if [[ -n $filter ]]; then
-            printf 'Keine Hostnamen fuer "%s" gefunden.\n' "$filter"
+            printf 'No hostnames found for "%s".\n' "$filter"
         else
-            printf 'Keine Hostnamen in SSH-Config oder known_hosts gefunden.\n'
+            printf 'No hostnames found in the SSH config or known_hosts.\n'
         fi
         return 0
     fi

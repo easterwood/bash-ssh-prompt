@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-# Login ueber die eindeutige NR-Spalte von known-hosts.
-# Nach der Zielaufloesung wird sshp verwendet, damit ssh-nr dasselbe
-# Verbindungsverhalten wie ein direkter sshp-Aufruf hat.
+# Log in via the unique NR column of known-hosts.
+# Once the target is resolved, sshp is used so that ssh-nr behaves exactly like
+# a direct sshp call.
 
 __ssh_by_number_run_sshp() {
     local kind rc arg command_line='sshp'
@@ -16,16 +16,16 @@ __ssh_by_number_run_sshp() {
 
     case $kind in
         function|file|builtin)
-            # Ueber eine Variable aufrufen, damit ein eventuell gleichnamiger
-            # Alias beim Parsen dieser Datei nicht versehentlich expandiert.
+            # Call through a variable so an alias of the same name is not
+            # expanded accidentally while this file is parsed.
             local runner=sshp
             "$runner" "$@"
             return $?
             ;;
         alias)
-            # Aliase werden vor Parameterexpansion verarbeitet und koennen
-            # deshalb nicht ueber "$runner" aufgerufen werden. Die Argumente
-            # werden mit %q shell-sicher an einen eval-Aufruf angehaengt.
+            # Aliases are processed before parameter expansion and therefore
+            # cannot be called through "$runner". The arguments are appended to
+            # an eval call in a shell-safe way using %q.
             shopt -q expand_aliases && had_expand_aliases=1
             shopt -s expand_aliases
 
@@ -40,7 +40,7 @@ __ssh_by_number_run_sshp() {
             return "$rc"
             ;;
         *)
-            printf 'ssh-nr: sshp ist weder als Funktion, Alias noch als Kommando verfuegbar.\n' >&2
+            printf 'ssh-nr: sshp is available neither as a function, an alias nor a command.\n' >&2
             return 127
             ;;
     esac
@@ -55,17 +55,17 @@ ssh_by_number() {
 
     case $nr in
         --help|-h|'')
-            printf 'Aufruf: ssh-nr NR [SSH-OPTIONEN ...]\n'
-            printf '        ssh-nr --list\n'
-            printf '\nNR ist die eindeutige Zielnummer aus der ersten Spalte von known-hosts.\n'
-            printf 'Das aufgeloeste Ziel wird anschliessend ueber sshp verbunden.\n'
-            printf 'SSH-Optionen werden vor dem Ziel an sshp uebergeben.\n'
+            printf 'Usage: ssh-nr NR [SSH-OPTIONS ...]\n'
+            printf '       ssh-nr --list\n'
+            printf '\nNR is the unique target number from the first column of known-hosts.\n'
+            printf 'The resolved target is then connected through sshp.\n'
+            printf 'SSH options are passed to sshp ahead of the destination.\n'
             [[ -n $nr ]] && return 0 || return 2
             ;;
         --list|-l)
             shift
             (( $# == 0 )) || {
-                printf 'ssh-nr: --list akzeptiert keine weiteren Argumente.\n' >&2
+                printf 'ssh-nr: --list does not accept any further arguments.\n' >&2
                 return 2
             }
             ssh_known_hosts
@@ -74,13 +74,13 @@ ssh_by_number() {
     esac
 
     [[ $nr =~ ^[1-9][0-9]*$ ]] || {
-        printf 'ssh-nr: ungueltige Zielnummer: %q\n' "$nr" >&2
+        printf 'ssh-nr: invalid target number: %q\n' "$nr" >&2
         return 2
     }
     shift
 
     [[ -r $known_hosts_file ]] || {
-        printf 'ssh-nr: %s fehlt oder ist nicht lesbar.\n' "$known_hosts_file" >&2
+        printf 'ssh-nr: %s is missing or not readable.\n' "$known_hosts_file" >&2
         return 1
     }
 
@@ -88,16 +88,16 @@ ssh_by_number() {
 
     gid=$((nr - 1))
     if (( gid < 0 || gid >= __kh_group_count )); then
-        printf 'ssh-nr: Zielnummer %s existiert nicht.\n' "$nr" >&2
-        printf 'Verfuegbare Ziele mit "known-hosts" anzeigen.\n' >&2
+        printf 'ssh-nr: target number %s does not exist.\n' "$nr" >&2
+        printf 'Show the available targets with "known-hosts".\n' >&2
         return 1
     fi
 
     alias=${__kh_group_alias[$gid]}
     target=${__kh_group_target[$gid]}
 
-    # Wenn ein Alias vorhanden ist, immer ueber ihn verbinden. Dadurch greifen
-    # User, Port, ProxyJump, IdentityFile usw. exakt wie in ~/.ssh/config.
+    # If an alias exists, always connect through it. That way user, port,
+    # ProxyJump, IdentityFile and so on apply exactly as in ~/.ssh/config.
     if [[ $alias != '-' ]]; then
         if [[ $config != "$HOME/.ssh/config" ]]; then
             sshp_args+=(-F "$config")
@@ -108,11 +108,11 @@ ssh_by_number() {
         return $?
     fi
 
-    # Direkte known_hosts-Ziele muessen in eine gueltige SSH-Zielsyntax
-    # ueberfuehrt werden. Marker, Hashes und Hostlisten sind nicht eindeutig.
+    # Direct known_hosts targets have to be converted into valid SSH
+    # destination syntax. Markers, hashes and host lists are not unambiguous.
     case $target in
-        @*|'[gehashter Hostname]'*|*','*|*'*'*|*'?'*|*'!'*)
-            printf 'ssh-nr: Zielnummer %s ist kein direkt verbindbares SSH-Ziel: %s\n' \
+        @*|'[hashed hostname]'*|*','*|*'*'*|*'?'*|*'!'*)
+            printf 'ssh-nr: target number %s is not a directly connectable SSH destination: %s\n' \
                 "$nr" "$target" >&2
             return 1
             ;;

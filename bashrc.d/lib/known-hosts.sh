@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
-# Host-Zuordnungscache fuer diese Shell.
+# Host mapping cache for this shell.
 declare -A __kh_rows=()
-# Effektiver Benutzer fuer direkte known_hosts-Ziele ohne zugeordneten Alias.
+# Effective user for direct known_hosts targets without an assigned alias.
 declare -A __kh_target_users=()
-# 1, wenn der Benutzer direkt in einem konkreten Host-Block der Benutzer-Config steht.
+# 1 if the user is set directly in a concrete Host block of the user config.
 declare -A __kh_target_user_explicit=()
 __kh_cache_id=''
 __kh_known_content=''
@@ -26,15 +26,15 @@ __kh_refresh() {
     __kh_scan_configs "$config" 0
 
     for alias in "${__kh_scan_aliases[@]}"; do
-        # -G oeffnet keine SSH-Sitzung. Konfigurierte Match-exec-Regeln koennen laufen.
+        # -G does not open an SSH session. Configured Match exec rules may run.
         if [[ $config == "$HOME/.ssh/config" ]]; then
             resolved=$(command ssh -G -T "$alias") || {
-                printf 'known-hosts: SSH-Konfiguration für Alias %q konnte nicht ausgewertet werden.\n' "$alias" >&2
+                printf 'known-hosts: could not evaluate the SSH configuration for alias %q.\n' "$alias" >&2
                 return 1
             }
         else
             resolved=$(command ssh -G -T -F "$config" "$alias") || {
-                printf 'known-hosts: SSH-Konfiguration für Alias %q konnte nicht ausgewertet werden.\n' "$alias" >&2
+                printf 'known-hosts: could not evaluate the SSH configuration for alias %q.\n' "$alias" >&2
                 return 1
             }
         fi
@@ -78,10 +78,10 @@ __kh_refresh() {
         done <<< "$hits"
     done
 
-    # Fuer known_hosts-Eintraege ohne explizite Alias-Zuordnung trotzdem den
-    # effektiven Benutzer aus der SSH-Konfiguration bestimmen. Dadurch greifen
-    # auch Host *-Defaults und Host-Wildcards. Der Zielhost wird dabei nicht als
-    # Alias ausgegeben.
+    # For known_hosts entries without an explicit alias assignment, still
+    # determine the effective user from the SSH configuration. That way Host *
+    # defaults and host wildcards apply as well. The target host itself is not
+    # printed as an alias.
     local kh_line kh_line_number=0 first second raw_hosts raw_host effective_user
     while IFS= read -r kh_line || [[ -n $kh_line ]]; do
         ((kh_line_number+=1))
@@ -125,9 +125,9 @@ __kh_refresh() {
         __kh_target_users["$raw_hosts"]=${effective_user:--}
         __kh_target_user_explicit["$raw_hosts"]=0
 
-        # Nicht markieren, wenn genau der effektive Benutzer explizit einem
-        # konkreten Host/Alias oder dessen literalem HostName zugeordnet ist.
-        # Ein User aus "Host *" oder Wildcard-Bloecken bleibt dagegen geerbt.
+        # Do not mark it when exactly this effective user is assigned
+        # explicitly to a concrete host/alias or its literal HostName. A user
+        # coming from "Host *" or wildcard blocks stays inherited.
         if [[ -n $effective_user &&
               ( ${__kh_scan_alias_direct_user["$raw_host"]-} == "$effective_user" ||
                 ${__kh_scan_target_direct_user["$raw_host"]-} == "$effective_user" ) ]]; then
@@ -148,7 +148,7 @@ __kh_cache_ensure() {
     fi
 }
 
-# Gemeinsames, aggregiertes Modell fuer Anzeige und Login per Zielnummer.
+# Shared, aggregated model for the display and for login by target number.
 declare -a __kh_group_alias=()
 declare -a __kh_group_target=()
 declare -a __kh_group_user=()
@@ -167,8 +167,8 @@ __kh_groups_reset() {
     __kh_group_count=0
 }
 
-# Baut genau dieselben Gruppen auf, die known-hosts anzeigt. Die Gruppenreihenfolge
-# definiert zugleich die stabile Zielnummer innerhalb des aktuellen Dateistands.
+# Builds exactly the same groups known-hosts displays. The group order also
+# defines the stable target number for the current state of the file.
 __kh_groups_build() {
     local known_hosts_file=$1 config=$2
     local line line_number=0 first second third fourth remainder
@@ -202,7 +202,7 @@ __kh_groups_build() {
         [[ -n $hosts && -n $key_type && -n $key ]] || continue
 
         if [[ $hosts == '|1|'* ]]; then
-            display_hosts='[gehashter Hostname]'
+            display_hosts='[hashed hostname]'
         else
             display_hosts=$hosts
         fi
@@ -298,9 +298,9 @@ __kh_groups_build() {
     done < "$known_hosts_file"
 }
 
-# Pro Alias/Ziel/Benutzer wird genau eine Zeile ausgegeben.
-# Mehrere known_hosts-Zeilen und Schluesseltypen werden zusammengefasst.
-# NR ist die eindeutige Zielnummer fuer ssh-nr.
+# Exactly one row is printed per alias/target/user.
+# Multiple known_hosts lines and key types are merged.
+# NR is the unique target number used by ssh-nr.
 ssh_known_hosts() {
     local known_hosts_file=${SSH_KNOWN_HOSTS_FILE:-$HOME/.ssh/known_hosts}
     local config=${SSH_CONFIG_FILE:-$HOME/.ssh/config}
@@ -315,7 +315,7 @@ ssh_known_hosts() {
         shift
 
         case $arg in
-            --lines|--zeilen)
+            --lines)
                 show_lines=1
                 ;;
             --refresh)
@@ -325,22 +325,22 @@ ssh_known_hosts() {
                 fingerprints=1
                 ;;
             --help|-h)
-                printf 'Aufruf: known-hosts [--lines] [--refresh] [FILTER]\n'
-                printf '        known-hosts --fingerprints\n'
+                printf 'Usage: known-hosts [--lines] [--refresh] [FILTER]\n'
+                printf '       known-hosts --fingerprints\n'
                 printf '\n'
-                printf '  --lines, --zeilen  known_hosts-Zeilennummern einblenden\n'
-                printf '  --refresh          Cache verwerfen und Daten neu einlesen\n'
-                printf '  --fingerprints     Original-Fingerprints mit ssh-keygen anzeigen\n'
+                printf '  --lines         Show the known_hosts line numbers\n'
+                printf '  --refresh       Discard the cache and re-read the data\n'
+                printf '  --fingerprints  Show the original ssh-keygen fingerprints\n'
                 return 0
                 ;;
             --)
                 if (( $# > 1 )); then
-                    printf 'known-hosts: Es ist nur ein FILTER erlaubt.\n' >&2
+                    printf 'known-hosts: only one FILTER is allowed.\n' >&2
                     return 2
                 fi
                 if (( $# == 1 )); then
                     [[ -z $filter ]] || {
-                        printf 'known-hosts: Es ist nur ein FILTER erlaubt.\n' >&2
+                        printf 'known-hosts: only one FILTER is allowed.\n' >&2
                         return 2
                     }
                     filter=$1
@@ -348,13 +348,13 @@ ssh_known_hosts() {
                 fi
                 ;;
             -*)
-                printf 'known-hosts: unbekannte Option: %s\n' "$arg" >&2
-                printf 'Aufruf: known-hosts [--lines] [--refresh] [FILTER]\n' >&2
+                printf 'known-hosts: unknown option: %s\n' "$arg" >&2
+                printf 'Usage: known-hosts [--lines] [--refresh] [FILTER]\n' >&2
                 return 2
                 ;;
             *)
                 if [[ -n $filter ]]; then
-                    printf 'known-hosts: Es ist nur ein FILTER erlaubt.\n' >&2
+                    printf 'known-hosts: only one FILTER is allowed.\n' >&2
                     return 2
                 fi
                 filter=$arg
@@ -363,13 +363,13 @@ ssh_known_hosts() {
     done
 
     [[ -r $known_hosts_file ]] || {
-        printf 'known-hosts: %s fehlt oder ist nicht lesbar.\n' "$known_hosts_file" >&2
+        printf 'known-hosts: %s is missing or not readable.\n' "$known_hosts_file" >&2
         return 1
     }
 
     if (( fingerprints )); then
         if (( show_lines || refresh )) || [[ -n $filter ]]; then
-            printf 'known-hosts: --fingerprints kann nicht mit FILTER, --lines oder --refresh kombiniert werden.\n' >&2
+            printf 'known-hosts: --fingerprints cannot be combined with FILTER, --lines or --refresh.\n' >&2
             return 2
         fi
         ssh-keygen -l -E sha256 -f "$known_hosts_file"
@@ -410,25 +410,25 @@ ssh_known_hosts() {
     if (( show_lines )); then
         printf '\e[2m%-*s  %-*s  %-*s  %-*s  %-*s  %s\e[0m\n' \
             "$w_nr" 'NR' \
-            "$w_line" 'ZEILE' \
-            "$w_host" 'ZIEL' \
+            "$w_line" 'LINE' \
+            "$w_host" 'TARGET' \
             "$w_host" 'ALIAS' \
-            "$w_user" 'BENUTZER' \
-            'SCHLÜSSEL'
+            "$w_user" 'USER' \
+            'KEYS'
     else
         printf '\e[2m%-*s  %-*s  %-*s  %-*s  %s\e[0m\n' \
             "$w_nr" 'NR' \
-            "$w_host" 'ZIEL' \
+            "$w_host" 'TARGET' \
             "$w_host" 'ALIAS' \
-            "$w_user" 'BENUTZER' \
-            'SCHLÜSSEL'
+            "$w_user" 'USER' \
+            'KEYS'
     fi
 
     if (( ! found )); then
         if [[ -n $filter ]]; then
-            printf 'Keine lesbaren Einträge für "%s" gefunden.\n' "$filter"
+            printf 'No readable entries found for "%s".\n' "$filter"
         else
-            printf 'Keine Einträge gefunden.\n'
+            printf 'No entries found.\n'
         fi
         return 0
     fi

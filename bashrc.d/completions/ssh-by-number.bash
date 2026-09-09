@@ -8,7 +8,7 @@ _ssh_by_number_completion() {
     COMPREPLY=()
     cur=${COMP_WORDS[COMP_CWORD]}
 
-    # Die Zielnummer ist immer das erste Argument.
+    # The target number is always the first argument.
     (( COMP_CWORD == 1 )) || return 0
 
     if [[ $cur == -* ]]; then

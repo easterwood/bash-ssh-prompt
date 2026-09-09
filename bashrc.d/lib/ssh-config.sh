@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# Gemeinsamer SSH-Config-Scanner fuer known-hosts und dessen Completion.
-# Ergebnisarrays werden vor jedem Scan zurueckgesetzt.
+# Shared SSH config scanner for known-hosts and its completion.
+# The result arrays are reset before every scan.
 declare -a __kh_scan_aliases=()
 declare -a __kh_scan_files=()
 declare -a __kh_scan_include_patterns=()
@@ -9,8 +9,8 @@ declare -A __kh_scan_alias_seen=()
 declare -A __kh_scan_file_seen=()
 declare -A __kh_scan_include_seen=()
 
-# Explizite User-Zuordnungen aus konkreten Host-Bloecken der Benutzer-Config.
-# Wildcard-/Negations-Bloecke wie "Host *" gelten absichtlich nicht als direkt.
+# Explicit user assignments from concrete Host blocks of the user config.
+# Wildcard/negation blocks such as "Host *" deliberately do not count as direct.
 declare -A __kh_scan_alias_direct_user=()
 declare -A __kh_scan_target_direct_user=()
 
@@ -25,9 +25,9 @@ __kh_scan_reset() {
     __kh_scan_target_direct_user=()
 }
 
-# Sammelt konkrete Host-Aliase und folgt Include-Anweisungen rekursiv.
-# Unterstuetzt relative Pfade, absolute Pfade, ~/ und Globs.
-# Tokens mit %, $ oder Leerzeichen werden bewusst nicht ausgewertet.
+# Collects concrete host aliases and follows Include directives recursively.
+# Supports relative paths, absolute paths, ~/ and globs.
+# Tokens containing %, $ or whitespace are deliberately not evaluated.
 __kh_scan_file() {
     local file=$1 base=$2 track_includes=${3:-0} track_direct_users=${4:-0}
     local line keyword token match alias
@@ -128,7 +128,7 @@ __kh_scan_file() {
     done < "$file"
 }
 
-# Scannt die angegebene Benutzerkonfiguration sowie die systemweite SSH-Config.
+# Scans the given user configuration plus the system-wide SSH config.
 __kh_scan_configs() {
     local config=$1 track_includes=${2:-0}
 
