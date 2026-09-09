@@ -12,6 +12,7 @@ completion. It is safe to re-source in the same shell.
 | `known-hosts-clean`, `ssh-known-hosts-clean` | `ssh_known_hosts_clean` | Verify host keys, remove stale entries and config aliases |
 | `ssh-nr` | `ssh_by_number` | Log in by target number from the `known-hosts` list |
 | `ssh-resolve-ips` | `ssh_resolve_ips` | Reverse-DNS for every IP in the config and `known_hosts` |
+| `ssh-resolve-hosts` | `ssh_resolve_hosts` | Forward-DNS for every hostname in the config and `known_hosts` |
 | `bash-commands`, `bashrc-help` | `bash_config_commands` | List every command this configuration provides |
 
 Both a hyphenated and a second alias exist for most of these so they are easy
@@ -400,6 +401,81 @@ code `2`.
 
 ---
 
+## `ssh-resolve-hosts`
+
+```
+ssh-resolve-hosts [FILTER]
+ssh-resolve-hosts --refresh
+ssh-resolve-hosts --help
+```
+
+The mirror image of `ssh-resolve-ips`: that one starts from IP literals and asks
+DNS for names, this one starts from hostnames and asks DNS for addresses.
+Together they cover both halves of your SSH inventory.
+
+```
+HOSTNAME                IP                     CONFIG   KNOWN_HOSTS
+web01.example.com       10.0.0.5, 2001:db8::5  web01    1
+multi.example.com       10.0.0.7, 10.0.0.8     db-prod  2
+plain-only.example.com  -                      -        3
+```
+
+| Column | Contents |
+|---|---|
+| `HOSTNAME` | Each name appears exactly once |
+| `IP` | All addresses, IPv4 first, comma-separated; `-` if the lookup failed |
+| `CONFIG` | Aliases referencing it, or `file:line` when no concrete alias applies; `-` if none |
+| `KNOWN_HOSTS` | Line numbers in `known_hosts`, or `-` |
+
+Where the names come from mirrors `ssh-resolve-ips` exactly:
+
+- the resolved `HostName` of each concrete config alias, via `ssh -G`, so names
+  inherited from a broader `Host` pattern are included;
+- raw `Host` and `HostName` values in the user config and its `Include` files,
+  with paths displayed as `~/…`;
+- the host field of every non-hashed `known_hosts` line, split on commas.
+
+`[host]:port` is unwrapped, and the system `/etc/ssh/ssh_config` is deliberately
+not scanned. IP literals are skipped here — they belong to `ssh-resolve-ips` —
+as are wildcard patterns, markers and hashed entries, none of which can be
+resolved.
+
+### Forward-DNS backends
+
+The first available backend that answers wins:
+
+1. `getent ahosts` — returns one line per address *family*, so duplicates are
+   collapsed
+2. `dig +short NAME A` and `AAAA`
+3. `host` — the `has address` / `has IPv6 address` lines
+4. `powershell.exe` with `System.Net.Dns.GetHostAddresses` for Git Bash on
+   Windows
+5. `nslookup`
+
+Every candidate line is validated as an IPv4 or IPv6 literal before it is shown,
+which is what makes the `dig` path safe: `dig +short` prints intermediate CNAME
+targets alongside the addresses, and those are dropped rather than displayed as
+an address.
+
+Results are cached per shell, negative answers included, so repeated calls are
+free. `--refresh` clears the cache, and so does `known-hosts --refresh`.
+`known_hosts` and the config are re-read on every call regardless.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `SSH_RESOLVE_HOST_TIMEOUT` | `3` | Per-lookup timeout in seconds; must be a positive integer |
+
+The filter is a single case-insensitive substring matched against name,
+addresses, config references and line numbers. More than one argument returns
+exit code `2`.
+
+> This file reuses the IP predicates, the timeout wrapper and the path shortener
+> from `lib/ssh-resolve-ips.sh` instead of duplicating them, so `ssh-tools.sh`
+> must source it after that file. The function checks the dependency at runtime
+> and reports it rather than failing obscurely.
+
+---
+
 ## Tab completion
 
 Completion is registered for the aliases, the hyphenated names **and** the
@@ -464,6 +540,7 @@ pressing `TAB` does not fork processes just to validate the cache.
 | `known-hosts-clean` | `--apply`, `--help` at the first position only |
 | `ssh-nr` | The valid target numbers `1..n` at the first position; also `--help` and `--list` |
 | `ssh-resolve-ips` | `--refresh`, `--help` at the first position only |
+| `ssh-resolve-hosts` | `--refresh`, `--help` at the first position only |
 | `bash-commands` | `--details`, `--check`, `--help`; one filter from the list of command names. Nothing after `--check` |
 
 `ssh-nr` completion builds the same grouping as `known-hosts`, so the offered

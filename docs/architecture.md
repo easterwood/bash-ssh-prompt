@@ -14,7 +14,8 @@
        │    ├─ lib/known-hosts.sh    │ libraries
        │    ├─ lib/known-hosts-clean.sh
        │    ├─ lib/ssh-by-number.sh  │
-       │    ├─ lib/ssh-resolve-ips.sh┘
+       │    ├─ lib/ssh-resolve-ips.sh│
+       │    ├─ lib/ssh-resolve-hosts.sh┘
        │    ├─ commands.sh          bash-commands
        │    ├─ completions/*.bash
        │    └─ aliases + complete registrations
@@ -74,7 +75,8 @@ keeps the trap from firing for each function call inside a pipeline.
 | `__kh_group_*` | The shared grouping model behind `known-hosts` and `ssh-nr` |
 | `__kh_clean_*` | `known-hosts-clean` state |
 | `__ssh_completion_*` | Shared completion cache and helpers |
-| `__ssh_resolve_ips_*` | `ssh-resolve-ips` internals and DNS cache |
+| `__ssh_resolve_ips_*` | `ssh-resolve-ips` internals, IP predicates and PTR cache |
+| `__ssh_resolve_hosts_*` | `ssh-resolve-hosts` internals and forward-DNS cache |
 | `__ssh_tools_dir` | Loader-local path helper in `ssh-tools.sh`, unset again at the end |
 | `__sshp_*` | Shared `ssh`/`sshp` argument parser, option tables and help |
 | `__bash_commands_*` | `bash-commands` helpers: kind lookup and usage text |
@@ -152,12 +154,13 @@ config aliases.
 |---|---|
 | `known-hosts` (`__kh_cache_id`, `__kh_rows`) | The `known_hosts`/config pair changes, or the stored copy of the `known_hosts` contents differs |
 | Completion (`__ssh_completion_*`) | `known_hosts`, the user config, `/etc/ssh/ssh_config`, any included file, or any include glob's match list changes |
-| DNS (`__ssh_resolve_ips_dns_cache`) | Only on `--refresh`; negative results are cached with a `\x1e` sentinel |
+| PTR DNS (`__ssh_resolve_ips_dns_cache`) | Only on `--refresh` or `known-hosts --refresh`; negative results are cached with a `\x1e` sentinel |
+| Forward DNS (`__ssh_resolve_hosts_dns_cache`) | Same, for `ssh-resolve-hosts` |
 | Endpoint reachability (`__kh_clean_endpoint_*`) | Per `known-hosts-clean` invocation |
 
 Validation uses only Bash builtins (`$(< file)`, `compgen -G`), so pressing
 `TAB` does not fork processes just to decide whether the cache is still good.
-`known-hosts --refresh` clears the first three at once.
+`known-hosts --refresh` clears the first four at once.
 
 ## Testing
 
@@ -261,8 +264,8 @@ GNU-only.
 
 ### 7. `ssh -G` and `Match exec`
 
-`known-hosts`, `known-hosts-clean` and `ssh-resolve-ips` call `ssh -G` per
-alias. That opens no network connection, but it does evaluate `Match exec`
+`known-hosts`, `known-hosts-clean`, `ssh-resolve-ips` and `ssh-resolve-hosts`
+call `ssh -G` per alias. That opens no network connection, but it does evaluate `Match exec`
 rules in your config — so those commands can trigger arbitrary local commands
 you configured yourself. It is also the main cost driver: a config with many
 aliases means many `ssh -G` invocations on the first (uncached) call.
@@ -277,7 +280,8 @@ maintenance will remove valid entries. Always read the dry run, and raise
 
 With `HashKnownHosts` enabled the hostname cannot be recovered. Such entries are
 shown as `[gehashter Hostname]`, cannot be filtered by name, cannot be reached
-via `ssh-nr`, and are skipped by `known-hosts-clean` and `ssh-resolve-ips`.
+via `ssh-nr`, and are skipped by `known-hosts-clean`, `ssh-resolve-ips` and
+`ssh-resolve-hosts`.
 
 ### 10. `NR` is only stable per file state
 

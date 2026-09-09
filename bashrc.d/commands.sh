@@ -52,6 +52,7 @@ bash_config_commands() {
 "SSH-Verbindung${sep}ssh-nr${sep}-${sep}bashrc.d/lib/ssh-by-number.sh${sep}Login ueber die Zielnummer aus known-hosts${sep}NR [SSH-OPTIONEN ...] | --list | --help"
 "SSH-Uebersicht${sep}known-hosts${sep}ssh-known-hosts${sep}bashrc.d/lib/known-hosts.sh${sep}Bekannte SSH-Ziele mit Alias, Benutzer und Zielnummer${sep}[--lines] [--refresh] [FILTER] | --fingerprints"
 "SSH-Uebersicht${sep}ssh-resolve-ips${sep}-${sep}bashrc.d/lib/ssh-resolve-ips.sh${sep}IPs aus SSH-Config und known_hosts per Reverse-DNS aufloesen${sep}[FILTER] | --refresh | --help"
+"SSH-Uebersicht${sep}ssh-resolve-hosts${sep}-${sep}bashrc.d/lib/ssh-resolve-hosts.sh${sep}Hostnamen aus SSH-Config und known_hosts per DNS zu IPs aufloesen${sep}[FILTER] | --refresh | --help"
 "SSH-Pflege${sep}known-hosts-clean${sep}ssh-known-hosts-clean${sep}bashrc.d/lib/known-hosts-clean.sh${sep}Veraltete known_hosts-Eintraege und Config-Aliase entfernen${sep}[--apply] | --help"
 "Hilfe${sep}bash-commands${sep}bashrc-help${sep}bashrc.d/commands.sh${sep}Diese Uebersicht anzeigen${sep}[--details] [FILTER] | --check | --help"
     )

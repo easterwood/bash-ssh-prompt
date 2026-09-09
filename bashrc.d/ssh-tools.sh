@@ -16,6 +16,10 @@ source "$__ssh_tools_dir/lib/known-hosts-clean.sh"
 source "$__ssh_tools_dir/lib/ssh-by-number.sh"
 # shellcheck source=lib/ssh-resolve-ips.sh
 source "$__ssh_tools_dir/lib/ssh-resolve-ips.sh"
+# ssh-resolve-hosts nutzt Hilfsfunktionen aus ssh-resolve-ips.sh und muss
+# deshalb danach geladen werden.
+# shellcheck source=lib/ssh-resolve-hosts.sh
+source "$__ssh_tools_dir/lib/ssh-resolve-hosts.sh"
 # shellcheck source=completions/ssh-hosts.bash
 source "$__ssh_tools_dir/completions/ssh-hosts.bash"
 # shellcheck source=completions/known-hosts.bash
@@ -26,6 +30,8 @@ source "$__ssh_tools_dir/completions/known-hosts-clean.bash"
 source "$__ssh_tools_dir/completions/ssh-by-number.bash"
 # shellcheck source=completions/ssh-resolve-ips.bash
 source "$__ssh_tools_dir/completions/ssh-resolve-ips.bash"
+# shellcheck source=completions/ssh-resolve-hosts.bash
+source "$__ssh_tools_dir/completions/ssh-resolve-hosts.bash"
 # shellcheck source=completions/ssh.bash
 source "$__ssh_tools_dir/completions/ssh.bash"
 # shellcheck source=commands.sh
@@ -33,12 +39,13 @@ source "$__ssh_tools_dir/commands.sh"
 # shellcheck source=completions/commands.bash
 source "$__ssh_tools_dir/completions/commands.bash"
 
-unalias known-hosts ssh-known-hosts known-hosts-clean ssh-known-hosts-clean ssh-resolve-ips ssh-nr bash-commands bashrc-help 2>/dev/null || true
+unalias known-hosts ssh-known-hosts known-hosts-clean ssh-known-hosts-clean ssh-resolve-ips ssh-resolve-hosts ssh-nr bash-commands bashrc-help 2>/dev/null || true
 alias known-hosts='ssh_known_hosts'
 alias ssh-known-hosts='ssh_known_hosts'
 alias known-hosts-clean='ssh_known_hosts_clean'
 alias ssh-known-hosts-clean='ssh_known_hosts_clean'
 alias ssh-resolve-ips='ssh_resolve_ips'
+alias ssh-resolve-hosts='ssh_resolve_hosts'
 alias ssh-nr='ssh_by_number'
 alias bash-commands='bash_config_commands'
 alias bashrc-help='bash_config_commands'
@@ -53,6 +60,9 @@ complete -F _ssh_known_hosts_clean_completion ssh_known_hosts_clean
 
 complete -F _ssh_resolve_ips_completion ssh-resolve-ips
 complete -F _ssh_resolve_ips_completion ssh_resolve_ips
+
+complete -F _ssh_resolve_hosts_completion ssh-resolve-hosts
+complete -F _ssh_resolve_hosts_completion ssh_resolve_hosts
 
 complete -F _ssh_by_number_completion ssh-nr
 complete -F _ssh_by_number_completion ssh_by_number

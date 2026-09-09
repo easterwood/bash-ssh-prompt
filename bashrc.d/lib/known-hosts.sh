@@ -381,6 +381,7 @@ ssh_known_hosts() {
         __kh_groups_reset
         __ssh_completion_cache_invalidate
         declare -F __ssh_resolve_ips_cache_invalidate >/dev/null && __ssh_resolve_ips_cache_invalidate
+        declare -F __ssh_resolve_hosts_cache_invalidate >/dev/null && __ssh_resolve_hosts_cache_invalidate
     fi
 
     __kh_groups_build "$known_hosts_file" "$config" || return

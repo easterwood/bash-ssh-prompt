@@ -24,6 +24,7 @@ Set these before sourcing, in `local.sh`, or per command.
 | `SSH_KNOWN_HOSTS_FILE` | `~/.ssh/known_hosts` | `known-hosts`, `known-hosts-clean`, `ssh-nr`, `ssh-resolve-ips`, all completions | Which `known_hosts` file to use |
 | `SSH_CONFIG_FILE` | `~/.ssh/config` | same as above | Which SSH config to treat as primary. When it differs from the default, the tools pass `-F` explicitly |
 | `SSH_RESOLVE_IP_TIMEOUT` | `3` | `ssh-resolve-ips` | Reverse-DNS timeout in seconds. Must be a positive integer |
+| `SSH_RESOLVE_HOST_TIMEOUT` | `3` | `ssh-resolve-hosts` | Forward-DNS timeout in seconds. Must be a positive integer |
 | `SSH_KNOWN_HOSTS_CLEAN_TIMEOUT` | `3` | `known-hosts-clean` | `ssh-keyscan` timeout in seconds. Must be a positive integer |
 | `SSH_PROMPT_SHOW_COMMAND` | `1` | `prompt.sh` | `0` hides the dim `letzter: <command>` line in the remote prompt |
 
@@ -114,6 +115,7 @@ SSH_KNOWN_HOSTS_FILE=tests/known_hosts.fixture known-hosts --lines
 
 ```bash
 SSH_RESOLVE_IP_TIMEOUT=10 ssh-resolve-ips
+SSH_RESOLVE_HOST_TIMEOUT=10 ssh-resolve-hosts
 SSH_KNOWN_HOSTS_CLEAN_TIMEOUT=10 known-hosts-clean
 ```
 

@@ -24,7 +24,7 @@ every server you connect to — without installing anything there by hand.
 | SSH overview | `known-hosts` — one readable row per target, with a stable target number |
 | SSH cleanup | `known-hosts-clean` — verify `known_hosts` against live host keys, drop stale entries and matching config aliases |
 | SSH login | `ssh-nr N` — connect by target number; `ssh` and `sshp` share one argument parser, so plain logins are transparently routed through `sshp` |
-| SSH DNS | `ssh-resolve-ips` — reverse-resolve every IP referenced in your config or `known_hosts` |
+| SSH DNS | `ssh-resolve-ips` and `ssh-resolve-hosts` — resolve every IP and every hostname referenced in your config or `known_hosts`, in both directions |
 | Completion | Tab completion for `ssh`, `sshp` and all helpers, with a lazy cache that notices config changes |
 | Discoverability | `bash-commands` — list every command this configuration adds, with a `--check` self-test |
 
@@ -98,7 +98,8 @@ ssh -p 2222 myserver    # OpenSSH options are passed through
 sshp --force myserver   # force a prompt re-sync before logging in
 ssh --help              # own switches plus the real client's option list
 
-ssh-resolve-ips         # reverse-DNS for all IPs in config + known_hosts
+ssh-resolve-ips         # reverse-DNS: IPs   -> hostnames
+ssh-resolve-hosts       # forward-DNS: hosts -> IPs
 known-hosts-clean       # dry run: what would be removed?
 known-hosts-clean --apply    # actually clean up (creates backups)
 ```
@@ -131,6 +132,7 @@ bashrc.d/
     known-hosts-clean.sh   known-hosts-clean
     ssh-by-number.sh       ssh-nr
     ssh-resolve-ips.sh     ssh-resolve-ips
+    ssh-resolve-hosts.sh   ssh-resolve-hosts (reuses helpers from the above)
   completions/             Bash completion for all of the above
 
 tests/
@@ -170,5 +172,6 @@ bash-commands --check       # every documented command is really defined
   [docs/installation.md#what-sshp-changes-on-a-remote-host](docs/installation.md#what-sshp-changes-on-a-remote-host).
 - `known-hosts-clean` treats an unreachable host as stale and would remove it.
   Always run the dry run first, and never run `--apply` while off the VPN.
-- `known-hosts` and `ssh-resolve-ips` run `ssh -G`, which does not open a
-  connection but does evaluate `Match exec` rules from your config.
+- `known-hosts`, `ssh-resolve-ips` and `ssh-resolve-hosts` run `ssh -G`, which
+  does not open a connection but does evaluate `Match exec` rules from your
+  config.
