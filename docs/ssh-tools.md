@@ -348,8 +348,8 @@ What it completes:
 - **Only at the destination position.** Options and their arguments are skipped;
   once a destination has been given, nothing more is offered.
 - **Filenames** after `-F`, `-i`, `-E`, `-I` and `-S`.
-- **`--force` and `--help`**, but only when the command word is `sshp` — these
-  are `sshp`'s own switches and are not offered for `ssh`.
+- **`--force` and `--help`** for both `ssh` and `sshp`. The two commands share
+  one argument parser, so both really accept these switches.
 - **Config aliases** and **plain `known_hosts` hostnames**. Entries such as
   `[host]:2222`, wildcard patterns and marker lines are excluded, because they
   are not valid `ssh` destinations.

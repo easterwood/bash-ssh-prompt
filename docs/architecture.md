@@ -75,7 +75,7 @@ keeps the trap from firing for each function call inside a pipeline.
 | `__ssh_completion_*` | Shared completion cache and helpers |
 | `__ssh_resolve_ips_*` | `ssh-resolve-ips` internals and DNS cache |
 | `__ssh_tools_dir` | Loader-local path helper in `ssh-tools.sh`, unset again at the end |
-| `__sshp_*` | `sshp` helpers: option table and usage text |
+| `__sshp_*` | Shared `ssh`/`sshp` argument parser, option tables and help |
 | `_ssh_*_completion` | Functions registered with `complete -F` |
 | `ssh_known_hosts`, `ssh_by_number`, … | Public functions behind the hyphenated aliases |
 
@@ -199,15 +199,17 @@ logins, and GNU `ls` option availability on every target.
 
 `sshp` forwards OpenSSH options but rejects anything after the destination,
 because it always ends in an interactive login — syncing a prompt for
-`host uname -a` would be pointless. Use `command ssh` for one-off commands.
+`host uname -a` would be pointless. The `ssh` wrapper detects that case and
+hands such calls to native OpenSSH, together with the options in
+`__sshp_option_skips_shell` (`-N -W -O -Q -G -V -f -T -s`) that start no
+interactive shell. That list is a judgement call rather than something OpenSSH
+declares, so an exotic non-interactive invocation could still take the `sshp`
+path and pay for one extra connection. `command ssh` always bypasses the
+wrapper.
 
-The `ssh()` wrapper is also deliberately narrow: it routes to `sshp` only for a
-bare single-argument call, so `ssh -p 2222 host` still goes to native OpenSSH
-and gets no synced prompt. Call `sshp -p 2222 host` explicitly if you want it.
-
-Finally, the sync state is keyed by the destination string alone. `sshp web01`
-and `sshp -F other-config web01` share one state entry, so if two configs map
-the same alias to different machines, use `--force`.
+The sync state is keyed by the destination string alone. `sshp web01` and
+`sshp -F other-config web01` share one state entry, so if two configs map the
+same alias to different machines, use `--force`.
 
 > Earlier versions shipped a second wrapper layer in `bashrc.d/lib/ssh-command.sh`
 > that added `-q` by default plus `--banner`/`--no-quiet`/`--quiet` and

@@ -23,7 +23,7 @@ every server you connect to — without installing anything there by hand.
 | History | Large history, timestamps, append-on-exit |
 | SSH overview | `known-hosts` — one readable row per target, with a stable target number |
 | SSH cleanup | `known-hosts-clean` — verify `known_hosts` against live host keys, drop stale entries and matching config aliases |
-| SSH login | `ssh-nr N` — connect by target number; `ssh HOST` transparently routed through `sshp` |
+| SSH login | `ssh-nr N` — connect by target number; `ssh` and `sshp` share one argument parser, so plain logins are transparently routed through `sshp` |
 | SSH DNS | `ssh-resolve-ips` — reverse-resolve every IP referenced in your config or `known_hosts` |
 | Completion | Tab completion for `ssh`, `sshp` and all helpers, with a lazy cache that notices config changes |
 
@@ -89,9 +89,10 @@ known-hosts --lines     # also show known_hosts line numbers
 known-hosts --fingerprints   # original ssh-keygen fingerprint output
 
 ssh-nr 4                # log in to target number 4 from the list above
-ssh myserver            # single argument -> routed through sshp
-sshp -p 2222 myserver   # OpenSSH options are passed through
+ssh myserver            # plain logins are routed through sshp
+ssh -p 2222 myserver    # OpenSSH options are passed through
 sshp --force myserver   # force a prompt re-sync before logging in
+ssh --help              # own switches plus the real client's option list
 
 ssh-resolve-ips         # reverse-DNS for all IPs in config + known_hosts
 known-hosts-clean       # dry run: what would be removed?

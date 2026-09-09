@@ -19,7 +19,13 @@ sshp --help
 Exactly one destination is required, and it must come after any options.
 `--force` and `--help` are `sshp`'s own switches; everything else starting with
 `-` is forwarded verbatim to OpenSSH. `--` ends option parsing, so the next word
-is taken as the destination.
+is taken as the destination. The `ssh` wrapper accepts the identical argument
+list — see [The `ssh()` wrapper](#the-ssh-wrapper).
+
+Parsing lives in one shared function, `__sshp_parse_args`, which fills
+`__sshp_options`, `__sshp_target`, `__sshp_extra`, `__sshp_force` and
+`__sshp_help_requested`. Both `sshp` and `ssh` call it, which is what keeps
+their behaviour and their completion in sync.
 
 Errors all return exit code `2` with a usage block:
 
@@ -66,37 +72,67 @@ destination is never mistaken for an option argument.
 
 ## The `ssh()` wrapper
 
-`ssh-prompt.sh` also redefines `ssh`:
+`ssh-prompt.sh` also redefines `ssh`, and it uses the **same parser** as `sshp`,
+so both commands accept the same arguments and the tab completion is identical
+for either name.
 
-```bash
-ssh() {
-    if (( $# == 1 )) && [[ -n ${1-} && ${1-} != -* ]]; then
-        sshp "$1"
-    else
-        command ssh "$@"
-    fi
-}
-```
+`ssh` delegates to `sshp` when the invocation is a plain interactive login: the
+arguments parse cleanly, there is nothing after the destination, and none of the
+options mean "no interactive shell". Everything else goes to the real OpenSSH
+client untouched.
 
-So a bare `ssh myserver` gets the synced prompt, while anything with options or
-a remote command goes to the real OpenSSH client untouched:
+| Command | Path taken | Why |
+|---|---|---|
+| `ssh server` | `sshp server` | plain login |
+| `ssh -p 2222 server` | `sshp -p 2222 server` | options are forwarded |
+| `ssh -J jump -i key db01` | `sshp -J jump -i key db01` | options are forwarded |
+| `ssh --force server` | `sshp --force server` | own switch, recognised by both |
+| `ssh --help` | own help, see below | own switch, recognised by both |
+| `ssh server uname -a` | native `ssh` | remote command |
+| `ssh -N -L 8080:localhost:80 server` | native `ssh` | `-N`: no shell |
+| `ssh -W inner:22 gateway` | native `ssh` | `-W`: stdio forward |
+| `ssh -O check server` | native `ssh` | `-O`: control command |
+| `ssh -G server` / `ssh -V` | native `ssh` | query only |
+| `ssh -T server` | native `ssh` | no pty requested |
+| `ssh` (no arguments) | native `ssh` | OpenSSH prints its own usage |
+| `command ssh server` | native `ssh` | explicit bypass |
 
-| Command | Path taken |
-|---|---|
-| `ssh server` | `sshp server` |
-| `ssh -p 2222 server` | native `ssh` |
-| `ssh server uname -a` | native `ssh` |
-| `command ssh server` | native `ssh` |
-
-The wrapper is deliberately conservative and was left alone when `sshp` gained
-option pass-through: `sshp -p 2222 server` now works, but `ssh -p 2222 server`
-still goes straight to OpenSSH, so tunnels (`-N -L …`) and one-off commands
-behave exactly as they always did. Call `sshp` explicitly when you want the
-synced prompt with options.
+`__sshp_option_skips_shell` holds that exclusion list
+(`-N -W -O -Q -G -V -f -T -s`). A prompt sync for those calls would cost an
+extra connection and achieve nothing, since no interactive Bash is started.
 
 `ssh-prompt.sh` runs `unalias ssh sshp` before defining the two functions,
 because aliases are expanded before function lookup and a distribution-supplied
 `alias ssh=…` would otherwise shadow them.
+
+## `--help`
+
+`sshp --help` and `ssh --help` print the same three-part help: the synopsis with
+`sshp`'s own switches, a paragraph on how options are forwarded, and then the
+option list of the **installed** OpenSSH client, so you do not have to leave the
+wrapper to look up a flag:
+
+```
+Aufruf: sshp [--force] [SSH-OPTIONEN ...] user@host
+        sshp [--force] [SSH-OPTIONEN ...] SSH-Config-Alias
+
+  --force   Prompt-Dateien uebertragen, auch wenn die Signatur passt
+  --help    Diese Hilfe anzeigen
+
+SSH-Optionen werden unveraendert an OpenSSH durchgereicht und gelten
+...
+
+Durchgereichte Optionen von /usr/bin/ssh (OpenSSH_9.6p1, OpenSSL 3.0.13):
+
+  usage: ssh [-46AaCfGgKkMNnqsTtVvXxYy] [-B bind_interface]
+             [-b bind_address] [-c cipher_spec] ...
+```
+
+That last block is not a copy kept in this repository. `__sshp_ssh_usage`
+locates the binary with `type -P ssh`, reads the version from `ssh -V`, and runs
+the binary with no arguments — OpenSSH then prints its usage block on stderr and
+exits 255. So the list always matches the client actually installed, and it
+degrades gracefully to a one-line note if no `ssh` is in `PATH`.
 
 ## Which files are synced
 

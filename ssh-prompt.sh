@@ -15,52 +15,68 @@ __sshp_option_takes_arg() {
     return 1
 }
 
-__sshp_usage() {
-    printf 'Aufruf: sshp [--force] [SSH-OPTIONEN ...] user@host\n'
-    printf '        sshp [--force] [SSH-OPTIONEN ...] SSH-Config-Alias\n'
-    printf '\n'
-    printf '  --force   Prompt-Dateien uebertragen, auch wenn die Signatur passt\n'
-    printf '  --help    Diese Hilfe anzeigen\n'
-    printf '\n'
-    printf 'SSH-Optionen werden unveraendert an OpenSSH durchgereicht und gelten\n'
-    printf 'sowohl fuer die Synchronisations- als auch fuer die Login-Verbindung.\n'
-    printf 'Ein Remote-Kommando wird nicht unterstuetzt, weil sshp immer eine\n'
-    printf 'interaktive Sitzung oeffnet. Dafuer "command ssh" verwenden.\n'
+# Optionen, bei denen OpenSSH keine interaktive Shell oeffnet. Fuer solche
+# Aufrufe waere ein Prompt-Sync sinnlos, der ssh-Wrapper reicht sie direkt
+# an OpenSSH weiter.
+__sshp_option_skips_shell() {
+    case $1 in
+        -N|-W|-O|-Q|-G|-V|-f|-T|-s)
+            return 0
+            ;;
+    esac
+    return 1
 }
 
-sshp() (
-    local force=0
-    local target='' arg option expect_arg=0
+# Gemeinsamer Argumentparser fuer sshp und den ssh-Wrapper. Ergebnisse:
+#   __sshp_options          durchzureichende OpenSSH-Optionen
+#   __sshp_target           das SSH-Ziel
+#   __sshp_extra            Worte nach dem Ziel (Remote-Kommando)
+#   __sshp_force            1 bei --force
+#   __sshp_help_requested   1 bei --help/-h
+# Rueckgabe 2 bei fehlendem Ziel oder fehlendem Optionsargument.
+declare -a __sshp_options=()
+declare -a __sshp_extra=()
+__sshp_target=''
+__sshp_force=0
+__sshp_help_requested=0
+
+__sshp_parse_args() {
+    local arg option expect_arg=0
+
     # Eigene Optionen stehen bewusst vorn: bei -o gewinnt in OpenSSH die erste
     # Angabe, dadurch bleibt WarnWeakCrypto=no auch bei eigenen -o erhalten.
-    local -a ssh_options=(-o WarnWeakCrypto=no)
+    __sshp_options=(-o WarnWeakCrypto=no)
+    __sshp_extra=()
+    __sshp_target=''
+    __sshp_force=0
+    __sshp_help_requested=0
 
     while (( $# )); do
         arg=$1
         shift
 
         if (( expect_arg )); then
-            ssh_options+=("$arg")
+            __sshp_options+=("$arg")
             expect_arg=0
             continue
         fi
 
         case $arg in
             --force)
-                force=1
+                __sshp_force=1
                 continue
                 ;;
             --help|-h)
-                __sshp_usage
+                __sshp_help_requested=1
                 return 0
                 ;;
             --)
-                target=${1-}
+                __sshp_target=${1-}
                 (( $# )) && shift
                 break
                 ;;
             -*)
-                ssh_options+=("$arg")
+                __sshp_options+=("$arg")
                 option=${arg:0:2}
                 if __sshp_option_takes_arg "$option" && (( ${#arg} == 2 )); then
                     expect_arg=1
@@ -70,27 +86,84 @@ sshp() (
         esac
 
         # Das erste Wort, das keine Option ist, ist das Ziel.
-        target=$arg
+        __sshp_target=$arg
         break
     done
 
+    __sshp_extra=("$@")
+
     if (( expect_arg )); then
         printf 'sshp: Zur letzten Option fehlt das Argument.\n' >&2
-        __sshp_usage >&2
         return 2
     fi
 
-    if [[ -z $target || $target == -* ]]; then
+    if [[ -z $__sshp_target || $__sshp_target == -* ]]; then
         printf 'sshp: Es wird genau ein SSH-Ziel benoetigt.\n' >&2
-        __sshp_usage >&2
         return 2
     fi
 
-    if (( $# )); then
-        printf 'sshp: Ein Remote-Kommando wird nicht unterstuetzt: %s\n' "$1" >&2
-        printf 'Dafuer "command ssh %s %s ..." verwenden.\n' "$target" "$1" >&2
+    return 0
+}
+
+__sshp_usage() {
+    printf 'Aufruf: sshp [--force] [SSH-OPTIONEN ...] user@host\n'
+    printf '        sshp [--force] [SSH-OPTIONEN ...] SSH-Config-Alias\n'
+    printf '\n'
+    printf '  --force   Prompt-Dateien uebertragen, auch wenn die Signatur passt\n'
+    printf '  --help    Diese Hilfe anzeigen\n'
+}
+
+# Originale Optionsliste des installierten OpenSSH-Clients. Der Aufruf ohne
+# Argumente gibt den Usage-Block auf stderr aus und endet mit 255.
+__sshp_ssh_usage() {
+    local binary version
+
+    binary=$(type -P ssh 2>/dev/null)
+    if [[ -z $binary ]]; then
+        printf 'Der OpenSSH-Client wurde nicht im PATH gefunden.\n'
+        return 0
+    fi
+
+    version=$("$binary" -V 2>&1 | head -n 1)
+    printf 'Durchgereichte Optionen von %s' "$binary"
+    [[ -z $version ]] || printf ' (%s)' "$version"
+    printf ':\n\n'
+    "$binary" 2>&1 | sed 's/^/  /' || true
+}
+
+__sshp_show_help() {
+    __sshp_usage
+    printf '\n'
+    printf 'SSH-Optionen werden unveraendert an OpenSSH durchgereicht und gelten\n'
+    printf 'sowohl fuer die Synchronisations- als auch fuer die Login-Verbindung.\n'
+    printf 'Ein Remote-Kommando wird nicht unterstuetzt, weil sshp immer eine\n'
+    printf 'interaktive Sitzung oeffnet. Dafuer "command ssh" verwenden.\n'
+    printf '\n'
+    __sshp_ssh_usage
+}
+
+sshp() (
+    __sshp_parse_args "$@" || {
+        __sshp_usage >&2
+        return 2
+    }
+
+    if (( __sshp_help_requested )); then
+        __sshp_show_help
+        return 0
+    fi
+
+    if (( ${#__sshp_extra[@]} )); then
+        printf 'sshp: Ein Remote-Kommando wird nicht unterstuetzt: %s\n' \
+            "${__sshp_extra[0]}" >&2
+        printf 'Dafuer "command ssh %s %s ..." verwenden.\n' \
+            "$__sshp_target" "${__sshp_extra[0]}" >&2
         return 2
     fi
+
+    local force=$__sshp_force
+    local target=$__sshp_target
+    local -a ssh_options=("${__sshp_options[@]}")
 
     local config_root=${BASH_CONFIG_ROOT:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)}
     local state_dir="$HOME/.cache/sshp"
@@ -198,9 +271,32 @@ REMOTE
 )
 
 ssh() {
-    if (( $# == 1 )) && [[ -n ${1-} && ${1-} != -* ]]; then
-        sshp "$1"
-    else
-        command ssh "$@"
+    local arg
+
+    # Denselben Parser verwenden wie sshp, damit ssh und sshp dieselben
+    # Argumente annehmen und die Completion fuer beide gleich gilt.
+    if __sshp_parse_args "$@" 2>/dev/null; then
+        if (( __sshp_help_requested )); then
+            __sshp_show_help
+            return 0
+        fi
+
+        # Remote-Kommandos gehen unveraendert an OpenSSH.
+        if (( ${#__sshp_extra[@]} == 0 )); then
+            for arg in "${__sshp_options[@]}"; do
+                if __sshp_option_skips_shell "$arg"; then
+                    command ssh "$@"
+                    return $?
+                fi
+            done
+
+            sshp "$@"
+            return $?
+        fi
+    elif (( __sshp_help_requested )); then
+        __sshp_show_help
+        return 0
     fi
+
+    command ssh "$@"
 }
