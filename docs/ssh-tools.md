@@ -12,10 +12,82 @@ completion. It is safe to re-source in the same shell.
 | `known-hosts-clean`, `ssh-known-hosts-clean` | `ssh_known_hosts_clean` | Verify host keys, remove stale entries and config aliases |
 | `ssh-nr` | `ssh_by_number` | Log in by target number from the `known-hosts` list |
 | `ssh-resolve-ips` | `ssh_resolve_ips` | Reverse-DNS for every IP in the config and `known_hosts` |
+| `bash-commands`, `bashrc-help` | `bash_config_commands` | List every command this configuration provides |
 
-Both a hyphenated and an `ssh-` prefixed alias exist for the first two so they
-are easy to find by tab completion. The underlying function names are also
-completable.
+Both a hyphenated and a second alias exist for most of these so they are easy
+to find by tab completion. The underlying function names are also completable.
+
+---
+
+## `bash-commands`
+
+```
+bash-commands [--details] [FILTER]
+bash-commands --check
+bash-commands --help
+```
+
+The discoverability entry point: it lists every command the configuration adds
+to your shell, grouped by purpose, so you do not have to read `docs/` to
+remember what exists.
+
+```
+Prompt und Anzeige
+  ll                  Verzeichnisinhalt mit ausgerichteten Spalten und farbigem Besitzer
+
+SSH-Verbindung
+  ssh                 OpenSSH-Wrapper; einfache Logins laufen ueber sshp
+  sshp                Prompt-Dateien zum Ziel uebertragen und einloggen
+  ssh-nr              Login ueber die Zielnummer aus known-hosts
+
+SSH-Uebersicht
+  known-hosts         Bekannte SSH-Ziele mit Alias, Benutzer und Zielnummer
+  ssh-resolve-ips     IPs aus SSH-Config und known_hosts per Reverse-DNS aufloesen
+...
+```
+
+| Option | Effect |
+|---|---|
+| `--details`, `-d` | Add the call syntax, the synonym and the defining file under each command |
+| `--check` | Print a verification table instead of the list |
+| `--help`, `-h` | Usage |
+| `FILTER` | A single case-insensitive substring, matched against name, synonym and description |
+
+`--check` cannot be combined with `FILTER` or `--details`, and more than one
+free-form argument is rejected; both return exit code `2`. A filter that matches
+nothing prints a short note and returns `0`.
+
+A command that is listed but not defined in the current shell is flagged in red
+with `(nicht definiert)`.
+
+### Why `--check` exists
+
+The command table is hand-maintained in `bashrc.d/commands.sh`, because what a
+command *does* cannot be derived from the code. That invites drift: rename an
+alias and the listing quietly lies. `--check` resolves every listed name and
+synonym with `alias` and `type -t`, prints its kind (`Funktion`, `Alias`,
+`Builtin`, `Programm`) and its defining file, and returns exit code `1` if
+anything is missing:
+
+```
+BEFEHL                   ART         QUELLE
+ll                       Funktion    bashrc.d/listing.sh
+ssh                      Funktion    ssh-prompt.sh
+known-hosts              Alias       bashrc.d/lib/known-hosts.sh
+  ssh-known-hosts        Alias       Synonym
+...
+Alle aufgefuehrten Befehle sind definiert.
+```
+
+So it works as a cheap self-test after any refactor:
+
+```bash
+bash-commands --check || echo 'Tabelle in bashrc.d/commands.sh veraltet'
+```
+
+Note that it only catches one direction. A command that exists but is missing
+*from* the table cannot be detected this way — adding an entry stays a manual
+step.
 
 ---
 
@@ -392,6 +464,7 @@ pressing `TAB` does not fork processes just to validate the cache.
 | `known-hosts-clean` | `--apply`, `--help` at the first position only |
 | `ssh-nr` | The valid target numbers `1..n` at the first position; also `--help` and `--list` |
 | `ssh-resolve-ips` | `--refresh`, `--help` at the first position only |
+| `bash-commands` | `--details`, `--check`, `--help`; one filter from the list of command names. Nothing after `--check` |
 
 `ssh-nr` completion builds the same grouping as `known-hosts`, so the offered
 numbers are always the real ones.

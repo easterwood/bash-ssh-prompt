@@ -15,6 +15,7 @@
        │    ├─ lib/known-hosts-clean.sh
        │    ├─ lib/ssh-by-number.sh  │
        │    ├─ lib/ssh-resolve-ips.sh┘
+       │    ├─ commands.sh          bash-commands
        │    ├─ completions/*.bash
        │    └─ aliases + complete registrations
        ├─ bashrc.d/prompt-core.sh    command timer, window title
@@ -76,6 +77,7 @@ keeps the trap from firing for each function call inside a pipeline.
 | `__ssh_resolve_ips_*` | `ssh-resolve-ips` internals and DNS cache |
 | `__ssh_tools_dir` | Loader-local path helper in `ssh-tools.sh`, unset again at the end |
 | `__sshp_*` | Shared `ssh`/`sshp` argument parser, option tables and help |
+| `__bash_commands_*` | `bash-commands` helpers: kind lookup and usage text |
 | `_ssh_*_completion` | Functions registered with `complete -F` |
 | `ssh_known_hosts`, `ssh_by_number`, … | Public functions behind the hyphenated aliases |
 
@@ -179,6 +181,10 @@ The fixture contains three synthetic lines — a plaintext host with an extra
 deliberately **no valid cryptographic keys**. This is a parser regression test,
 not a crypto test and not a benchmark.
 
+`bash-commands --check` is a second, cheap self-test: it resolves every command
+listed in `bashrc.d/commands.sh` and returns exit code `1` if one is missing, so
+a renamed alias does not silently invalidate the overview.
+
 To syntax-check everything, including the files `install.sh` skips:
 
 ```bash
@@ -228,7 +234,7 @@ prepended unconditionally, so re-sourcing accumulates duplicate entries.
 ### 3. `install.sh` checks only part of the tree
 
 `bash -n` is run against `bashrc.sh`, `prompt.sh`, `ssh-prompt.sh`,
-`.git-prompt-colors.sh` and the six `bashrc.d/*.sh` modules — but not
+`.git-prompt-colors.sh` and the seven `bashrc.d/*.sh` modules — but not
 `bashrc.d/lib/*.sh` or `bashrc.d/completions/*.bash`. A syntax error there is
 only noticed when a new shell starts. Run the `find | xargs bash -n` command
 above before committing.
@@ -300,7 +306,9 @@ free of local paths, Windows assumptions and `bash-git-prompt` dependencies.
 in `bashrc.d/completions/`, then add the `source` lines, the alias and the
 `complete -F` registration in `bashrc.d/ssh-tools.sh`. Reuse `__kh_scan_configs`
 for config parsing and `__ssh_completion_cache_ensure` for host lists rather
-than re-implementing either.
+than re-implementing either. Finally add a row to the `rows` table in
+`bashrc.d/commands.sh` and the name to `bashrc.d/completions/commands.bash`,
+then confirm with `bash-commands --check`.
 
 **Changing the prompt** — the local prompt lives in `.git-prompt-colors.sh` and
 `prompt-local.sh`; the remote prompt in `prompt.sh`. Keep the timer variable

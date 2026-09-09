@@ -26,6 +26,7 @@ every server you connect to — without installing anything there by hand.
 | SSH login | `ssh-nr N` — connect by target number; `ssh` and `sshp` share one argument parser, so plain logins are transparently routed through `sshp` |
 | SSH DNS | `ssh-resolve-ips` — reverse-resolve every IP referenced in your config or `known_hosts` |
 | Completion | Tab completion for `ssh`, `sshp` and all helpers, with a lazy cache that notices config changes |
+| Discoverability | `bash-commands` — list every command this configuration adds, with a `--check` self-test |
 
 ## Requirements
 
@@ -82,6 +83,9 @@ Details, uninstall instructions and the manual-setup alternative are in
 ## Quick tour
 
 ```bash
+bash-commands           # what does this configuration give me?
+bash-commands --details # ... with call syntax and defining file
+
 ll                      # aligned, colour-coded directory listing
 known-hosts             # overview of every known SSH target, numbered
 known-hosts srv         # case-insensitive substring filter
@@ -120,6 +124,7 @@ bashrc.d/
   prompt-core.sh           Command timer and window title (local + remote)
   prompt-local.sh          bash-git-prompt wiring for local shells
   ssh-tools.sh             Loader for the SSH helpers, aliases, completion
+  commands.sh              bash-commands: overview of all provided commands
   lib/
     ssh-config.sh          Shared ~/.ssh/config scanner (incl. Include)
     known-hosts.sh         known-hosts overview and grouping model
@@ -151,7 +156,8 @@ edges, in particular a load-order clash between the two `ssh` wrappers.
 ## Testing
 
 ```bash
-bash tests/known-hosts.sh
+bash tests/known-hosts.sh   # known-hosts parser regression test
+bash-commands --check       # every documented command is really defined
 ```
 
 `TEST.md` (German) records a manual test run of the whole package from

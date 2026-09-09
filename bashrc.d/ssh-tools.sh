@@ -28,14 +28,20 @@ source "$__ssh_tools_dir/completions/ssh-by-number.bash"
 source "$__ssh_tools_dir/completions/ssh-resolve-ips.bash"
 # shellcheck source=completions/ssh.bash
 source "$__ssh_tools_dir/completions/ssh.bash"
+# shellcheck source=commands.sh
+source "$__ssh_tools_dir/commands.sh"
+# shellcheck source=completions/commands.bash
+source "$__ssh_tools_dir/completions/commands.bash"
 
-unalias known-hosts ssh-known-hosts known-hosts-clean ssh-known-hosts-clean ssh-resolve-ips ssh-nr 2>/dev/null || true
+unalias known-hosts ssh-known-hosts known-hosts-clean ssh-known-hosts-clean ssh-resolve-ips ssh-nr bash-commands bashrc-help 2>/dev/null || true
 alias known-hosts='ssh_known_hosts'
 alias ssh-known-hosts='ssh_known_hosts'
 alias known-hosts-clean='ssh_known_hosts_clean'
 alias ssh-known-hosts-clean='ssh_known_hosts_clean'
 alias ssh-resolve-ips='ssh_resolve_ips'
 alias ssh-nr='ssh_by_number'
+alias bash-commands='bash_config_commands'
+alias bashrc-help='bash_config_commands'
 
 complete -F _ssh_known_hosts_completion known-hosts
 complete -F _ssh_known_hosts_completion ssh-known-hosts
@@ -50,6 +56,10 @@ complete -F _ssh_resolve_ips_completion ssh_resolve_ips
 
 complete -F _ssh_by_number_completion ssh-nr
 complete -F _ssh_by_number_completion ssh_by_number
+
+complete -F _bash_commands_completion bash-commands
+complete -F _bash_commands_completion bashrc-help
+complete -F _bash_commands_completion bash_config_commands
 
 # sshp is treated like ssh: the first destination argument gets host completion.
 # Remove an older completion spec first so this registration is unambiguous.
