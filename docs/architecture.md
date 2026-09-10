@@ -21,19 +21,20 @@
        │    └─ aliases + complete registrations
        ├─ bashrc.d/prompt-core.sh    command timer, window title
        ├─ bashrc.d/prompt-local.sh   bash-git-prompt wiring
-       ├─ ssh-prompt.sh              sshp + ssh() wrapper
+       ├─ ssh-prompt.sh              sshp
        └─ local.sh                   optional, untracked
 ```
 
 `bashrc.sh` guards on `[[ $- == *i* ]]`, so non-interactive shells (scripts,
 `scp`, `rsync`) exit the file immediately.
 
-`ssh()` and `sshp()` are defined in exactly one place, `ssh-prompt.sh`. It
-starts with `unalias ssh sshp`, because aliases are expanded before function
-lookup and would otherwise shadow the wrappers at the interactive prompt. The
-completion registrations for both names live in `ssh-tools.sh`, which is loaded
-earlier — the order does not matter there, since `complete -F` only stores a
-function name.
+`sshp()` is defined in exactly one place, `ssh-prompt.sh`. It starts with
+`unalias sshp`, because aliases are expanded before function lookup and would
+otherwise shadow the function at the interactive prompt. `ssh` is deliberately
+neither unaliased nor redefined: the configuration no longer wraps it, so plain
+`ssh` is the OpenSSH client from `PATH`. The completion registrations for both
+names live in `ssh-tools.sh`, which is loaded earlier — the order does not
+matter there, since `complete -F` only stores a function name.
 
 ## `PROMPT_COMMAND` composition
 
@@ -208,13 +209,10 @@ logins, and GNU `ls` option availability on every target.
 
 `sshp` forwards OpenSSH options but rejects anything after the destination,
 because it always ends in an interactive login — syncing a prompt for
-`host uname -a` would be pointless. The `ssh` wrapper detects that case and
-hands such calls to native OpenSSH, together with the options in
-`__sshp_option_skips_shell` (`-N -W -O -Q -G -V -f -T -s`) that start no
-interactive shell. That list is a judgement call rather than something OpenSSH
-declares, so an exotic non-interactive invocation could still take the `sshp`
-path and pay for one extra connection. `command ssh` always bypasses the
-wrapper.
+`host uname -a` would be pointless. Use `ssh host uname -a` for that: `ssh` is
+not wrapped, so anything that is not an interactive login simply goes to
+OpenSSH directly. The flip side is that a plain `ssh host` no longer syncs the
+prompt either; call `sshp host` when you want it.
 
 The sync state is keyed by the destination string alone. `sshp web01` and
 `sshp -F other-config web01` share one state entry, so if two configs map the
@@ -226,6 +224,11 @@ same alias to different machines, use `--force`.
 > `ssh()`/`sshp()`, that layer was never active. It has been removed together
 > with its switches and their completions; option handling now lives in `sshp`
 > itself.
+>
+> The `ssh()` wrapper in `ssh-prompt.sh` is gone as well. It routed plain
+> logins to `sshp` and everything else to native OpenSSH. `ssh` is now the
+> unmodified system binary; the prompt sync is only performed by an explicit
+> `sshp` (or `ssh-nr`, which calls `sshp`).
 
 ### 2. `bashrc.d/environment.sh` is machine-specific
 

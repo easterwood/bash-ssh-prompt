@@ -37,7 +37,6 @@ Prompt and display
   ll                  Directory listing with aligned columns and a colour-coded owner
 
 SSH connection
-  ssh                 OpenSSH wrapper; plain logins are routed through sshp
   sshp                Copy the prompt files to the destination and log in
   ssh-nr              Log in by the target number from known-hosts
 

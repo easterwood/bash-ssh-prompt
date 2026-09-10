@@ -47,7 +47,6 @@ bash_config_commands() {
     # GROUP | COMMAND | SYNONYMS | SOURCE | DESCRIPTION | OPTIONS
     local -a rows=(
 "Prompt and display${sep}ll${sep}-${sep}bashrc.d/listing.sh${sep}Directory listing with aligned columns and a colour-coded owner${sep}all options of ls"
-"SSH connection${sep}ssh${sep}-${sep}ssh-prompt.sh${sep}OpenSSH wrapper; plain logins are routed through sshp${sep}[--force] [SSH-OPTIONS ...] DESTINATION"
 "SSH connection${sep}sshp${sep}-${sep}ssh-prompt.sh${sep}Copy the prompt files to the destination and log in${sep}[--force] [SSH-OPTIONS ...] DESTINATION"
 "SSH connection${sep}ssh-nr${sep}-${sep}bashrc.d/lib/ssh-by-number.sh${sep}Log in by the target number from known-hosts${sep}NR [SSH-OPTIONS ...] | --list | --help"
 "SSH overview${sep}known-hosts${sep}ssh-known-hosts${sep}bashrc.d/lib/known-hosts.sh${sep}Known SSH targets with alias, user and target number${sep}[--lines] [--refresh] [FILTER] | --fingerprints"

@@ -22,7 +22,7 @@ every server you connect to — without installing anything there by hand.
 | History | Large history, timestamps, append-on-exit |
 | SSH overview | `known-hosts` — one readable row per target, with a stable target number |
 | SSH cleanup | `known-hosts-clean` — verify `known_hosts` against live host keys, drop stale entries and matching config aliases |
-| SSH login | `ssh-nr N` — connect by target number; `ssh` and `sshp` share one argument parser, so plain logins are transparently routed through `sshp` |
+| SSH login | `sshp HOST` — sync the prompt, then log in; `ssh-nr N` — connect by target number. Plain `ssh` is left untouched and stays the OpenSSH client |
 | SSH DNS | `ssh-resolve-ips` and `ssh-resolve-hosts` — resolve every IP and every hostname referenced in your config or `known_hosts`, in both directions |
 | Completion | Tab completion for `ssh`, `sshp` and all helpers, with a lazy cache that notices config changes |
 | Discoverability | `bash-commands` — list every command this configuration adds, with a `--check` self-test |
@@ -92,10 +92,11 @@ known-hosts --lines     # also show known_hosts line numbers
 known-hosts --fingerprints   # original ssh-keygen fingerprint output
 
 ssh-nr 4                # log in to target number 4 from the list above
-ssh myserver            # plain logins are routed through sshp
-ssh -p 2222 myserver    # OpenSSH options are passed through
+sshp myserver           # sync the prompt files, then log in
+sshp -p 2222 myserver   # OpenSSH options are passed through
 sshp --force myserver   # force a prompt re-sync before logging in
-ssh --help              # own switches plus the real client's option list
+sshp --help             # own switches plus the real client's option list
+ssh myserver            # untouched OpenSSH: no sync, no prompt
 
 ssh-resolve-ips         # reverse-DNS: IPs   -> hostnames
 ssh-resolve-hosts       # forward-DNS: hosts -> IPs
@@ -114,7 +115,7 @@ bashrc.sh                  Entry point: loads every module in order
 bashrc.snippet.sh          Reference snippet for manual setup (legacy)
 local.sh.example           Template for untracked machine-local settings
 prompt.sh                  Prompt used on remote hosts (synced by sshp)
-ssh-prompt.sh              sshp: sync + login, and the ssh() wrapper
+ssh-prompt.sh              sshp: prompt sync + login
 .git-prompt-colors.sh      Custom theme for bash-git-prompt
 
 bashrc.d/
@@ -152,7 +153,7 @@ tests/
 
 Start with [docs/architecture.md#known-limitations](docs/architecture.md#known-limitations)
 if something behaves differently than described — there are a few known rough
-edges, in particular a load-order clash between the two `ssh` wrappers.
+edges.
 
 ## Testing
 

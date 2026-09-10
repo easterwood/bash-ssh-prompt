@@ -71,7 +71,9 @@ complete -F _bash_commands_completion bash-commands
 complete -F _bash_commands_completion bashrc-help
 complete -F _bash_commands_completion bash_config_commands
 
-# sshp is treated like ssh: the first destination argument gets host completion.
+# Host completion for the first destination argument. "ssh" is plain OpenSSH
+# again and no longer wrapped, but the host completion is just as useful there,
+# so both names keep it.
 # Remove an older completion spec first so this registration is unambiguous.
 complete -r ssh sshp 2>/dev/null || true
 complete -F _ssh_tools_ssh_completion ssh

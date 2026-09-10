@@ -19,13 +19,14 @@ sshp --help
 Exactly one destination is required, and it must come after any options.
 `--force` and `--help` are `sshp`'s own switches; everything else starting with
 `-` is forwarded verbatim to OpenSSH. `--` ends option parsing, so the next word
-is taken as the destination. The `ssh` wrapper accepts the identical argument
-list — see [The `ssh()` wrapper](#the-ssh-wrapper).
+is taken as the destination.
 
-Parsing lives in one shared function, `__sshp_parse_args`, which fills
-`__sshp_options`, `__sshp_target`, `__sshp_extra`, `__sshp_force` and
-`__sshp_help_requested`. Both `sshp` and `ssh` call it, which is what keeps
-their behaviour and their completion in sync.
+`ssh` is not wrapped — see [Plain `ssh` is not touched](#plain-ssh-is-not-touched).
+
+Parsing lives in `__sshp_parse_args`, which fills `__sshp_options`,
+`__sshp_target`, `__sshp_extra`, `__sshp_force` and `__sshp_help_requested`.
+The completion for the destination argument uses the same option table, which
+is what keeps parsing and completion in sync.
 
 Errors all return exit code `2` with a usage block:
 
@@ -37,7 +38,7 @@ Errors all return exit code `2` with a usage block:
 
 A remote command is rejected on purpose: `sshp` always ends in an interactive
 login, so `sshp host uname -a` would sync the prompt for nothing. Use
-`command ssh host uname -a` instead.
+`ssh host uname -a` instead.
 
 The whole function body is a subshell (`sshp() ( … )`), so its `local`
 variables, `trap` and working state cannot leak into your interactive shell.
@@ -70,47 +71,34 @@ destination is never mistaken for an option argument.
 > state entry. If two configs map the same alias to different machines, force a
 > re-sync with `--force`.
 
-## The `ssh()` wrapper
+## Plain `ssh` is not touched
 
-`ssh-prompt.sh` also redefines `ssh`, and it uses the **same parser** as `sshp`,
-so both commands accept the same arguments and the tab completion is identical
-for either name.
+This configuration does not define an `ssh` function or alias. `ssh` is the
+OpenSSH client from your `PATH`, with all options, all exit codes and the
+distribution's own behaviour. The prompt sync happens only when you ask for it:
 
-`ssh` delegates to `sshp` when the invocation is a plain interactive login: the
-arguments parse cleanly, there is nothing after the destination, and none of the
-options mean "no interactive shell". Everything else goes to the real OpenSSH
-client untouched.
+| Command | What happens |
+|---|---|
+| `sshp server` | sync if needed, then log in |
+| `ssh server` | native OpenSSH, no sync, no synced prompt |
+| `ssh server uname -a` | native OpenSSH, as always |
+| `ssh-nr 4` | resolves the target number and calls `sshp` |
 
-| Command | Path taken | Why |
-|---|---|---|
-| `ssh server` | `sshp server` | plain login |
-| `ssh -p 2222 server` | `sshp -p 2222 server` | options are forwarded |
-| `ssh -J jump -i key db01` | `sshp -J jump -i key db01` | options are forwarded |
-| `ssh --force server` | `sshp --force server` | own switch, recognised by both |
-| `ssh --help` | own help, see below | own switch, recognised by both |
-| `ssh server uname -a` | native `ssh` | remote command |
-| `ssh -N -L 8080:localhost:80 server` | native `ssh` | `-N`: no shell |
-| `ssh -W inner:22 gateway` | native `ssh` | `-W`: stdio forward |
-| `ssh -O check server` | native `ssh` | `-O`: control command |
-| `ssh -G server` / `ssh -V` | native `ssh` | query only |
-| `ssh -T server` | native `ssh` | no pty requested |
-| `ssh` (no arguments) | native `ssh` | OpenSSH prints its own usage |
-| `command ssh server` | native `ssh` | explicit bypass |
+Only `sshp` and the helper commands are added; `ssh` keeps host completion from
+`ssh-tools.sh`, because that is useful regardless of which of the two you use.
 
-`__sshp_option_skips_shell` holds that exclusion list
-(`-N -W -O -Q -G -V -f -T -s`). A prompt sync for those calls would cost an
-extra connection and achieve nothing, since no interactive Bash is started.
-
-`ssh-prompt.sh` runs `unalias ssh sshp` before defining the two functions,
-because aliases are expanded before function lookup and a distribution-supplied
-`alias ssh=…` would otherwise shadow them.
+> An earlier version shipped an `ssh()` wrapper here that forwarded plain
+> interactive logins to `sshp` and everything else to OpenSSH. It has been
+> removed. If you want that behaviour back for individual hosts, the commented
+> snippet in `bashrc.snippet.sh` shows a minimal variant for your own
+> `~/.bashrc`.
 
 ## `--help`
 
-`sshp --help` and `ssh --help` print the same three-part help: the synopsis with
-`sshp`'s own switches, a paragraph on how options are forwarded, and then the
-option list of the **installed** OpenSSH client, so you do not have to leave the
-wrapper to look up a flag:
+`sshp --help` prints a three-part help: the synopsis with `sshp`'s own
+switches, a paragraph on how options are forwarded, and then the option list of
+the **installed** OpenSSH client, so you do not have to switch commands to look
+up a flag:
 
 ```
 Usage: sshp [--force] [SSH-OPTIONS ...] user@host

@@ -4,8 +4,9 @@
 [[ ! -r "$HOME/.config/bash/ssh-prompt/ssh-prompt.sh" ]] || source "$HOME/.config/bash/ssh-prompt/ssh-prompt.sh"
 
 # Optional: route plain ssh to sshp for selected aliases.
-# Uncomment the following lines and adjust the aliases only if needed.
-# This replaces an existing custom ssh() wrapper.
+# ssh-prompt.sh does not define an ssh wrapper, so nothing gets overwritten
+# here. Uncomment the lines below and adjust the aliases only if you want
+# single hosts to sync the prompt automatically.
 # ssh() {
 #     if (( $# == 1 )) && [[ $1 == devbox || $1 == testbox ]]; then
 #         sshp "$1"

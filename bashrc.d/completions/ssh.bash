@@ -168,11 +168,13 @@ _ssh_tools_ssh_completion() {
 
     cur=${__ssh_completion_line_words[__ssh_completion_line_cword]-}
 
-    # Our own long switches. ssh and sshp accept the same arguments, so they
-    # are offered for both commands.
+    # Our own long switches. Only sshp understands them; native OpenSSH does
+    # not know any long options, so they are not offered for ssh.
     if [[ $cur == --* ]]; then
-        [[ --force == "$cur"* ]] && COMPREPLY+=(--force)
-        [[ --help == "$cur"* ]] && COMPREPLY+=(--help)
+        if [[ ${__ssh_completion_line_words[0]##*/} == sshp ]]; then
+            [[ --force == "$cur"* ]] && COMPREPLY+=(--force)
+            [[ --help == "$cur"* ]] && COMPREPLY+=(--help)
+        fi
         return 0
     fi
 

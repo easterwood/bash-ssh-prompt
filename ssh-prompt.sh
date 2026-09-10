@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 
-# Remove aliases of the same name. Aliases are expanded before function
-# resolution and would otherwise shadow the wrappers below.
-unalias ssh sshp 2>/dev/null || true
+# Remove an alias of the same name. Aliases are expanded before function
+# resolution and would otherwise shadow the sshp function below.
+#
+# "ssh" is deliberately left alone: this file no longer defines an ssh
+# wrapper, so plain "ssh" stays the OpenSSH client from PATH (or whatever
+# alias you set yourself).
+unalias sshp 2>/dev/null || true
 
 # OpenSSH options whose argument may follow as a separate word. Only needed to
 # separate options from the destination reliably.
@@ -15,19 +19,7 @@ __sshp_option_takes_arg() {
     return 1
 }
 
-# Options for which OpenSSH does not open an interactive shell. A prompt sync
-# would be pointless for such calls, so the ssh wrapper passes them straight on
-# to OpenSSH.
-__sshp_option_skips_shell() {
-    case $1 in
-        -N|-W|-O|-Q|-G|-V|-f|-T|-s)
-            return 0
-            ;;
-    esac
-    return 1
-}
-
-# Shared argument parser for sshp and the ssh wrapper. Results:
+# Argument parser for sshp. Results:
 #   __sshp_options          OpenSSH options to pass through
 #   __sshp_target           the SSH destination
 #   __sshp_extra            words after the destination (remote command)
@@ -137,7 +129,7 @@ __sshp_show_help() {
     printf 'SSH options are passed through to OpenSSH unchanged and apply to\n'
     printf 'both the sync connection and the login connection.\n'
     printf 'A remote command is not supported because sshp always opens an\n'
-    printf 'interactive session. Use "command ssh" for that.\n'
+    printf 'interactive session. Use "ssh" for that.\n'
     printf '\n'
     __sshp_ssh_usage
 }
@@ -156,7 +148,7 @@ sshp() (
     if (( ${#__sshp_extra[@]} )); then
         printf 'sshp: a remote command is not supported: %s\n' \
             "${__sshp_extra[0]}" >&2
-        printf 'Use "command ssh %s %s ..." for that.\n' \
+        printf 'Use "ssh %s %s ..." for that.\n' \
             "$__sshp_target" "${__sshp_extra[0]}" >&2
         return 2
     fi
@@ -269,34 +261,3 @@ REMOTE
     mv -f "$temporary_state" "$state_file" || return 1
     command ssh "${ssh_options[@]}" "$target"
 )
-
-ssh() {
-    local arg
-
-    # Use the same parser as sshp so ssh and sshp accept the same arguments and
-    # the completion applies equally to both.
-    if __sshp_parse_args "$@" 2>/dev/null; then
-        if (( __sshp_help_requested )); then
-            __sshp_show_help
-            return 0
-        fi
-
-        # Remote commands go to OpenSSH unchanged.
-        if (( ${#__sshp_extra[@]} == 0 )); then
-            for arg in "${__sshp_options[@]}"; do
-                if __sshp_option_skips_shell "$arg"; then
-                    command ssh "$@"
-                    return $?
-                fi
-            done
-
-            sshp "$@"
-            return $?
-        fi
-    elif (( __sshp_help_requested )); then
-        __sshp_show_help
-        return 0
-    fi
-
-    command ssh "$@"
-}
