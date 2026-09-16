@@ -23,11 +23,11 @@ Set these before sourcing, in `local.sh`, or per command.
 
 | Variable | Default | Read by | Effect |
 |---|---|---|---|
-| `SSH_KNOWN_HOSTS_FILE` | `~/.ssh/known_hosts` | `known-hosts`, `known-hosts-clean`, `ssh-nr`, `ssh-resolve-ips`, all completions | Which `known_hosts` file to use |
+| `SSH_KNOWN_HOSTS_FILE` | `~/.ssh/known_hosts` | `known-hosts` (incl. `--clean`), `ssh-nr`, `ssh-resolve-ips`, all completions | Which `known_hosts` file to use |
 | `SSH_CONFIG_FILE` | `~/.ssh/config` | same as above | Which SSH config to treat as primary. When it differs from the default, the tools pass `-F` explicitly |
 | `SSH_RESOLVE_IP_TIMEOUT` | `3` | `ssh-resolve-ips` | Reverse-DNS timeout in seconds. Must be a positive integer |
 | `SSH_RESOLVE_HOST_TIMEOUT` | `3` | `ssh-resolve-hosts` | Forward-DNS timeout in seconds. Must be a positive integer |
-| `SSH_KNOWN_HOSTS_CLEAN_TIMEOUT` | `3` | `known-hosts-clean` | `ssh-keyscan` timeout in seconds. Must be a positive integer |
+| `SSH_KNOWN_HOSTS_CLEAN_TIMEOUT` | `3` | `known-hosts --clean` | `ssh-keyscan` timeout in seconds. Must be a positive integer |
 | `SSH_PROMPT_SHOW_COMMAND` | `1` | `prompt.sh` | `0` hides the dim `letzter: <command>` line in the remote prompt |
 | `HISTORY_DEDUPE_LIVE` | `1` | `bashrc.d/history.sh` | `0` rewrites the history file only at shell start instead of also right after a repeated command. Useful on very large history files |
 
@@ -54,8 +54,8 @@ Not meant to be set by hand, but useful when debugging:
 | `~/.bashrc.before-modular-config.<timestamp>` | `install.sh` | Backup of the previous `~/.bashrc` |
 | `~/.cache/sshp/<crc>_<size>.state` | `sshp` | Sync signature, keyed by the destination string (options are not part of the key) |
 | `<checkout>/local.sh` | you | Untracked machine-local settings, loaded last |
-| `~/.ssh/known_hosts.bak.<timestamp>` | `known-hosts-clean --apply` | Backup, only when the file actually changes |
-| `~/.ssh/config.bak.<timestamp>` | `known-hosts-clean --apply` | Backup, only when the file actually changes |
+| `~/.ssh/known_hosts.bak.<timestamp>` | `known-hosts --clean --apply` | Backup, only when the file actually changes |
+| `~/.ssh/config.bak.<timestamp>` | `known-hosts --clean --apply` | Backup, only when the file actually changes |
 | `~/.bash-git-prompt/` | you | Optional `bash-git-prompt` checkout |
 | `~/.bash_history` | Bash, `history -a`, `history_dedupe` | Written after every command, not only on exit. Rewritten in place when duplicates are removed |
 | `~/.bash_history.XXXXXX` | `history_dedupe` | Short-lived temporary file, moved over `~/.bash_history` or deleted |
@@ -122,7 +122,7 @@ SSH_KNOWN_HOSTS_FILE=tests/known_hosts.fixture known-hosts --lines
 ```bash
 SSH_RESOLVE_IP_TIMEOUT=10 ssh-resolve-ips
 SSH_RESOLVE_HOST_TIMEOUT=10 ssh-resolve-hosts
-SSH_KNOWN_HOSTS_CLEAN_TIMEOUT=10 known-hosts-clean
+SSH_KNOWN_HOSTS_CLEAN_TIMEOUT=10 known-hosts --clean
 ```
 
 **Quieter remote prompt** — put this in `local.sh` before any sync, so the

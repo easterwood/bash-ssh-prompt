@@ -12,8 +12,6 @@ _bash_commands_completion() {
         ssh-known-hosts
         ssh-resolve-ips
         ssh-resolve-hosts
-        known-hosts-clean
-        ssh-known-hosts-clean
         bash-commands
         bashrc-help
     )

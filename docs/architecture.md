@@ -12,7 +12,6 @@
        ├─ bashrc.d/ssh-tools.sh      ┐
        │    ├─ lib/ssh-config.sh     │
        │    ├─ lib/known-hosts.sh    │ libraries
-       │    ├─ lib/known-hosts-clean.sh
        │    ├─ lib/ssh-by-number.sh  │
        │    ├─ lib/ssh-resolve-ips.sh│
        │    ├─ lib/ssh-resolve-hosts.sh┘
@@ -80,7 +79,7 @@ keeps the trap from firing for each function call inside a pipeline.
 | `__kh_scan_*` | Shared SSH-config scanner results |
 | `__kh_rows`, `__kh_target_*`, `__kh_cache_*` | `known-hosts` cache |
 | `__kh_group_*` | The shared grouping model behind `known-hosts` and `ssh-nr` |
-| `__kh_clean_*` | `known-hosts-clean` state |
+| `__kh_clean_*` | `known-hosts --clean` state |
 | `__ssh_completion_*` | Shared completion cache and helpers |
 | `__ssh_resolve_ips_*` | `ssh-resolve-ips` internals, IP predicates and PTR cache |
 | `__ssh_resolve_hosts_*` | `ssh-resolve-hosts` internals and forward-DNS cache |
@@ -96,7 +95,7 @@ both spellings.
 
 ## The shared config scanner — `lib/ssh-config.sh`
 
-One scanner feeds `known-hosts`, `known-hosts-clean`, `ssh-resolve-ips` and the
+One scanner feeds `known-hosts`, `--clean`, `ssh-resolve-ips` and the
 completion cache. `__kh_scan_configs` resets state, scans the user config with
 `$HOME/.ssh` as the include base, then `/etc/ssh/ssh_config`.
 
@@ -163,7 +162,7 @@ config aliases.
 | Completion (`__ssh_completion_*`) | `known_hosts`, the user config, `/etc/ssh/ssh_config`, any included file, or any include glob's match list changes |
 | PTR DNS (`__ssh_resolve_ips_dns_cache`) | Only on `--refresh` or `known-hosts --refresh`; negative results are cached with a `\x1e` sentinel |
 | Forward DNS (`__ssh_resolve_hosts_dns_cache`) | Same, for `ssh-resolve-hosts` |
-| Endpoint reachability (`__kh_clean_endpoint_*`) | Per `known-hosts-clean` invocation |
+| Endpoint reachability (`__kh_clean_endpoint_*`) | Per `known-hosts --clean` invocation |
 
 Validation uses only Bash builtins (`$(< file)`, `compgen -G`), so pressing
 `TAB` does not fork processes just to decide whether the cache is still good.
@@ -274,13 +273,13 @@ GNU-only.
 
 ### 7. `ssh -G` and `Match exec`
 
-`known-hosts`, `known-hosts-clean`, `ssh-resolve-ips` and `ssh-resolve-hosts`
+`known-hosts` (including `--clean`), `ssh-resolve-ips` and `ssh-resolve-hosts`
 call `ssh -G` per alias. That opens no network connection, but it does evaluate `Match exec`
 rules in your config — so those commands can trigger arbitrary local commands
 you configured yourself. It is also the main cost driver: a config with many
 aliases means many `ssh -G` invocations on the first (uncached) call.
 
-### 8. `known-hosts-clean` cannot distinguish down from gone
+### 8. `known-hosts --clean` cannot distinguish down from gone
 
 An unreachable host is treated as stale. Running `--apply` off the VPN or during
 maintenance will remove valid entries. Always read the dry run, and raise
@@ -290,7 +289,7 @@ maintenance will remove valid entries. Always read the dry run, and raise
 
 With `HashKnownHosts` enabled the hostname cannot be recovered. Such entries are
 shown as `[hashed hostname]`, cannot be filtered by name, cannot be reached
-via `ssh-nr`, and are skipped by `known-hosts-clean`, `ssh-resolve-ips` and
+via `ssh-nr`, and are skipped by `--clean`, `ssh-resolve-ips` and
 `ssh-resolve-hosts`.
 
 ### 10. `NR` is only stable per file state

@@ -3,8 +3,8 @@
 _ssh_known_hosts_completion() {
     local known_hosts_file=${SSH_KNOWN_HOSTS_FILE:-$HOME/.ssh/known_hosts}
     local config=${SSH_CONFIG_FILE:-$HOME/.ssh/config}
-    local cur word i have_filter=0 have_fingerprints=0
-    local -a options=(--lines --refresh --fingerprints --help)
+    local cur word i have_filter=0 have_fingerprints=0 have_clean=0
+    local -a options=(--lines --refresh --fingerprints --clean --help)
     local -a words=()
 
     COMPREPLY=()
@@ -15,7 +15,10 @@ _ssh_known_hosts_completion() {
             --fingerprints)
                 have_fingerprints=1
                 ;;
-            --lines|--refresh|--help|-h|--)
+            --clean)
+                have_clean=1
+                ;;
+            --lines|--refresh|--apply|--help|-h|--)
                 ;;
             -*)
                 ;;
@@ -26,6 +29,15 @@ _ssh_known_hosts_completion() {
     done
 
     (( have_fingerprints == 0 )) || return 0
+
+    # --clean takes no filter and no host names, only --apply.
+    if (( have_clean )); then
+        for word in --apply --help; do
+            [[ $word == "$cur"* ]] || continue
+            COMPREPLY+=("$word")
+        done
+        return 0
+    fi
 
     # Options may appear before or after the filter.
     if [[ $cur == -* ]]; then

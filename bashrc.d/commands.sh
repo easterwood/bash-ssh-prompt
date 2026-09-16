@@ -49,10 +49,9 @@ bash_config_commands() {
 "Prompt and display${sep}ll${sep}-${sep}bashrc.d/listing.sh${sep}Directory listing with aligned columns and a colour-coded owner${sep}all options of ls"
 "SSH connection${sep}sshp${sep}-${sep}ssh-prompt.sh${sep}Copy the prompt files to the destination and log in${sep}[--force] [SSH-OPTIONS ...] DESTINATION"
 "SSH connection${sep}ssh-nr${sep}-${sep}bashrc.d/lib/ssh-by-number.sh${sep}Log in by the target number from known-hosts${sep}NR [SSH-OPTIONS ...] | --list | --help"
-"SSH overview${sep}known-hosts${sep}ssh-known-hosts${sep}bashrc.d/lib/known-hosts.sh${sep}Known SSH targets with alias, user and target number${sep}[--lines] [--refresh] [FILTER] | --fingerprints"
+"SSH overview${sep}known-hosts${sep}ssh-known-hosts${sep}bashrc.d/lib/known-hosts.sh${sep}Known SSH targets with alias, user and target number; --clean removes stale entries${sep}[--lines] [--refresh] [FILTER] | --fingerprints | --clean [--apply]"
 "SSH overview${sep}ssh-resolve-ips${sep}-${sep}bashrc.d/lib/ssh-resolve-ips.sh${sep}Reverse-DNS for IPs from the SSH config and known_hosts${sep}[FILTER] | --refresh | --help"
 "SSH overview${sep}ssh-resolve-hosts${sep}-${sep}bashrc.d/lib/ssh-resolve-hosts.sh${sep}Forward-DNS for hostnames from the SSH config and known_hosts${sep}[FILTER] | --refresh | --help"
-"SSH maintenance${sep}known-hosts-clean${sep}ssh-known-hosts-clean${sep}bashrc.d/lib/known-hosts-clean.sh${sep}Remove stale known_hosts entries and config aliases${sep}[--apply] | --help"
 "Help${sep}bash-commands${sep}bashrc-help${sep}bashrc.d/commands.sh${sep}Show this overview${sep}[--details] [FILTER] | --check | --help"
     )
 

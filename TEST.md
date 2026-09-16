@@ -15,6 +15,8 @@ Linux test environment. All automated checks passed.
 | Multi-file sync | Passed (SSH simulated) |
 | Per-target change detection | Passed |
 | `known-hosts` overview and filter | Passed |
+| `known-hosts --clean` after the merge | Passed |
+| History writing and deduplication | Passed |
 | ZIP integrity | Passed |
 
 ## Test environment
@@ -172,6 +174,66 @@ The ZIP archive was checked in full with `unzip -t`.
 
 Result: no corrupted entries.
 
+### 11. `known-hosts --clean` after the merge
+
+`bashrc.d/lib/known-hosts-clean.sh` and its completion file were removed and the
+implementation moved into `bashrc.d/lib/known-hosts.sh` behind the `--clean`
+option. Checked with stubbed `ssh`, `ssh-keygen` and `ssh-keyscan` binaries on a
+throwaway home directory holding one reachable host, one unreachable host, a
+hashed entry and matching config aliases.
+
+| Check | Result |
+|---|---|
+| `known-hosts --help` shows the merged usage | Passed |
+| `known-hosts --clean` dry run: reachable kept, unreachable and its alias reported, hashed skipped, no file written | Passed |
+| `known-hosts --clean --apply`: both files rewritten, both backups created, caches invalidated | Passed |
+| `known-hosts --apply` without `--clean` returns `2` | Passed |
+| `known-hosts --clean --lines` returns `2` | Passed |
+| `known-hosts-clean` alias and completion gone, `known-hosts` completion still registered | Passed |
+| `bash-commands --check` lists no stale row | Passed |
+| `bash tests/known-hosts.sh` still passes unchanged | Passed |
+
+Result: passed.
+
+### 12. History writing and deduplication
+
+Checked in throwaway home directories with `bash --rcfile ... -i`.
+
+**Writing.** With `history -a` in `PROMPT_COMMAND`, every command appears in
+`~/.bash_history` immediately, without the shell having exited. Without it the
+file stayed at the state of the last `exit`, which is the failure mode a Windows
+reboot produces.
+
+**`history -a` vs. `history -n`.** A foreign entry was appended to the file
+mid-session to emulate a second terminal.
+
+| `PROMPT_COMMAND` | History list | File |
+|---|---|---|
+| `history -a; history -n` | foreign entry missing, own command doubled | correct |
+| `history -n; history -a` | correct | foreign entry doubled |
+| `history -a; history -c; history -r` | correct | correct |
+
+The first ordering is the one commonly copied from the web and is unsafe; the
+configuration ships plain `history -a` and leaves cross-terminal sync off.
+
+**Deduplication.** Session with `ll`, `git push`, `ll`, `echo x`, `git push`.
+The file directly afterwards, without restarting a shell:
+
+```
+ll
+echo x
+git push
+```
+
+Every command exactly once, at the position of its most recent use. Repeats
+typed back to back, bare `Enter` on an empty line, and a multi-line `for` block
+were checked as well: the block stays a single entry, nothing is lost, and the
+following session added no duplicates. A file with entries lacking a `#<epoch>`
+line — as produced by pasting a script into the terminal — was deduplicated
+without corrupting the remaining timestamps.
+
+Result: passed.
+
 ## Still to be checked manually
 
 The following checks can only be carried out in the actual environment:
@@ -182,6 +244,8 @@ The following checks can only be carried out in the actual environment:
 4. Rendering of colours and Unicode characters in the terminal in use.
 5. Behaviour with password-based SSH authentication.
 6. Availability of the GNU `ls` options used on every target server.
+8. History persistence across a real Windows reboot, and the runtime cost of
+   `history_dedupe` on a grown `~/.bash_history` under Git Bash.
 
 ## Manual acceptance test
 

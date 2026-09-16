@@ -19,9 +19,9 @@ every server you connect to — without installing anything there by hand.
 | Prompt | Two-line prompt, exit code, command duration, cwd, terminal window title, optional `bash-git-prompt` integration |
 | Remote prompt | The same prompt on remote hosts, pushed automatically by `sshp` |
 | Listing | `ll` — GNU `ls` output reformatted with aligned columns, no group column, colour-coded owner |
-| History | Large history, timestamps, append-on-exit |
+| History | Large history with timestamps, written after every command instead of only on exit, and kept free of duplicates |
 | SSH overview | `known-hosts` — one readable row per target, with a stable target number |
-| SSH cleanup | `known-hosts-clean` — verify `known_hosts` against live host keys, drop stale entries and matching config aliases |
+| SSH cleanup | `known-hosts --clean` — verify `known_hosts` against live host keys, drop stale entries and matching config aliases |
 | SSH login | `sshp HOST` — sync the prompt, then log in; `ssh-nr N` — connect by target number. Plain `ssh` is left untouched and stays the OpenSSH client |
 | SSH DNS | `ssh-resolve-ips` and `ssh-resolve-hosts` — resolve every IP and every hostname referenced in your config or `known_hosts`, in both directions |
 | Completion | Tab completion for `ssh`, `sshp` and all helpers, with a lazy cache that notices config changes |
@@ -100,8 +100,8 @@ ssh myserver            # untouched OpenSSH: no sync, no prompt
 
 ssh-resolve-ips         # reverse-DNS: IPs   -> hostnames
 ssh-resolve-hosts       # forward-DNS: hosts -> IPs
-known-hosts-clean       # dry run: what would be removed?
-known-hosts-clean --apply    # actually clean up (creates backups)
+known-hosts --clean          # dry run: what would be removed?
+known-hosts --clean --apply  # actually clean up (creates backups)
 ```
 
 The first `sshp` call to a host after you change a prompt file opens two SSH
@@ -120,7 +120,7 @@ ssh-prompt.sh              sshp: prompt sync + login
 
 bashrc.d/
   environment.sh           JDK, JMeter, Android, Maven  (edit this!)
-  history.sh               History size, timestamps, append mode
+  history.sh               History sizes, timestamps, crash-safe writing, dedup
   listing.sh               Shared ll implementation
   prompt-core.sh           Command timer and window title (local + remote)
   prompt-local.sh          bash-git-prompt wiring for local shells
@@ -128,8 +128,7 @@ bashrc.d/
   commands.sh              bash-commands: overview of all provided commands
   lib/
     ssh-config.sh          Shared ~/.ssh/config scanner (incl. Include)
-    known-hosts.sh         known-hosts overview and grouping model
-    known-hosts-clean.sh   known-hosts-clean
+    known-hosts.sh         known-hosts: overview, grouping model, --clean
     ssh-by-number.sh       ssh-nr
     ssh-resolve-ips.sh     ssh-resolve-ips
     ssh-resolve-hosts.sh   ssh-resolve-hosts (reuses helpers from the above)
@@ -147,7 +146,7 @@ tests/
 | [docs/installation.md](docs/installation.md) | Install, update, uninstall, manual setup, remote-side changes |
 | [docs/prompt.md](docs/prompt.md) | Prompt, command timer, window title, `ll`, history, git theme |
 | [docs/ssh-sync.md](docs/ssh-sync.md) | How `sshp` works: signatures, state, remote payload, troubleshooting |
-| [docs/ssh-tools.md](docs/ssh-tools.md) | `known-hosts`, `known-hosts-clean`, `ssh-nr`, `ssh-resolve-ips`, completion |
+| [docs/ssh-tools.md](docs/ssh-tools.md) | `known-hosts` incl. `--clean`, `ssh-nr`, `ssh-resolve-ips`, completion |
 | [docs/configuration.md](docs/configuration.md) | Every environment variable and file path, with defaults |
 | [docs/architecture.md](docs/architecture.md) | Load order, naming conventions, caches, tests, known limitations |
 
@@ -170,7 +169,7 @@ bash-commands --check       # every documented command is really defined
 - `sshp` appends a marked block to the **remote** `~/.bashrc` and creates
   `~/.hushlogin` there. Both are reversible; see
   [docs/installation.md#what-sshp-changes-on-a-remote-host](docs/installation.md#what-sshp-changes-on-a-remote-host).
-- `known-hosts-clean` treats an unreachable host as stale and would remove it.
+- `known-hosts --clean` treats an unreachable host as stale and would remove it.
   Always run the dry run first, and never run `--apply` while off the VPN.
 - `known-hosts`, `ssh-resolve-ips` and `ssh-resolve-hosts` run `ssh -G`, which
   does not open a connection but does evaluate `Match exec` rules from your

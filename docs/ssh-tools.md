@@ -1,15 +1,14 @@
 # SSH tools
 
-`bashrc.d/ssh-tools.sh` is the entry point for the SSH helpers. It sources six
-library files and six completion files, registers aliases, and wires up Bash
+`bashrc.d/ssh-tools.sh` is the entry point for the SSH helpers. It sources five
+library files and seven completion files, registers aliases, and wires up Bash
 completion. It is safe to re-source in the same shell.
 
 ## Commands at a glance
 
 | Command | Alias for | Purpose |
 |---|---|---|
-| `known-hosts`, `ssh-known-hosts` | `ssh_known_hosts` | Readable, numbered overview of all known SSH targets |
-| `known-hosts-clean`, `ssh-known-hosts-clean` | `ssh_known_hosts_clean` | Verify host keys, remove stale entries and config aliases |
+| `known-hosts`, `ssh-known-hosts` | `ssh_known_hosts` | Readable, numbered overview of all known SSH targets; `--clean` verifies host keys and removes stale entries and config aliases |
 | `ssh-nr` | `ssh_by_number` | Log in by target number from the `known-hosts` list |
 | `ssh-resolve-ips` | `ssh_resolve_ips` | Reverse-DNS for every IP in the config and `known_hosts` |
 | `ssh-resolve-hosts` | `ssh_resolve_hosts` | Forward-DNS for every hostname in the config and `known_hosts` |
@@ -41,7 +40,7 @@ SSH connection
   ssh-nr              Log in by the target number from known-hosts
 
 SSH overview
-  known-hosts         Known SSH targets with alias, user and target number
+  known-hosts         Known SSH targets with alias, user and target number; --clean removes stale entries
   ssh-resolve-ips     Reverse-DNS for IPs from the SSH config and known_hosts
 ...
 ```
@@ -58,15 +57,15 @@ free-form argument is rejected; both return exit code `2`. A filter that matches
 nothing prints a short note and returns `0`.
 
 A command that is listed but not defined in the current shell is flagged in red
-with `(nicht definiert)`.
+with `missing`.
 
 ### Why `--check` exists
 
 The command table is hand-maintained in `bashrc.d/commands.sh`, because what a
 command *does* cannot be derived from the code. That invites drift: rename an
 alias and the listing quietly lies. `--check` resolves every listed name and
-synonym with `alias` and `type -t`, prints its kind (`Funktion`, `Alias`,
-`Builtin`, `Programm`) and its defining file, and returns exit code `1` if
+synonym with `alias` and `type -t`, prints its kind (`Function`, `Alias`,
+`Builtin`, `Program`) and its defining file, and returns exit code `1` if
 anything is missing:
 
 ```
@@ -127,12 +126,15 @@ NR  TARGET                ALIAS         USER      KEYS
 | `--lines` | Add the `LINE` column with `known_hosts` line numbers |
 | `--refresh` | Discard the in-shell caches and re-read everything |
 | `--fingerprints` | Run `ssh-keygen -l -E sha256` once over the whole file and print its original output |
+| `--clean` | Check the entries with `ssh-keyscan` and report stale ones — see [`known-hosts --clean`](#known-hosts---clean) |
+| `--apply` | Only with `--clean`: write the cleaned files after creating backups |
 | `--help`, `-h` | Usage |
 | `FILTER` | A single case-insensitive substring |
 | `--` | Ends option parsing; at most one `FILTER` may follow |
 
-`--fingerprints` cannot be combined with `FILTER`, `--lines` or `--refresh`; the
-combination returns exit code `2`. More than one free-form argument is also
+`--fingerprints` cannot be combined with `FILTER`, `--lines` or `--refresh`, and
+`--clean` with none of those four; both combinations return exit code `2`, as
+does `--apply` without `--clean`. More than one free-form argument is also
 rejected with `2`.
 
 ### Filtering
@@ -185,66 +187,19 @@ contents, so editing that file invalidates the cache automatically.
 
 ---
 
-## `ssh-nr`
+## `known-hosts --clean`
 
 ```
-ssh-nr NR [SSH-OPTIONEN ...]
-ssh-nr --list
-ssh-nr --help
+known-hosts --clean            # dry run (default)
+known-hosts --clean --apply    # write changes, after creating backups
+known-hosts --help
 ```
 
-Connects to the target with the given `NR` from the `known-hosts` list. The
-grouping is rebuilt from the same model, so numbers always agree between the two
-commands for a given file state.
-
-```bash
-known-hosts        # look at the list
-ssh-nr 3           # connect to target 3
-ssh-nr --list      # same as plain known-hosts
-```
-
-Resolution rules:
-
-- **If the target has a config alias**, `ssh-nr` connects via the alias. That is
-  deliberate: `User`, `Port`, `ProxyJump`, `IdentityFile` and everything else
-  from `~/.ssh/config` then apply exactly as configured.
-- **Otherwise** the raw `known_hosts` target is used. `[host]:port` is split
-  into host and `-p port`.
-- Markers (`@cert-authority`, `@revoked`), hashed entries, comma-separated host
-  lists and wildcard patterns are **not** connectable and are rejected with a
-  clear message.
-
-The connection itself always goes through `sshp`, so a target reached by number
-gets the same prompt sync as a direct `sshp` call.
-`__ssh_by_number_run_sshp` deals with `sshp` being a function, an external
-command, a builtin or an alias — in the alias case it rebuilds the command line
-with `printf %q` and `eval` so arguments stay shell-safe.
-
-Numbers must be positive integers; an invalid or out-of-range number returns a
-message pointing you back at `known-hosts`.
-
-Any options you add are inserted **before** the destination, next to the ones
-`ssh-nr` supplies itself: `-F "$SSH_CONFIG_FILE"` when a non-default config is
-in use, and `-p <port>` for an alias-less target on a non-standard port.
-
-```bash
-ssh-nr 2 -v                    # verbose, port and config still applied
-SSH_CONFIG_FILE=~/.ssh/config.customer ssh-nr 1
-```
-
-Since `sshp` forwards options to both its connections, the sync and the login
-use identical settings. A remote command is not possible here — `sshp` rejects
-anything after the destination; use `command ssh` for that.
-
----
-
-## `known-hosts-clean`
-
-```
-known-hosts-clean            # dry run (default)
-known-hosts-clean --apply    # write changes, after creating backups
-known-hosts-clean --help
-```
+`--clean` used to be a separate command, `known-hosts-clean`. It is now an
+option of `known-hosts`, sharing the same alias resolution, the same
+`known_hosts` parsing and the same environment variables. `--clean` cannot be
+combined with a `FILTER`, `--lines`, `--refresh` or `--fingerprints`, and
+`--apply` is only valid together with `--clean`; both return exit code `2`.
 
 Checks each usable `known_hosts` entry against the host's live key with
 `ssh-keyscan`, and then removes matching stale aliases from your primary SSH
@@ -334,8 +289,61 @@ will delete perfectly valid entries. Always read the dry run first, and consider
 raising the timeout on slow links:
 
 ```bash
-SSH_KNOWN_HOSTS_CLEAN_TIMEOUT=10 known-hosts-clean
+SSH_KNOWN_HOSTS_CLEAN_TIMEOUT=10 known-hosts --clean
 ```
+
+---
+
+## `ssh-nr`
+
+```
+ssh-nr NR [SSH-OPTIONEN ...]
+ssh-nr --list
+ssh-nr --help
+```
+
+Connects to the target with the given `NR` from the `known-hosts` list. The
+grouping is rebuilt from the same model, so numbers always agree between the two
+commands for a given file state.
+
+```bash
+known-hosts        # look at the list
+ssh-nr 3           # connect to target 3
+ssh-nr --list      # same as plain known-hosts
+```
+
+Resolution rules:
+
+- **If the target has a config alias**, `ssh-nr` connects via the alias. That is
+  deliberate: `User`, `Port`, `ProxyJump`, `IdentityFile` and everything else
+  from `~/.ssh/config` then apply exactly as configured.
+- **Otherwise** the raw `known_hosts` target is used. `[host]:port` is split
+  into host and `-p port`.
+- Markers (`@cert-authority`, `@revoked`), hashed entries, comma-separated host
+  lists and wildcard patterns are **not** connectable and are rejected with a
+  clear message.
+
+The connection itself always goes through `sshp`, so a target reached by number
+gets the same prompt sync as a direct `sshp` call.
+`__ssh_by_number_run_sshp` deals with `sshp` being a function, an external
+command, a builtin or an alias — in the alias case it rebuilds the command line
+with `printf %q` and `eval` so arguments stay shell-safe.
+
+Numbers must be positive integers; an invalid or out-of-range number returns a
+message pointing you back at `known-hosts`.
+
+Any options you add are inserted **before** the destination, next to the ones
+`ssh-nr` supplies itself: `-F "$SSH_CONFIG_FILE"` when a non-default config is
+in use, and `-p <port>` for an alias-less target on a non-standard port.
+
+```bash
+ssh-nr 2 -v                    # verbose, port and config still applied
+SSH_CONFIG_FILE=~/.ssh/config.customer ssh-nr 1
+```
+
+Since `sshp` forwards options to both its connections, the sync and the login
+use identical settings. A remote command is not possible here — `sshp` rejects
+anything after the destination; use `command ssh` for that.
 
 ---
 
@@ -535,8 +543,7 @@ pressing `TAB` does not fork processes just to validate the cache.
 
 | Command | Completes |
 |---|---|
-| `known-hosts` | `--lines`, `--refresh`, `--fingerprints`, `--help`; one filter from the filter-host list. Nothing after `--fingerprints`, and nothing once a filter is present |
-| `known-hosts-clean` | `--apply`, `--help` at the first position only |
+| `known-hosts` | `--lines`, `--refresh`, `--fingerprints`, `--clean`, `--help`; one filter from the filter-host list. Nothing after `--fingerprints`; only `--apply` and `--help` after `--clean`; nothing once a filter is present |
 | `ssh-nr` | The valid target numbers `1..n` at the first position; also `--help` and `--list` |
 | `ssh-resolve-ips` | `--refresh`, `--help` at the first position only |
 | `ssh-resolve-hosts` | `--refresh`, `--help` at the first position only |
