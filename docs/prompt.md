@@ -193,10 +193,88 @@ line up.
 
 | Setting | Value |
 |---|---|
+| `HISTFILE` | `~/.bash_history`, set explicitly |
 | `HISTSIZE` | `1000000` |
-| `HISTFILESIZE` | `20000000` |
+| `HISTFILESIZE` | `200000` |
 | `HISTTIMEFORMAT` | `'%F %T '` |
+| `HISTCONTROL` | `erasedups` |
 | `shopt histappend` | enabled |
+| `shopt cmdhist` | enabled |
+
+`HISTFILE` is set by hand rather than left to the default, because `HOME` is not
+reliably the same directory in every Git Bash, WSL or scheduled-task context on
+Windows. `cmdhist` keeps a multi-line command as a single entry, which also
+makes pasted blocks land in the history as one item instead of one item per
+line.
+
+### Writing after every command
+
+Bash saves its history only when the shell exits cleanly. A Windows reboot, a
+terminal window that is closed rather than exited, or a crashed session kills
+the process without that, and everything typed since the shell started is gone —
+the file still holds the state of the last `exit`.
+
+`__history_append` therefore runs `history -a` from `PROMPT_COMMAND`, so the
+file is never more than one command behind:
+
+```
+history -a    history list of this shell  ->  ~/.bash_history   (append new entries)
+history -n    ~/.bash_history  ->  history list of this shell   (read new lines)
+```
+
+`history -n` is deliberately **not** used. It would make commands from other
+open terminals visible here, but the two directions do not combine cleanly:
+
+- `history -a; history -n` moves the read marker past the shell's own write, so
+  entries appended by another terminal in the meantime are skipped, while the
+  shell's own last command is read back and appears twice in the list.
+- `history -n; history -a` gets the list right but writes the foreign entry back
+  to the file, which then holds it twice.
+- Only `history -a; history -c; history -r` is correct in both places, and it
+  re-reads the whole file at every prompt.
+
+Cross-terminal sync is therefore left off. Each shell keeps its own arrow-up
+history during the session; the sessions are merged at the next shell start.
+
+### Deduplication — `history_dedupe`
+
+`HISTCONTROL=erasedups` removes every earlier occurrence of a command from the
+history list before the new one is stored, so a repeated command ends up exactly
+once, at the end. That applies to the **history list of the running shell only**,
+never to the file: `history -a` has already written the earlier occurrence, and
+entries read back from the file at the next start are not filtered by
+`HISTCONTROL` at all.
+
+`history_dedupe` closes that gap by rewriting the history file so every command
+appears exactly once, at the position of its most recent use and with that use's
+timestamp. It parses records of `#<epoch>` plus command lines, so multi-line
+entries stay intact and entries without a timestamp line — pasted blocks, files
+written by an older configuration — are preserved. The new file is built via
+`mktemp`, gets the permissions of the original, and replaces it with `mv -f`; if
+anything fails the original is left untouched.
+
+It runs in two places:
+
+1. **At shell start.** Bash reads the history file only after the startup files
+   have run, so cleaning it up in `history.sh` means the shell comes up with the
+   deduplicated list. No `history -c` / `history -r` is needed.
+2. **On a repeat, during the session.** `HISTCMD` does not advance when
+   `erasedups` drops an entry, because the list does not grow. Comparing it with
+   `__history_previous_histcmd` is a free duplicate detector — no subshell, no
+   file access — and the rewrite is triggered only when a repeat actually
+   happened, not at every prompt.
+
+Set `HISTORY_DEDUPE_LIVE=0` (in `local.sh`, or directly in `history.sh`) to skip
+step 2 on very large history files; the file is then cleaned only at shell start.
+
+The function is callable by hand and takes an optional file argument:
+
+```bash
+history_dedupe                        # ~/.bash_history
+history_dedupe ~/.bash_history.old    # any other history file
+```
+
+### Interaction with the command timer
 
 `HISTTIMEFORMAT` is also what makes the timer's `history 1` lookup interesting:
 `__cmd_timer_debug` overrides it to empty for its own internal call, so the

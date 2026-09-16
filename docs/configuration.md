@@ -8,9 +8,11 @@
 |---|---|---|
 | `BASH_CONFIG_ROOT` | `bashrc.sh` | Absolute path of the checkout, resolved with `pwd -P`. Exported, so `sshp` and helpers can find their files |
 | `TIME_STYLE` | `bashrc.d/listing.sh` | `+%Y-%m-%d %H:%M:%S` — also affects plain `ls -l` |
+| `HISTFILE` | `bashrc.d/history.sh` | `~/.bash_history` — set explicitly, because `HOME` differs between Git Bash, WSL and task contexts on Windows |
 | `HISTSIZE` | `bashrc.d/history.sh` | `1000000` |
-| `HISTFILESIZE` | `bashrc.d/history.sh` | `20000000` |
+| `HISTFILESIZE` | `bashrc.d/history.sh` | `200000` |
 | `HISTTIMEFORMAT` | `bashrc.d/history.sh` | `'%F %T '` |
+| `HISTCONTROL` | `bashrc.d/history.sh` | `erasedups` — a repeated command keeps only its most recent occurrence. Append `:ignorespace` to also drop commands typed with a leading space |
 | `SSHP_WELCOME_SHOWN` | `prompt.sh` | Exported guard so the remote welcome banner appears once per connection, not in nested shells |
 | `JMETER_PATH`, `PATH`, `ANDROID_HOME`, `MAVEN_OPTS` | `bashrc.d/environment.sh` | Machine-specific — see below |
 | `GIT_PROMPT_ONLY_IN_REPO`, `GIT_PROMPT_THEME`, `GIT_PROMPT_SHOW_UPSTREAM`, `GIT_PROMPT_THEME_FILE` | `bashrc.d/prompt-local.sh` | `bash-git-prompt` settings |
@@ -27,6 +29,7 @@ Set these before sourcing, in `local.sh`, or per command.
 | `SSH_RESOLVE_HOST_TIMEOUT` | `3` | `ssh-resolve-hosts` | Forward-DNS timeout in seconds. Must be a positive integer |
 | `SSH_KNOWN_HOSTS_CLEAN_TIMEOUT` | `3` | `known-hosts-clean` | `ssh-keyscan` timeout in seconds. Must be a positive integer |
 | `SSH_PROMPT_SHOW_COMMAND` | `1` | `prompt.sh` | `0` hides the dim `letzter: <command>` line in the remote prompt |
+| `HISTORY_DEDUPE_LIVE` | `1` | `bashrc.d/history.sh` | `0` rewrites the history file only at shell start instead of also right after a repeated command. Useful on very large history files |
 
 ### Internal variables
 
@@ -39,6 +42,7 @@ Not meant to be set by hand, but useful when debugging:
 | `__cmd_elapsed_us` | Duration of the last command in microseconds |
 | `__cmd_duration` | Formatted duration, e.g. `247ms` |
 | `__cmd_timer_start_us` | Start timestamp, unset after each measurement |
+| `__history_previous_histcmd` | `HISTCMD` as of the previous prompt. It stalls when `erasedups` drops an entry, which is how a repeated command is detected without a subshell |
 
 ## Files and directories
 
@@ -53,6 +57,8 @@ Not meant to be set by hand, but useful when debugging:
 | `~/.ssh/known_hosts.bak.<timestamp>` | `known-hosts-clean --apply` | Backup, only when the file actually changes |
 | `~/.ssh/config.bak.<timestamp>` | `known-hosts-clean --apply` | Backup, only when the file actually changes |
 | `~/.bash-git-prompt/` | you | Optional `bash-git-prompt` checkout |
+| `~/.bash_history` | Bash, `history -a`, `history_dedupe` | Written after every command, not only on exit. Rewritten in place when duplicates are removed |
+| `~/.bash_history.XXXXXX` | `history_dedupe` | Short-lived temporary file, moved over `~/.bash_history` or deleted |
 
 ### Remote (created by `sshp`)
 

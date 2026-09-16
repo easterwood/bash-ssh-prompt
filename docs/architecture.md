@@ -7,7 +7,7 @@
   └─ bashrc.sh                  returns immediately unless interactive
        ├─ exports BASH_CONFIG_ROOT
        ├─ bashrc.d/environment.sh    JDK / JMeter / Android / Maven
-       ├─ bashrc.d/history.sh        history sizes, timestamps, histappend
+       ├─ bashrc.d/history.sh        history sizes, timestamps, dedup, history -a
        ├─ bashrc.d/listing.sh        ll, TIME_STYLE
        ├─ bashrc.d/ssh-tools.sh      ┐
        │    ├─ lib/ssh-config.sh     │
@@ -50,8 +50,13 @@ and both handle the string form and the Bash 5.1 array form of
 3. append   __cmd_timer_arm       re-arm the DEBUG trap last
 ```
 
-Result, roughly: `__cmd_timer_stop` → `setLastCommandState`/git prompt builder →
-`__cmd_timer_arm`. `prompt_callback` is not in `PROMPT_COMMAND` at all;
+`history.sh` is sourced before both prompt modules and appends
+`__history_append` to whatever `PROMPT_COMMAND` holds at that point. Step 1
+above prepends to it rather than replacing it, so the history entry survives and
+ends up in the middle.
+
+Result, roughly: `__cmd_timer_stop` → `__history_append` →
+`setLastCommandState`/git prompt builder → `__cmd_timer_arm`. `prompt_callback` is not in `PROMPT_COMMAND` at all;
 `bash-git-prompt` calls it while assembling the prompt.
 
 **Remote** (`prompt.sh`) replaces `PROMPT_COMMAND` outright:
@@ -70,6 +75,7 @@ keeps the trap from firing for each function call inside a pipeline.
 | Prefix | Meaning |
 |---|---|
 | `__cmd_*` | Command timer and window title |
+| `__history_*` | History writing and duplicate detection |
 | `__remote_prompt_*` | Remote prompt only |
 | `__kh_scan_*` | Shared SSH-config scanner results |
 | `__kh_rows`, `__kh_target_*`, `__kh_cache_*` | `known-hosts` cache |
@@ -299,6 +305,19 @@ It appends a block to the remote `~/.bashrc` and creates `~/.hushlogin`. Both
 are guarded and reversible, but on shared or managed accounts you may not want
 this. Undo instructions are in
 [installation.md](installation.md#what-sshp-changes-on-a-remote-host).
+
+### 12. History deduplication is unlocked and file-wide
+
+`history_dedupe` reads and rewrites the whole history file. Two shells that
+start at the very same moment, or a rewrite that races an append from another
+terminal, can lose a single line; there is no portable locking under Git Bash.
+The cost also scales with the file, which is why `HISTFILESIZE` was lowered to
+`200000` and why the in-session rewrite is limited to actual repeats and can be
+turned off with `HISTORY_DEDUPE_LIVE=0`.
+
+`HISTCONTROL` never applies to entries read from the file, only to commands
+typed at the prompt. Duplicates created by another terminal are therefore
+visible until the next shell start cleans the file.
 
 ## Extension points
 

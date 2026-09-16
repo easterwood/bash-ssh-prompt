@@ -16,12 +16,17 @@ source ~/.bashrc
    resolved).
 2. Syntax-checks a fixed list of files with `bash -n`:
    `bashrc.sh`, `prompt.sh`, `ssh-prompt.sh`, `.git-prompt-colors.sh`, and the
-   six modules in `bashrc.d/`. If any of them fails, nothing is changed.
+   seven modules in `bashrc.d/`. If any of them fails, nothing is changed.
 3. If `~/.bashrc` exists, copies it (preserving attributes) to
    `~/.bashrc.before-modular-config.<YYYYmmdd-HHMMSS>` and prints the path.
 4. Overwrites `~/.bashrc` with a three-line loader. The checkout path is written
    through `printf %q`, so paths with spaces or special characters are safe.
 5. Syntax-checks the generated `~/.bashrc` and prints the reload command.
+
+> `source ~/.bashrc` is enough for everything except the history cleanup.
+> `history_dedupe` rewrites `~/.bash_history` before Bash reads it, and in an
+> already running shell the list in memory is written back on exit. Open a new
+> terminal to see the deduplicated history.
 
 The generated loader:
 
@@ -77,6 +82,16 @@ source ~/.bashrc
 type ll sshp known-hosts   # all defined
 echo "$BASH_CONFIG_ROOT"   # points at your checkout
 bash tests/known-hosts.sh  # parser regression test passes
+```
+
+In a freshly opened terminal, check that the history is being written
+immediately instead of only on exit:
+
+```bash
+echo "$HISTFILE"                    # ~/.bash_history
+declare -p PROMPT_COMMAND           # contains __history_append
+echo history-probe
+tail -2 "$HISTFILE"                 # the probe is already there
 ```
 
 ## Updating
