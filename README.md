@@ -135,7 +135,20 @@ bashrc.d/
   completions/             Bash completion for all of the above
 
 tests/
-  known-hosts.sh           Regression test for the known-hosts parser
+  run-all.sh               Runs every test script, one summary line each
+  lib.sh                   Assertions and the sandbox/stub helpers
+  install.sh               install.sh loader, backup, syntax gate
+  history.sh               History deduplication and writing
+  listing.sh               ll formatting
+  prompt-core.sh           Command timer and window title
+  ssh-config.sh            Config scanner, Include, direct vs inherited users
+  known-hosts.sh           known-hosts parser and process count
+  known-hosts-clean.sh     known-hosts --clean, dry run and --apply
+  ssh-by-number.sh         ssh-nr target resolution
+  ssh-resolve.sh           IP predicates and resolver options
+  sshp.sh                  sshp argument parser and guards
+  commands.sh              bash-commands listing and self-check
+  completion.sh            Host cache and all completion functions
   known_hosts.fixture      Synthetic parser data (no real keys)
 ```
 
@@ -157,12 +170,17 @@ edges.
 ## Testing
 
 ```bash
-bash tests/known-hosts.sh   # known-hosts parser regression test
+bash tests/run-all.sh       # the whole suite: 12 scripts, 295 checks
+bash tests/history.sh       # or a single script
 bash-commands --check       # every documented command is really defined
 ```
 
-`TEST.md` records a manual test run of the whole package from
-8 September 2026. See [docs/architecture.md#testing](docs/architecture.md#testing).
+The tests run against throwaway home directories and stubbed `ssh`,
+`ssh-keygen` and `ssh-keyscan` binaries, so they touch neither your own
+configuration nor the network.
+
+`TEST.md` records what the suite covers plus a manual test run of the whole
+package. See [docs/architecture.md#testing](docs/architecture.md#testing).
 
 ## Safety notes
 

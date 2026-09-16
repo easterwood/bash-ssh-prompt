@@ -171,24 +171,49 @@ Validation uses only Bash builtins (`$(< file)`, `compgen -G`), so pressing
 ## Testing
 
 ```bash
-bash tests/known-hosts.sh
+bash tests/run-all.sh       # everything
+bash tests/history.sh       # a single script
 ```
 
-The test sources `bashrc.d/ssh-tools.sh`, points `SSH_KNOWN_HOSTS_FILE` at
-`tests/known_hosts.fixture`, and replaces `ssh-keygen` with a counting stub. It
-asserts that:
+`tests/run-all.sh` executes every `*.sh` in `tests/` except itself and
+`lib.sh`, prints one `PASS` line per script with its check count, and returns
+`1` if any script failed.
 
-- the default view runs with **zero** `ssh-keygen` calls;
-- a filtered view also runs with zero calls;
-- `--fingerprints` makes exactly **one** call, with the expected arguments;
-- a filter matches a plaintext host and excludes the `@cert-authority` line;
-- the unfiltered view shows both `[hashed hostname]` and `cert-authority`;
-- combining `--fingerprints` with a filter fails.
+| Script | Checks | Covers |
+|---|---|---|
+| `tests/install.sh` | 21 | The generated loader, the backup, `printf %q` quoting of a path with spaces, the `bash -n` gate, and that `bashrc.sh` stays inert in a non-interactive shell |
+| `tests/history.sh` | 17 | `history_dedupe` on timestamped, multi-line and timestamp-less files, plus the live rewrite and `HISTORY_DEDUPE_LIVE=0` end to end in an interactive shell |
+| `tests/listing.sh` | 17 | The `ll` header, the dropped `ls` summary line, hidden files, names with spaces, option pass-through |
+| `tests/prompt-core.sh` | 22 | The clock, duration formatting across all five ranges, exit-code capture, control-character escaping in the window title |
+| `tests/ssh-config.sh` | 22 | Alias collection, skipped wildcards, quotes, `Include` with glob and `~/`, direct versus inherited users |
+| `tests/known-hosts.sh` | 13 | The `known_hosts` parser, the filter, hashed and marker entries, rejected option combinations, and how many processes the rendering spawns |
+| `tests/known-hosts-clean.sh` | 39 | `known-hosts --clean`: dry run, `--apply` with backups, rejected combinations, the removed `known-hosts-clean` alias, and the completion |
+| `tests/ssh-by-number.sh` | 19 | `ssh-nr`: help, `--list`, invalid and out-of-range numbers, alias versus raw target, `[host]:port`, markers, `-F` pass-through, both `sshp` call branches |
+| `tests/ssh-resolve.sh` | 38 | The IPv4/IPv6 predicates, help, argument and timeout validation, and the load-order dependency between the two resolvers |
+| `tests/sshp.sh` | 34 | The `sshp` argument parser, `--force`, `--`, the remote-command rejection, and the check for missing sync files |
+| `tests/commands.sh` | 26 | `bash-commands`: listing, `--details`, the `--check` self-test including a deliberately stale row, filter, rejected combinations |
+| `tests/completion.sh` | 27 | The shared host cache, its invalidation after a config edit, `ssh`/`sshp` destinations including `user@`, and every per-command completion |
 
-The fixture contains three synthetic lines — a plaintext host with an extra
-`[host]:2222` name, a `@cert-authority` wildcard entry, and a hashed entry — and
-deliberately **no valid cryptographic keys**. This is a parser regression test,
-not a crypto test and not a benchmark.
+`tests/lib.sh` holds the shared parts: `assert`, `assert_equal`,
+`assert_contains`, `assert_not_contains`, `assert_status`, `assert_file`, and
+`test_sandbox`/`test_stub`.
+
+`test_sandbox` creates a temporary `HOME` plus a stub directory at the front of
+`PATH` and removes both on exit, so no test sees your real `~/.ssh` or
+`~/.bash_history`. `test_stub` writes an executable stub into that directory,
+which is necessary because the configuration calls `ssh`, `ssh-keygen` and
+`ssh-keyscan` through `command`, where a shell function would be ignored. No
+test opens a network connection.
+
+The tests deliberately do not use `set -e`. They source the real configuration,
+and several of its functions return non-zero as part of normal control flow — an
+unreachable host, a rejected option combination — which would abort an errexit
+shell mid-test. Each assertion exits on its own instead.
+
+`tests/known_hosts.fixture` contains three synthetic lines — a plaintext host
+with an extra `[host]:2222` name, a `@cert-authority` wildcard entry, and a
+hashed entry — and deliberately **no valid cryptographic keys**. These are
+parser and behaviour regression tests, not crypto tests and not benchmarks.
 
 `bash-commands --check` is a second, cheap self-test: it resolves every command
 listed in `bashrc.d/commands.sh` and returns exit code `1` if one is missing, so
@@ -200,8 +225,8 @@ To syntax-check everything, including the files `install.sh` skips:
 find . -name '*.sh' -o -name '*.bash' | xargs -n1 bash -n
 ```
 
-`TEST.md` in the repository root is the report of a manual test run
-from 8 September 2026, covering the installer, the local and remote prompts, the
+`TEST.md` in the repository root lists what the automated suite covers and
+reports the manual test run covering the installer, the local and remote prompts, the
 `ll` layout, multi-file sync with a stubbed `ssh` client, per-target change
 detection, and the `known-hosts` overview. It also lists what could not be
 tested automatically: Git Bash on Windows, a real `bash-git-prompt` install,
@@ -224,6 +249,7 @@ The sync state is keyed by the destination string alone. `sshp web01` and
 same alias to different machines, use `--force`.
 
 > Earlier versions shipped a second wrapper layer in `bashrc.d/lib/ssh-command.sh`
+> (the file itself has since been deleted as well)
 > that added `-q` by default plus `--banner`/`--no-quiet`/`--quiet` and
 > `SSH_TOOLS_QUIET`. Because `ssh-prompt.sh` is sourced later and redefines
 > `ssh()`/`sshp()`, that layer was never active. It has been removed together
@@ -319,6 +345,10 @@ typed at the prompt. Duplicates created by another terminal are therefore
 visible until the next shell start cleans the file.
 
 ## Extension points
+
+**Adding a test** — drop a `*.sh` into `tests/`, source `tests/lib.sh`, call
+`test_sandbox` before sourcing anything from the configuration, and end with
+`pass`. `tests/run-all.sh` picks it up automatically.
 
 **Adding a shell module** — drop a file into `bashrc.d/` and add a `source`
 line to `bashrc.sh`. Files sourced by both local and remote shells must stay

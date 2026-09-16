@@ -2,11 +2,15 @@
 
 ## Summary
 
-The modular Bash configuration was verified on 8 September 2026 in an isolated
-Linux test environment. All automated checks passed.
+The modular Bash configuration was verified in an isolated Linux test
+environment. All automated checks passed.
+
+Reproducible part: `bash tests/run-all.sh` — 12 scripts, 295 checks, all passing.
+The remaining sections describe one-off checks that are not scripted.
 
 | Area | Result |
 |---|---|
+| Automated suite (`tests/run-all.sh`) | Passed |
 | Syntax of all shell files | Passed |
 | Modular local loader | Passed |
 | Local `bash-git-prompt` integration | Passed (with a test double) |
@@ -32,6 +36,38 @@ Linux test environment. All automated checks passed.
 Git Bash on Windows and the actual target servers were not part of the
 executable test environment.
 
+## Automated suite
+
+```bash
+bash tests/run-all.sh       # everything
+bash tests/history.sh       # a single script
+```
+
+`run-all.sh` runs every `*.sh` in `tests/` except itself and `lib.sh`, prints one
+line per script, and returns `1` if any of them failed.
+
+| Script | Checks | Covers |
+|---|---|---|
+| `tests/install.sh` | 21 | Generated loader, backup of an existing `~/.bashrc`, `printf %q` quoting of a path with spaces, the `bash -n` gate, and `bashrc.sh` staying inert non-interactively |
+| `tests/history.sh` | 17 | `history_dedupe` on timestamped, multi-line and timestamp-less files, the live rewrite, and `HISTORY_DEDUPE_LIVE=0` end to end |
+| `tests/listing.sh` | 17 | `ll`: header, dropped `ls` summary line, hidden files, names with spaces, option pass-through. Skipped without GNU `ls` |
+| `tests/prompt-core.sh` | 22 | Clock, duration formatting across all five ranges, exit-code capture, control-character escaping in the window title |
+| `tests/ssh-config.sh` | 22 | Alias collection, skipped wildcards, quotes, `Include` with glob and `~/`, direct versus inherited users |
+| `tests/known-hosts.sh` | 13 | Parser, filter, hashed and marker entries, rejected option combinations, and the number of processes the rendering spawns |
+| `tests/known-hosts-clean.sh` | 39 | `known-hosts --clean`: dry run, `--apply` with backups, rejected combinations, the removed `known-hosts-clean` alias, completion |
+| `tests/ssh-by-number.sh` | 19 | `ssh-nr`: help, `--list`, invalid and out-of-range numbers, alias versus raw target, `[host]:port`, markers, `-F` pass-through, both `sshp` call branches |
+| `tests/ssh-resolve.sh` | 38 | IPv4/IPv6 predicates, help, argument and timeout validation, load-order dependency between the two resolvers |
+| `tests/sshp.sh` | 34 | `sshp` argument parser, `--force`, `--`, remote-command rejection, missing sync files |
+| `tests/commands.sh` | 26 | `bash-commands`: listing, `--details`, `--check` including a deliberately stale row, filter, rejected combinations |
+| `tests/completion.sh` | 27 | Shared host cache, invalidation after a config edit, `ssh`/`sshp` destinations including `user@`, every per-command completion |
+
+Every script calls `test_sandbox` from `tests/lib.sh` first, which creates a
+throwaway `HOME` and a stub directory at the front of `PATH` and removes both on
+exit. `ssh`, `ssh-keygen` and `ssh-keyscan` are replaced by stubs there, because
+the configuration calls them through `command`, where a shell function would be
+ignored. No test reads the real `~/.ssh` or `~/.bash_history`, and none opens a
+network connection.
+
 ## Checks performed
 
 ### 1. Bash syntax
@@ -51,6 +87,10 @@ The following files were checked individually with `bash -n`:
 - `bashrc.d/prompt-local.sh`
 
 Result: no syntax errors.
+
+`bashrc.d/lib/ssh-command.sh` was removed. It had not been sourced by
+`ssh-tools.sh` for some time — `docs/architecture.md` already described it as
+gone — so it was dead code that `bash -n` kept validating.
 
 ### 2. Removal of duplicates
 
@@ -155,8 +195,8 @@ Update: the default view and the filter no longer spawn an `ssh-keygen` process.
 `--fingerprints` spawns exactly one call for the whole file and returns the
 original OpenSSH output.
 
-Reproducible regression test: `bash tests/known-hosts.sh` (passed).
-The test double counts calls and checks arguments; synthetic parser data
+Reproducible regression test: `bash tests/known-hosts.sh` (passed, 13 checks).
+The `ssh-keygen` stub counts calls and checks arguments; synthetic parser data
 exercises the filter, markers and the hash display. It is neither a
 cryptographic test nor a runtime measurement under Git Bash. The checks below
 additionally describe the earlier state with real test keys.
@@ -178,26 +218,35 @@ Result: no corrupted entries.
 
 `bashrc.d/lib/known-hosts-clean.sh` and its completion file were removed and the
 implementation moved into `bashrc.d/lib/known-hosts.sh` behind the `--clean`
-option. Checked with stubbed `ssh`, `ssh-keygen` and `ssh-keyscan` binaries on a
-throwaway home directory holding one reachable host, one unreachable host, a
-hashed entry and matching config aliases.
+option.
+
+Reproducible regression test: `bash tests/known-hosts-clean.sh` (passed, 39
+checks). The fixture is a throwaway home directory with one reachable host, one
+unreachable host, a hashed entry and matching config aliases; `ssh`,
+`ssh-keygen` and `ssh-keyscan` are stubs.
 
 | Check | Result |
 |---|---|
-| `known-hosts --help` shows the merged usage | Passed |
-| `known-hosts --clean` dry run: reachable kept, unreachable and its alias reported, hashed skipped, no file written | Passed |
-| `known-hosts --clean --apply`: both files rewritten, both backups created, caches invalidated | Passed |
-| `known-hosts --apply` without `--clean` returns `2` | Passed |
-| `known-hosts --clean --lines` returns `2` | Passed |
-| `known-hosts-clean` alias and completion gone, `known-hosts` completion still registered | Passed |
-| `bash-commands --check` lists no stale row | Passed |
-| `bash tests/known-hosts.sh` still passes unchanged | Passed |
+| `known-hosts --help` shows the merged usage, including the keyscan timeout | Passed |
+| Dry run: reachable kept, unreachable and its alias reported, hashed skipped | Passed |
+| Dry run writes neither `known_hosts` nor the config | Passed |
+| `--apply`: both files rewritten, both backups created, the live host survives | Passed |
+| The overview after `--apply` reflects the new state, so the caches were invalidated | Passed |
+| `--apply` without `--clean`, and `--clean` with `--lines`, `--refresh`, `--fingerprints` or a filter, all return `2` | Passed |
+| `known-hosts-clean` alias, function and completion function are gone | Passed |
+| Completion offers `--clean`, then only `--apply`/`--help` and no host names | Passed |
+
+`bash-commands --check` lists no stale row, and `bash tests/known-hosts.sh`
+passes unchanged.
 
 Result: passed.
 
 ### 12. History writing and deduplication
 
-Checked in throwaway home directories with `bash --rcfile ... -i`.
+Reproducible regression test: `bash tests/history.sh` (passed, 17 checks). The
+file-level checks call `history_dedupe` directly; the behavioural checks start
+`bash --rcfile ... -i` in a throwaway home directory, because `history -a` and
+`erasedups` only do anything in an interactive shell.
 
 **Writing.** With `history -a` in `PROMPT_COMMAND`, every command appears in
 `~/.bash_history` immediately, without the shell having exited. Without it the
@@ -244,7 +293,7 @@ The following checks can only be carried out in the actual environment:
 4. Rendering of colours and Unicode characters in the terminal in use.
 5. Behaviour with password-based SSH authentication.
 6. Availability of the GNU `ls` options used on every target server.
-8. History persistence across a real Windows reboot, and the runtime cost of
+7. History persistence across a real Windows reboot, and the runtime cost of
    `history_dedupe` on a grown `~/.bash_history` under Git Bash.
 
 ## Manual acceptance test
