@@ -4,8 +4,24 @@ HISTFILE="$HOME/.bash_history"
 HISTSIZE=1000000
 HISTFILESIZE=200000
 HISTTIMEFORMAT='%F %T '
-# Set HISTORY_DEDUPE_LIVE=0 to clean the file only at shell start.
-HISTORY_DEDUPE_LIVE=${HISTORY_DEDUPE_LIVE:-1}
+
+# Rewrite the history file whenever a repeated command is entered.
+#
+# This used to default to 1 and is the most expensive thing in the whole
+# prompt path: history_dedupe forks four times (mktemp, awk, chmod, mv) and
+# runs awk over the complete history file, which HISTFILESIZE allows to grow
+# to 200000 lines. Under MSYS2 that is easily half a second, and it happens
+# exactly when a command is repeated -- which is most of the time.
+#
+# With 0 the file is still cleaned at every shell start, so nothing is lost;
+# the duplicates just survive until the next start. Set it to 1 in local.sh if
+# you want the old behaviour back.
+HISTORY_DEDUPE_LIVE=${HISTORY_DEDUPE_LIVE:-0}
+
+# Clean the file once at shell start. Set to 0 to make the shell start faster
+# and clean up manually with "history_dedupe" instead.
+HISTORY_DEDUPE_ON_START=${HISTORY_DEDUPE_ON_START:-1}
+
 # erasedups: a repeated command drops its earlier occurrences and is kept
 # only at the end of the history. Add ":ignorespace" to also skip commands
 # that start with a space.
@@ -75,7 +91,7 @@ history_dedupe() {
 
 # Bash reads the history file only after the startup files have run, so
 # cleaning it up here means the shell starts with the deduplicated list.
-history_dedupe
+(( HISTORY_DEDUPE_ON_START )) && history_dedupe
 
 # Bash only saves the history when the shell exits cleanly. A Windows reboot,
 # a killed terminal or a crashed session therefore loses everything typed
