@@ -279,3 +279,111 @@ history_dedupe ~/.bash_history.old    # any other history file
 `HISTTIMEFORMAT` is also what makes the timer's `history 1` lookup interesting:
 `__cmd_timer_debug` overrides it to empty for its own internal call, so the
 timestamp never ends up in `__cmd_last_command`.
+
+## Gruvbox Rainbow prompt — `bashrc.d/prompt-gruvbox.sh`
+
+An alternative to `prompt-local.sh` that reproduces the look of starship's
+[Gruvbox Rainbow preset](https://starship.rs/presets/gruvbox-rainbow) in pure
+Bash. It replaces `bash-git-prompt` rather than theming it, and reuses the
+timer from `prompt-core.sh` unchanged. Which of the two is active is decided by
+a single `source` line in `bashrc.sh`.
+
+### Segments
+
+Colours come from the Gruvbox dark palette as 24-bit escapes, separated by the
+powerline glyphs `U+E0B6`, `U+E0B0` and `U+E0B4`. Left to right:
+
+| Segment | Colour | Shown when |
+|---|---|---|
+| OS icon, user | orange | always |
+| Working directory | yellow | always |
+| Branch and Git status | aqua | `.git` exists in `$PWD` or an ancestor |
+| Java, Maven, Node, Python version | blue | the matching project marker is found |
+| Docker context | grey | a context outside `PROMPT_GRUVBOX_DOCKER_HIDE` is selected |
+| Exit code, duration, clock | dark grey | on a failure, a slow command, or always for the clock |
+
+The second line carries only the input symbol: green `❯`, red `❯` after a
+failure, red `#` for root.
+
+Git markers are `=n` conflicts, `+n` staged, `!n` unstaged, `?n` untracked,
+`*n` stashes, `⇡n` ahead, `⇣n` behind.
+
+### Cost per prompt
+
+The same rule as everywhere else applies: a fork costs 15-25 ms under MSYS2.
+
+| Situation | Forks |
+|---|---|
+| Outside a repository | 0 |
+| Inside a repository | 1 (`git status --porcelain=v2 --branch --show-stash`) |
+| A toolchain that has actually changed | 1 extra, and only then |
+
+The Git call is guarded by a fork-free ancestor walk for `.git`, so a plain
+directory never pays for a `git status` that only fails. `branch`, upstream
+divergence, stash count and all file states come out of that one call and are
+parsed by the shell.
+
+### Freshness
+
+What gets cached is decided by what a refresh would cost, not by the lifetime
+of the shell.
+
+The **Java version** is derived from `JAVA_HOME`, or from a JDK path in
+`$PATH`, on every single prompt — that is a regular expression over a string
+the shell already holds, so it costs nothing and a JDK switch is visible in the
+next prompt. Only when neither path carries a version number does `java
+-version` have to start a JVM, and that one result is cached against
+`JAVA_HOME` and `PATH`; changing either discards it.
+
+The **project version** is read fresh from `pom.xml` on every prompt, so an
+edit shows up immediately. A builtin redirection is not a fork, and the loop
+stops at the first element that can only follow the version (`<properties>`,
+`<modules>`, `<dependencyManagement>`, `<dependencies>`, `<build>`,
+`<profiles>`), which puts a normal pom at roughly 0.05 ms — about a fortieth of
+one fork under MSYS2. `PROMPT_GRUVBOX_POM_MAX_LINES` bounds the one bad case, a
+pom carrying thousands of lines of licence header ahead of its version element.
+
+**Node** and **Python** still cost a fork to interrogate, so they stay cached —
+but against `PATH` and `VIRTUAL_ENV`, which is exactly what nvm, fnm, volta and
+`activate` rewrite. Switching a Node version re-detects on the next prompt.
+
+The **Docker context** is read from `$DOCKER_CONTEXT`, `$DOCKER_HOST` or
+`config.json` once per shell. This is the one value that still needs a new
+shell after `docker context use`; drop the `__gb_docker_cache` guard in
+`__gb_docker_context` if that matters more than the file read.
+
+`config.json` is looked for under `$DOCKER_CONFIG`, then `$HOME/.docker`, then
+`%USERPROFILE%\.docker` with the separators converted — Git Bash does not
+guarantee that `$HOME` and `%USERPROFILE%` agree, and Docker Desktop writes
+into the latter.
+
+`PROMPT_GRUVBOX_DOCKER_HIDE` suppresses the contexts that only ever mean "the
+one local engine". A stock Docker Desktop for Windows reports `desktop-linux`
+on every prompt forever, which is a badge without information, so the segment
+stays out of the way until the CLI actually points somewhere else. Set the
+variable to an empty string to always show the context.
+
+### Settings
+
+All of these can be set in `local.sh`:
+
+| Variable | Default | Effect |
+|---|---|---|
+| `PROMPT_GRUVBOX_MIN_DURATION_US` | `100000` | Show the duration from this many microseconds on |
+| `PROMPT_GRUVBOX_GIT` | `1` | `0` drops the Git segment, and with it the only per-prompt fork |
+| `PROMPT_GRUVBOX_POM_MAX_LINES` | `500` | Give up on `pom.xml` after this many lines |
+| `PROMPT_GRUVBOX_DOCKER_HIDE` | `default desktop-linux desktop-windows` | Docker contexts that do not earn a segment |
+| `PROMPT_GRUVBOX_POWERLINE` | `1` | `0` falls back to ASCII separators without a Nerd Font |
+| `PROMPT_GRUVBOX_TIME_ON_INPUT_LINE` | `0` | `1` puts the clock in front of `❯`, as the old Custom theme did |
+| `PROMPT_DIRTRIM` | `3` | Path components kept by Bash before truncating |
+
+### Requirements
+
+A Nerd Font in the terminal and a true-colour terminal — Windows Terminal and
+mintty both qualify. `LANG` has to name a UTF-8 locale, because the glyphs are
+written as `$'\uXXXX'` and Bash converts those using the current locale.
+
+### Remote shells
+
+Unaffected. `prompt.sh` stays the prompt that `sshp` pushes to remote hosts; it
+has no dependency on this module and assumes nothing about the remote font.

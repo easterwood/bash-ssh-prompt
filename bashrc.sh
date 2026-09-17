@@ -12,7 +12,10 @@ source "$BASH_CONFIG_ROOT/bashrc.d/prompt-core.sh"
 source "$BASH_CONFIG_ROOT/bashrc.d/history.sh"
 source "$BASH_CONFIG_ROOT/bashrc.d/listing.sh"
 source "$BASH_CONFIG_ROOT/bashrc.d/ssh-tools.sh"
-source "$BASH_CONFIG_ROOT/bashrc.d/prompt-local.sh"
+# The prompt. prompt-gruvbox.sh is standalone; swap it back for
+# prompt-local.sh to return to bash-git-prompt.
+#source "$BASH_CONFIG_ROOT/bashrc.d/prompt-local.sh"
+source "$BASH_CONFIG_ROOT/bashrc.d/prompt-gruvbox.sh"
 source "$BASH_CONFIG_ROOT/ssh-prompt.sh"
 
 # Untracked, machine-specific overrides are optional.
