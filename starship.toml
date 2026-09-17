@@ -1,0 +1,164 @@
+# Gruvbox Starship prompt without helper scripts.
+#
+# Layout:
+#   line 1: OS + user | directory | Git | toolchain/project | Docker
+#   line 2: time + duration/status
+#   line 3: input symbol
+#
+# A Nerd Font is required for the Powerline separators and icons.
+#
+# Important:
+# The coloured transitions on line 1 are a fixed chain:
+# orange -> yellow -> aqua -> blue -> bg3.
+# This is visually seamless while the corresponding modules are present.
+# With pure Starship, a later optional segment cannot detect which differently
+# coloured optional segment was the previous visible one.
+
+"$schema" = 'https://starship.rs/config-schema.json'
+
+add_newline = false
+palette = 'gruvbox'
+scan_timeout = 30
+command_timeout = 1000
+
+format = """
+[](fg:orange)\
+$os\
+$username\
+[](fg:orange bg:yellow)\
+$directory\
+([](fg:yellow bg:aqua)$git_branch$git_commit$git_status)\
+([](fg:aqua bg:blue)$java$package$nodejs$python)\
+([](fg:blue bg:bg3)$docker_context)\
+[](fg:bg3)\
+$line_break\
+[](fg:fg0)\
+$time\
+$cmd_duration\
+$status\
+[](fg:fg0)\
+$line_break\
+$character"""
+
+[palettes.gruvbox]
+fg0 = '#fbf1c7'
+bg1 = '#3c3836'
+bg3 = '#665c54'
+blue = '#458588'
+blue_bright = '#83a598'
+aqua = '#689d6a'
+green = '#98971a'
+orange = '#d65d0e'
+purple = '#b16286'
+red = '#cc241d'
+yellow = '#d79921'
+
+# --- line 1: identity / path ----------------------------------------------
+
+[os]
+disabled = false
+format = '[ $symbol ](fg:fg0 bg:orange)'
+
+[os.symbols]
+Windows = '󰍲'
+Linux = '󰌽'
+Macos = '󰀵'
+
+[username]
+show_always = true
+format = '[$user ](fg:fg0 bg:orange)'
+
+[directory]
+format = '[ $path ](fg:fg0 bg:yellow)'
+home_symbol = '~'
+truncation_length = 3
+truncation_symbol = '.../'
+truncate_to_repo = false
+read_only = ''
+
+# --- line 1: Git -----------------------------------------------------------
+
+[git_branch]
+only_attached = true
+symbol = ' '
+format = '[ $symbol$branch](fg:fg0 bg:aqua)'
+
+[git_commit]
+only_detached = true
+commit_hash_length = 7
+tag_disabled = true
+format = '[  $hash](fg:fg0 bg:aqua)'
+
+[git_status]
+format = '[$conflicted$staged$modified$renamed$deleted$typechanged$untracked$stashed$ahead_behind ](fg:fg0 bg:aqua)'
+conflicted = ' =${count}'
+staged = ' +${count}'
+modified = ' !${count}'
+renamed = ' +${count}'
+deleted = ' !${count}'
+typechanged = ' !${count}'
+untracked = ' ?${count}'
+stashed = ' *${count}'
+ahead = ' ⇡${count}'
+behind = ' ⇣${count}'
+diverged = ' ⇡${ahead_count} ⇣${behind_count}'
+up_to_date = ''
+ignore_submodules = false
+
+# --- line 1: toolchain / project ------------------------------------------
+
+[java]
+symbol = ' '
+version_format = '${raw}'
+format = '[ $symbol$version ](fg:fg0 bg:blue)'
+
+[package]
+symbol = ' '
+version_format = '${raw}'
+format = '[ $symbol$version ](fg:fg0 bg:blue)'
+
+[nodejs]
+symbol = ' '
+version_format = '${raw}'
+format = '[ $symbol$version ](fg:fg0 bg:blue)'
+
+[python]
+symbol = ' '
+version_format = '${raw}'
+format = '[ $symbol$version ](fg:fg0 bg:blue)'
+detect_extensions = []
+detect_files = []
+detect_folders = []
+
+# --- line 1: Docker --------------------------------------------------------
+
+[docker_context]
+symbol = ' '
+format = '[ $symbol$context ](fg:blue_bright bg:bg3)'
+only_with_files = false
+
+# --- line 2: clock / duration / status ------------------------------------
+
+[time]
+disabled = false
+time_format = '%H:%M'
+format = '[  $time ](fg:fg0 bg:bg1)'
+
+[cmd_duration]
+min_time = 100
+show_milliseconds = true
+format = '[ $duration ](fg:fg0 bg:bg1)'
+
+[status]
+disabled = false
+symbol = '✘ '
+format = '[$symbol$status](fg:red bg:bg1)'
+map_symbol = false
+recognize_signal_code = true
+
+# --- line 3 ---------------------------------------------------------------
+
+[character]
+success_symbol = '[❯](fg:green)'
+error_symbol = '[❯](fg:red)'
+format = '$symbol '

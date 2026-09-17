@@ -30,6 +30,8 @@ Set these before sourcing, in `local.sh`, or per command.
 | `SSH_KNOWN_HOSTS_CLEAN_TIMEOUT` | `3` | `known-hosts --clean` | `ssh-keyscan` timeout in seconds. Must be a positive integer |
 | `SSH_PROMPT_SHOW_COMMAND` | `1` | `prompt.sh` | `0` hides the dim `letzter: <command>` line in the remote prompt |
 | `HISTORY_DEDUPE_LIVE` | `1` | `bashrc.d/history.sh` | `0` rewrites the history file only at shell start instead of also right after a repeated command. Useful on very large history files |
+| `BASH_PROMPT_BACKEND` | `auto` | `bashrc.sh` | Local prompt: `starship`, `bash-git-prompt`, `gruvbox`, or `auto`. Aliases: `prompt-local`, `git`, `prompt-gruvbox`, `prompt-gruvbox.sh` |
+| `STARSHIP_CONFIG` | `<checkout>/starship.toml` | `bashrc.sh` | Optional override for the Starship config path when the Starship backend is selected |
 
 ### Internal variables
 
@@ -53,7 +55,7 @@ Not meant to be set by hand, but useful when debugging:
 | `~/.bashrc` | `install.sh` | Three-line loader for the checkout |
 | `~/.bashrc.before-modular-config.<timestamp>` | `install.sh` | Backup of the previous `~/.bashrc` |
 | `~/.cache/sshp/<crc>_<size>.state` | `sshp` | Sync signature, keyed by the destination string (options are not part of the key) |
-| `<checkout>/local.sh` | you | Untracked machine-local settings, loaded last |
+| `<checkout>/local.sh` | you | Untracked machine-local settings, loaded after the common modules and immediately before the local prompt backend is selected |
 | `~/.ssh/known_hosts.bak.<timestamp>` | `known-hosts --clean --apply` | Backup, only when the file actually changes |
 | `~/.ssh/config.bak.<timestamp>` | `known-hosts --clean --apply` | Backup, only when the file actually changes |
 | `~/.bash-git-prompt/` | you | Optional `bash-git-prompt` checkout |
@@ -105,9 +107,25 @@ Copy the template and edit:
 cp local.sh.example local.sh
 ```
 
-It is sourced last by `bashrc.sh`, only if readable, so it can override anything
-the modules set. It is covered by `.gitignore` along with `*.bak`, `*.backup`,
-`.idea` and `*.iml`.
+It is sourced near the end of `bashrc.sh`, only if readable: after the common
+history/listing/SSH modules and immediately before the local prompt backend is
+selected. That lets it select and configure the prompt without being sourced
+twice. It is covered by `.gitignore` along with `*.bak`, `*.backup`, `.idea`
+and `*.iml`.
+
+Prompt selection example:
+
+```bash
+BASH_PROMPT_BACKEND=starship
+# BASH_PROMPT_BACKEND=bash-git-prompt
+# BASH_PROMPT_BACKEND=gruvbox
+# BASH_PROMPT_BACKEND=auto
+```
+
+Open a new shell after changing the value. `auto` keeps the previous behaviour:
+Starship if the `starship` executable is available, otherwise the pure-Bash
+Gruvbox prompt. If an explicitly selected external backend is unavailable,
+`bashrc.sh` prints a warning and falls back to Gruvbox.
 
 ## Recipes
 

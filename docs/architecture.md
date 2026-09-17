@@ -7,6 +7,7 @@
   └─ bashrc.sh                  returns immediately unless interactive
        ├─ exports BASH_CONFIG_ROOT
        ├─ bashrc.d/environment.sh    JDK / JMeter / Android / Maven
+       ├─ bashrc.d/prompt-core.sh    command timer, window title helpers
        ├─ bashrc.d/history.sh        history sizes, timestamps, dedup, history -a
        ├─ bashrc.d/listing.sh        ll, TIME_STYLE
        ├─ bashrc.d/ssh-tools.sh      ┐
@@ -18,14 +19,20 @@
        │    ├─ commands.sh          bash-commands
        │    ├─ completions/*.bash
        │    └─ aliases + complete registrations
-       ├─ bashrc.d/prompt-core.sh    command timer, window title
-       ├─ bashrc.d/prompt-local.sh   bash-git-prompt wiring
        ├─ ssh-prompt.sh              sshp
-       └─ local.sh                   optional, untracked
+       ├─ local.sh                   optional, untracked; selects prompt backend
+       └─ one local prompt backend
+            ├─ starship.toml + starship init bash
+            ├─ bashrc.d/prompt-local.sh   bash-git-prompt wiring
+            └─ bashrc.d/prompt-gruvbox.sh pure-Bash Gruvbox Powerline
 ```
 
 `bashrc.sh` guards on `[[ $- == *i* ]]`, so non-interactive shells (scripts,
 `scp`, `rsync`) exit the file immediately.
+
+`local.sh` is deliberately sourced before the local prompt backend. Its
+`BASH_PROMPT_BACKEND` value chooses `starship`, `bash-git-prompt`, `gruvbox`, or
+`auto`; only the selected backend is initialized in a fresh shell.
 
 `sshp()` is defined in exactly one place, `ssh-prompt.sh`. It starts with
 `unalias sshp`, because aliases are expanded before function lookup and would
@@ -37,9 +44,9 @@ matter there, since `complete -F` only stores a function name.
 
 ## `PROMPT_COMMAND` composition
 
-Both prompt modules must interleave with `bash-git-prompt` and with each other,
-and both handle the string form and the Bash 5.1 array form of
-`PROMPT_COMMAND`.
+The shell prompt backends interleave with the shared history hook, and both
+handle the string form and the Bash 5.1 array form of `PROMPT_COMMAND`. Starship
+uses its own Bash initialization and is never combined with either shell prompt.
 
 **Local** (`prompt-local.sh`), built in three steps:
 

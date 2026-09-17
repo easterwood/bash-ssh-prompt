@@ -58,8 +58,31 @@ not be committed belongs in `local.sh` instead:
 cp local.sh.example local.sh
 ```
 
-`local.sh` is loaded last, is optional, and is listed in `.gitignore` together
-with `*.bak`, `*.backup`, `.idea` and `*.iml`.
+`local.sh` is optional and is listed in `.gitignore` together with `*.bak`,
+`*.backup`, `.idea` and `*.iml`. It is loaded after the common modules and just
+before the local prompt backend is initialized, so it can select the prompt.
+
+For example:
+
+```bash
+BASH_PROMPT_BACKEND=starship
+# BASH_PROMPT_BACKEND=bash-git-prompt
+# BASH_PROMPT_BACKEND=gruvbox
+# BASH_PROMPT_BACKEND=auto
+```
+
+Open a new shell after changing the backend.
+
+## Optional: Starship
+
+Install `starship` and select it in `local.sh`:
+
+```bash
+BASH_PROMPT_BACKEND=starship
+```
+
+The configuration sets `STARSHIP_CONFIG` to the versioned `starship.toml`
+unless you already set `STARSHIP_CONFIG` yourself.
 
 ## Optional: bash-git-prompt
 

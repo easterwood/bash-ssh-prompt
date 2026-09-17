@@ -16,7 +16,7 @@ every server you connect to — without installing anything there by hand.
 
 | Area | What you get |
 |---|---|
-| Prompt | Two-line prompt, exit code, command duration, cwd, terminal window title, optional `bash-git-prompt` integration |
+| Prompt | Selectable local backend: Starship, `bash-git-prompt`, or the pure-Bash Gruvbox Powerline; exit code, duration, cwd and window title |
 | Remote prompt | The same prompt on remote hosts, pushed automatically by `sshp` |
 | Listing | `ll` — GNU `ls` output reformatted with aligned columns, no group column, colour-coded owner |
 | History | Large history with timestamps, written after every command instead of only on exit, and kept free of duplicates |
@@ -36,6 +36,7 @@ every server you connect to — without installing anything there by hand.
 - GNU coreutils (`ls`, `date`, `mktemp`, `cksum`) and an `awk`
 - OpenSSH client: `ssh`, `ssh-keygen`, `ssh-keyscan`
 - `tar` and `gzip` for `sshp`
+- Optional: [Starship](https://starship.rs/) for the versioned `starship.toml` backend
 - Optional: [`bash-git-prompt`](https://github.com/magicmonty/bash-git-prompt)
   checked out at `~/.bash-git-prompt`
 - Optional, for reverse DNS: `getent`, `dig`, `host`, `nslookup` or
@@ -71,6 +72,22 @@ source "$BASH_CONFIG_ROOT/bashrc.sh"
 
 Because the loader references the checkout by absolute path, moving the
 repository means re-running `install.sh`.
+
+### Choose the local prompt
+
+Set `BASH_PROMPT_BACKEND` in the untracked `local.sh` and open a new shell:
+
+```bash
+BASH_PROMPT_BACKEND=starship         # versioned starship.toml
+BASH_PROMPT_BACKEND=bash-git-prompt  # bashrc.d/prompt-local.sh
+BASH_PROMPT_BACKEND=gruvbox          # bashrc.d/prompt-gruvbox.sh
+BASH_PROMPT_BACKEND=auto             # Starship if installed, otherwise Gruvbox
+```
+
+`prompt-local` is accepted as an alias for `bash-git-prompt`; `prompt-gruvbox`
+and `prompt-gruvbox.sh` are aliases for `gruvbox`. An explicitly selected
+backend that is not installed falls back to the pure-Bash Gruvbox prompt with a
+warning.
 
 **Before you use it for real**, edit `bashrc.d/environment.sh`. As shipped it
 contains one developer's hard-coded Windows paths for the JDK, JMeter, the
@@ -113,7 +130,8 @@ connections: one to sync, one to log in. Unchanged calls open just one.
 install.sh                 Installs the ~/.bashrc loader, with backup
 bashrc.sh                  Entry point: loads every module in order
 bashrc.snippet.sh          Reference snippet for manual setup (legacy)
-local.sh.example           Template for untracked machine-local settings
+local.sh.example           Template for untracked settings and prompt selection
+starship.toml              Versioned Gruvbox Starship theme
 prompt.sh                  Prompt used on remote hosts (synced by sshp)
 ssh-prompt.sh              sshp: prompt sync + login
 .git-prompt-colors.sh      Custom theme for bash-git-prompt
@@ -124,6 +142,7 @@ bashrc.d/
   listing.sh               Shared ll implementation
   prompt-core.sh           Command timer and window title (local + remote)
   prompt-local.sh          bash-git-prompt wiring for local shells
+  prompt-gruvbox.sh        Pure-Bash Gruvbox Powerline prompt
   ssh-tools.sh             Loader for the SSH helpers, aliases, completion
   commands.sh              bash-commands: overview of all provided commands
   lib/
@@ -141,6 +160,8 @@ tests/
   history.sh               History deduplication and writing
   listing.sh               ll formatting
   prompt-core.sh           Command timer and window title
+  prompt-gruvbox.sh        Gruvbox prompt regression test
+  prompt-selection.sh      local.sh backend selector regression test
   ssh-config.sh            Config scanner, Include, direct vs inherited users
   known-hosts.sh           known-hosts parser and process count
   known-hosts-clean.sh     known-hosts --clean, dry run and --apply
@@ -170,7 +191,7 @@ edges.
 ## Testing
 
 ```bash
-bash tests/run-all.sh       # the whole suite: 12 scripts, 295 checks
+bash tests/run-all.sh       # the whole suite
 bash tests/history.sh       # or a single script
 bash-commands --check       # every documented command is really defined
 ```

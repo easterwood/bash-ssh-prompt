@@ -10,7 +10,8 @@ for file in \
     bashrc.sh prompt.sh ssh-prompt.sh .git-prompt-colors.sh \
     bashrc.d/environment.sh bashrc.d/history.sh bashrc.d/listing.sh \
     bashrc.d/ssh-tools.sh bashrc.d/commands.sh \
-    bashrc.d/prompt-core.sh bashrc.d/prompt-local.sh; do
+    bashrc.d/prompt-core.sh bashrc.d/prompt-local.sh \
+    bashrc.d/prompt-gruvbox.sh; do
     bash -n "$config_root/$file"
 done
 

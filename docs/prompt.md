@@ -1,18 +1,36 @@
 # Prompt, timer and listing
 
-Three files carry the shell experience, and two of them are shared between local
-and remote shells:
+The prompt-related files are split between shared timer/listing code, selectable
+local backends, and the separately synced remote prompt:
 
 | File | Loaded locally | Synced to remote hosts |
 |---|---|---|
 | `bashrc.d/prompt-core.sh` | yes | yes |
 | `bashrc.d/listing.sh` | yes | yes |
-| `bashrc.d/prompt-local.sh` | yes | no |
+| `bashrc.d/prompt-local.sh` | selectable | no |
+| `bashrc.d/prompt-gruvbox.sh` | selectable | no |
+| `starship.toml` | selectable | no |
 | `prompt.sh` | no | yes |
 
 The split exists so the timer and `ll` are defined exactly once. `prompt.sh`
 sources the two shared files relative to its own directory rather than
 duplicating them.
+
+## Selecting the local prompt
+
+`bashrc.sh` reads `BASH_PROMPT_BACKEND` after sourcing `local.sh`. Supported
+values are:
+
+| Value | Backend |
+|---|---|
+| `starship` | `starship init bash` with the versioned `starship.toml` |
+| `bash-git-prompt` | `bashrc.d/prompt-local.sh` and `~/.bash-git-prompt/gitprompt.sh` |
+| `gruvbox` | `bashrc.d/prompt-gruvbox.sh` |
+| `auto` | Starship when installed, otherwise Gruvbox |
+
+Aliases `prompt-local`/`git` and `prompt-gruvbox`/`prompt-gruvbox.sh` are also
+accepted. Set one value in `local.sh` and open a new shell. An unavailable
+explicit external backend falls back to Gruvbox with a warning.
 
 ## Command timer — `bashrc.d/prompt-core.sh`
 
@@ -282,11 +300,11 @@ timestamp never ends up in `__cmd_last_command`.
 
 ## Gruvbox Rainbow prompt — `bashrc.d/prompt-gruvbox.sh`
 
-An alternative to `prompt-local.sh` that reproduces the look of starship's
+A selectable alternative to `prompt-local.sh` that reproduces the look of starship's
 [Gruvbox Rainbow preset](https://starship.rs/presets/gruvbox-rainbow) in pure
 Bash. It replaces `bash-git-prompt` rather than theming it, and reuses the
-timer from `prompt-core.sh` unchanged. Which of the two is active is decided by
-a single `source` line in `bashrc.sh`.
+timer from `prompt-core.sh` unchanged. Select it with
+`BASH_PROMPT_BACKEND=gruvbox` in `local.sh`.
 
 ### Segments
 
@@ -302,8 +320,10 @@ powerline glyphs `U+E0B6`, `U+E0B0` and `U+E0B4`. Left to right:
 | Docker context | grey | a context outside `PROMPT_GRUVBOX_DOCKER_HIDE` is selected |
 | Exit code, duration, clock | dark grey | on a failure, a slow command, or always for the clock |
 
-The second line carries only the input symbol: green `❯`, red `❯` after a
-failure, red `#` for root.
+The prompt is split across three terminal lines. The first powerline line ends
+after the working directory. The second line carries Git, toolchain, Docker,
+status/duration and the clock. The third line carries only the input symbol:
+green `❯`, red `❯` after a failure, red `#` for root.
 
 Git markers are `=n` conflicts, `+n` staged, `!n` unstaged, `?n` untracked,
 `*n` stashes, `⇡n` ahead, `⇣n` behind.
@@ -374,7 +394,7 @@ All of these can be set in `local.sh`:
 | `PROMPT_GRUVBOX_POM_MAX_LINES` | `500` | Give up on `pom.xml` after this many lines |
 | `PROMPT_GRUVBOX_DOCKER_HIDE` | `default desktop-linux desktop-windows` | Docker contexts that do not earn a segment |
 | `PROMPT_GRUVBOX_POWERLINE` | `1` | `0` falls back to ASCII separators without a Nerd Font |
-| `PROMPT_GRUVBOX_TIME_ON_INPUT_LINE` | `0` | `1` puts the clock in front of `❯`, as the old Custom theme did |
+| `PROMPT_GRUVBOX_TIME_ON_INPUT_LINE` | `0` | `1` moves the clock from powerline line two in front of `❯` on line three |
 | `PROMPT_DIRTRIM` | `3` | Path components kept by Bash before truncating |
 
 ### Requirements
@@ -387,3 +407,37 @@ written as `$'\uXXXX'` and Bash converts those using the current locale.
 
 Unaffected. `prompt.sh` stays the prompt that `sshp` pushes to remote hosts; it
 has no dependency on this module and assumes nothing about the remote font.
+
+## Starship Gruvbox prompt
+
+Select Starship with `BASH_PROMPT_BACKEND=starship` in `local.sh`. `bashrc.sh`
+then uses the versioned `starship.toml` instead of sourcing either shell prompt.
+`BASH_PROMPT_BACKEND=auto` chooses Starship when it is installed and Gruvbox
+otherwise. An explicit Starship selection also falls back to Gruvbox if the
+executable is missing.
+
+The Starship layout is three lines:
+
+```
+OS + user | directory | Git | toolchain/project | Docker
+time + duration/status
+❯
+```
+
+The Gruvbox RGB palette and Nerd Font glyphs match `prompt-gruvbox.sh`. Project
+context now lives on the first row with the user and working directory. After
+the orange identity segment, the row uses one stable dark-grey `bg1` band:
+the directory is yellow, Git is aqua, toolchain/project is bright blue and
+Docker keeps its grey/blue accent. Git, toolchain/project and Docker are
+conditional groups whose accent-coloured `` is part of the group, so an empty
+module removes its separator as well. This keeps the configuration entirely in
+`starship.toml` without neighbour-detection helpers or doubled arrows.
+
+The second row contains only the always-visible clock plus optional command
+duration and failure status on `bg1`. It therefore has a fixed `` left cap and
+one `` right cap regardless of which optional timing/status modules are shown.
+
+Starship's `cmd_duration` replaces the custom DEBUG-trap timer while Starship is
+active. Do not source `prompt-gruvbox.sh` after `starship init bash`, because
+Starship documents that a later Bash DEBUG trap breaks its command-duration
+module.

@@ -2,3 +2,10 @@
 
 # Optional, untracked settings or secrets.
 # Copy this file to local.sh if you need it.
+
+# Local prompt backend:
+#   starship         versioned starship.toml
+#   bash-git-prompt  bashrc.d/prompt-local.sh + ~/.bash-git-prompt
+#   gruvbox          bashrc.d/prompt-gruvbox.sh
+#   auto             Starship if installed, otherwise Gruvbox
+BASH_PROMPT_BACKEND=auto

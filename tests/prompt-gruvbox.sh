@@ -211,9 +211,17 @@ __cmd_elapsed_us=0
 __gb_build
 
 rendered=$(visible)
-assert_contains 'the path escape survives' "$rendered" '\w'
-assert_contains 'the user escape survives' "$rendered" '\u'
-assert_contains 'the prompt breaks before the input symbol' "$rendered" '\n'
+first_line=${rendered%%\\n*}
+after_first=${rendered#*\\n}
+second_line=${after_first%%\\n*}
+third_line=${after_first#*\\n}
+
+assert_contains 'the path escape survives on line one' "$first_line" '\w'
+assert_contains 'the user escape survives on line one' "$first_line" '\u'
+assert_not_contains 'the clock is not on line one' "$first_line" '\A'
+assert_contains 'the clock is on the second powerline line' "$second_line" '\A'
+assert_not_contains 'the path is not repeated on line two' "$second_line" '\w'
+assert_not_contains 'the input line has no path segment' "$third_line" '\w'
 
 # root gets '#', everyone else the arrow, so the test derives the expectation
 # instead of assuming who runs it.
@@ -223,7 +231,7 @@ else
     expected_symbol=$'\u276f'
 fi
 assert_contains 'a successful prompt ends in the input symbol' \
-    "$rendered" "$expected_symbol"
+    "$third_line" "$expected_symbol"
 assert_not_contains 'no error marker on success' "$rendered" $'\u2718'
 
 __cmd_last_exit=42

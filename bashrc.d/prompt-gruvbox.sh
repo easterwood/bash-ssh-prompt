@@ -431,11 +431,6 @@ __gb_build() {
     #     never passes through an expansion of ours.
     __gb_add yellow fg0 ' \w '
 
-    # The first powerline line ends with the working directory. The remaining
-    # segments start a fresh powerline band on line two.
-    __gb_close
-    __gb_ps1+='\n'
-
     # 3 - git, aqua.
     if __gb_git_segment; then
         __gb_add aqua fg0 " ${REPLY} "
@@ -472,15 +467,20 @@ __gb_build() {
         __gb_add bg3 blue_bright " ${__gb_icon_docker} ${REPLY} "
     fi
 
+    # The first powerline line ends with the working directory. The remaining
+    # segments start a fresh powerline band on line two.
+    __gb_close
+    __gb_ps1+='\n'
+
     # 6 - exit code, duration and clock, dark grey.
-    if (( rc != 0 )); then
-        tail+=" ${__gb_fg[red]}${__gb_icon_error} ${rc}${__gb_fg[fg0]}"
-    fi
     if [[ -n $duration ]] && (( rc != 0 || elapsed >= PROMPT_GRUVBOX_MIN_DURATION_US )); then
         tail+=" ${__gb_icon_duration} ${duration}"
     fi
     if (( ! PROMPT_GRUVBOX_TIME_ON_INPUT_LINE )); then
         tail+=" ${__gb_icon_clock} \\A"
+    fi
+    if (( rc != 0 )); then
+        tail+=" ${__gb_fg[red]}${__gb_icon_error} ${rc}${__gb_fg[fg0]}"
     fi
     [[ -z $tail ]] || __gb_add bg1 fg0 "${tail} "
 
