@@ -102,9 +102,10 @@ __history_append() {
     return 0
 }
 
-# history.sh is sourced before the prompt files, so prompt-local.sh keeps this
-# entry when it wraps PROMPT_COMMAND around the command timer.
-if [[ $(declare -p PROMPT_COMMAND 2>/dev/null) == 'declare -a'* ]]; then
+# prompt-core.sh is sourced before this file and provides
+# __prompt_command_is_array, which replaces the forking
+# $(declare -p PROMPT_COMMAND) test.
+if __prompt_command_is_array; then
     PROMPT_COMMAND+=(__history_append)
 else
     PROMPT_COMMAND="${PROMPT_COMMAND:+${PROMPT_COMMAND%;};}__history_append"

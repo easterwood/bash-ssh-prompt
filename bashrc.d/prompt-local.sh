@@ -14,23 +14,52 @@ prompt_callback() {
 }
 
 # The timer has to run before bash-git-prompt.
-if [[ $(declare -p PROMPT_COMMAND 2>/dev/null) == 'declare -a'* ]]; then
+if __prompt_command_is_array; then
     PROMPT_COMMAND=(__cmd_timer_stop "${PROMPT_COMMAND[@]}")
 else
     PROMPT_COMMAND="__cmd_timer_stop${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
 fi
+
+# ---------------------------------------------------------------------------
+# bash-git-prompt
+#
+# These variables have to be set BEFORE gitprompt.sh is sourced, otherwise the
+# defaults win. Each one removes Git calls or forks from every single prompt,
+# and under MSYS2 a fork costs 15-25 ms.
+# ---------------------------------------------------------------------------
 
 GIT_PROMPT_ONLY_IN_REPO=0
 GIT_PROMPT_THEME=Custom
 GIT_PROMPT_SHOW_UPSTREAM=1
 GIT_PROMPT_THEME_FILE="$BASH_CONFIG_ROOT/.git-prompt-colors.sh"
 
+# The biggest win. Without it bash-git-prompt checks the remote behind the
+# prompt, which means the prompt waits for the network whenever the remote is
+# slow or unreachable (VPN down, proxy, laptop offline). The up/down arrows
+# then only reflect the last explicit fetch, which is the usual trade.
+GIT_PROMPT_FETCH_REMOTE_STATUS=1
+
+# "git status --untracked-files=no" does not walk untracked directories.
+# node_modules, target/ and build/ alone can cost hundreds of milliseconds.
+# The price is that the "…n" untracked marker disappears from the prompt; set
+# this to "normal" if you would rather keep it.
+GIT_PROMPT_SHOW_UNTRACKED_FILES=normal
+
+# No extra Git call per submodule.
+GIT_PROMPT_IGNORE_SUBMODULES=0
+
+# No node/python/conda environment detection per prompt.
+GIT_PROMPT_WITH_VIRTUAL_ENV=0
+
+# No counting of changed files.
+GIT_PROMPT_SHOW_CHANGED_FILES_COUNT=1
+
 if [[ -r "$HOME/.bash-git-prompt/gitprompt.sh" ]]; then
     source "$HOME/.bash-git-prompt/gitprompt.sh"
 fi
 
 # Arm the DEBUG hook as the last prompt action.
-if [[ $(declare -p PROMPT_COMMAND 2>/dev/null) == 'declare -a'* ]]; then
+if __prompt_command_is_array; then
     PROMPT_COMMAND+=(__cmd_timer_arm)
 else
     PROMPT_COMMAND="${PROMPT_COMMAND%;};__cmd_timer_arm"

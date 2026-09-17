@@ -1,5 +1,20 @@
 #!/usr/bin/env bash
 
+# Fork-free test for an array-valued PROMPT_COMMAND.
+#
+# The previous test was $(declare -p PROMPT_COMMAND), and a command
+# substitution forks. Under MSYS2/Cygwin a fork costs 15-25 ms because Windows
+# has no fork() and Cygwin emulates it with CreateProcess plus a memory image.
+# The test ran four times across the startup files, so this alone saves about
+# 60 ms per shell start.
+#
+# PROMPT_COMMAND can only be an array from Bash 5.1 on, so on older shells the
+# answer is always "no" and the ${var@a} expansion is never reached.
+__prompt_command_is_array() {
+    ((BASH_VERSINFO[0] > 5 || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] >= 1))) &&
+        [[ ${PROMPT_COMMAND@a} == *a* ]]
+}
+
 __cmd_timer_now_us() {
     local t sec usec
     if [[ -n ${EPOCHREALTIME-} ]]; then

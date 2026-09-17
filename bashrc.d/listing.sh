@@ -2,18 +2,23 @@
 
 export TIME_STYLE='+%Y-%m-%d %H:%M:%S'
 
+# The user name cannot change within a shell session, so it is resolved once at
+# load time. It used to be ${USER:-$(id -un)} inside ll(). Git Bash leaves USER
+# empty and sets USERNAME instead, so the fallback fired on every single call:
+# the fork alone cost 26 ms, id itself another 17 ms.
+__listing_user=${USER:-${LOGNAME:-${USERNAME:-}}}
+[[ -n $__listing_user ]] || __listing_user=$(id -un 2>/dev/null) || __listing_user=''
+__listing_user=${__listing_user%%@*}
+
 unalias ll 2>/dev/null
 ll() {
-    local current_user=${USER:-$(id -un)}
-    current_user=${current_user%%@*}
-
     command ls \
         -oah \
         --color=always \
         --group-directories-first \
         --time-style='+%Y-%m-%d %H:%M:%S' \
         "$@" |
-    awk -v current_user="$current_user" '
+    awk -v current_user="$__listing_user" '
         BEGIN {
             reset   = "\033[0m"
             dim     = "\033[2m"

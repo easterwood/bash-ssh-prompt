@@ -52,7 +52,8 @@ __remote_prompt_build() {
     PS1+="${first_line}${status}\n\t ${symbol_color}${symbol}\[\e[0m\] "
 }
 
-if [[ $(declare -p PROMPT_COMMAND 2>/dev/null) == 'declare -a'* ]]; then
+# __prompt_command_is_array comes from prompt-core.sh, which is sourced above.
+if __prompt_command_is_array; then
     PROMPT_COMMAND=(__cmd_timer_stop __remote_prompt_build __cmd_timer_arm)
 else
     PROMPT_COMMAND='__cmd_timer_stop;__remote_prompt_build;__cmd_timer_arm'
