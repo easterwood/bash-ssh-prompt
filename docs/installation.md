@@ -125,7 +125,8 @@ git pull
 source ~/.bashrc
 ```
 
-If `prompt.sh`, `bashrc.d/listing.sh` or `bashrc.d/prompt-core.sh` changed, the
+If `prompt.sh`, `bashrc.d/listing.sh`, `bashrc.d/prompt-core.sh` or
+`bashrc.d/prompt-gruvbox.sh` changed, the
 next `sshp`/`ssh` to each host will re-sync automatically, because the sync
 signature no longer matches the stored state. You do not need to clear anything
 by hand — but `sshp --force HOST` will re-sync unconditionally.
@@ -157,6 +158,7 @@ The first successful sync to a host makes these changes in the remote `$HOME`:
 | `~/.cache/ssh-prompt/prompt.sh` | The synced remote prompt |
 | `~/.cache/ssh-prompt/bashrc.d/listing.sh` | Shared `ll` |
 | `~/.cache/ssh-prompt/bashrc.d/prompt-core.sh` | Shared command timer |
+| `~/.cache/ssh-prompt/bashrc.d/prompt-gruvbox.sh` | Shared powerline prompt (Git segment off on remote hosts) |
 | `~/.bashrc` | Gains a marked loader block (see below) |
 | `~/.bashrc.before-sshp` | One-time backup, created only if `~/.bashrc` existed |
 | `~/.hushlogin` | Created (empty) to suppress the MOTD/last-login banner |

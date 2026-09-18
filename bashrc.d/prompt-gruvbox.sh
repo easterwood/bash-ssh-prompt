@@ -49,6 +49,25 @@
 # of into the second powerline line, the way the old Custom theme did it.
 : "${PROMPT_GRUVBOX_TIME_ON_INPUT_LINE:=0}"
 
+# Repeat the command that produced the current prompt in the second powerline
+# line, between the duration and the exit code. Local and remote shells show it
+# alike; prompt.sh seeds this from SSH_PROMPT_SHOW_COMMAND before sourcing, so
+# that knob still switches it off over SSH.
+: "${PROMPT_GRUVBOX_SHOW_COMMAND:=1}"
+
+# Truncate that repetition to this many characters.
+: "${PROMPT_GRUVBOX_COMMAND_MAX_LEN:=60}"
+
+# Show the host name next to the user. Only useful when the shell is not the
+# local one, so it follows SSH_CONNECTION by default.
+if [[ -z ${PROMPT_GRUVBOX_SHOW_HOST-} ]]; then
+    if [[ -n ${SSH_CONNECTION-} ]]; then
+        PROMPT_GRUVBOX_SHOW_HOST=1
+    else
+        PROMPT_GRUVBOX_SHOW_HOST=0
+    fi
+fi
+
 # Truncate the path to this many components. Bash does this natively.
 PROMPT_DIRTRIM=${PROMPT_DIRTRIM:-3}
 
@@ -122,15 +141,8 @@ esac
 
 # --- helpers ----------------------------------------------------------------
 
-# Dynamic text lands in PS1, which bash expands. A branch called '$(id)' would
-# otherwise run. Escape the three characters that matter.
-__gb_quote() {
-    local s=$1
-    s=${s//\\/\\\\}
-    s=${s//\$/\\\$}
-    s=${s//\`/\\\`}
-    REPLY=$s
-}
+# Quoting and the last-command text come from prompt-core.sh, which both this
+# module and prompt-local.sh sit on top of.
 
 # Walk up from $PWD looking for a file or directory. No forks - "[[ -e ]]" is
 # a builtin, so this is a handful of stat() calls.
@@ -218,7 +230,7 @@ __gb_git_segment() {
     if [[ $branch == '(detached)' || -z $branch ]]; then
         branch="${__gb_icon_detached} ${oid:0:7}"
     else
-        __gb_quote "$branch"
+        __prompt_quote "$branch"
         branch="${__gb_icon_branch} ${REPLY}"
     fi
 
@@ -424,8 +436,13 @@ __gb_build() {
 
     __gb_open
 
-    # 1 - operating system and user, orange.
-    __gb_add orange fg0 " ${__gb_icon_os} \\u "
+    # 1 - operating system and user, orange. \u and \h are bash prompt escapes,
+    #     so neither passes through an expansion of ours.
+    if (( PROMPT_GRUVBOX_SHOW_HOST )); then
+        __gb_add orange fg0 " ${__gb_icon_os} \\u@\\h "
+    else
+        __gb_add orange fg0 " ${__gb_icon_os} \\u "
+    fi
 
     # 2 - working directory, yellow. \w is a bash prompt escape, so the path
     #     never passes through an expansion of ours.
@@ -444,7 +461,7 @@ __gb_build() {
             __gb_add blue fg0 " ${__gb_icon_java} ${REPLY} "
         fi
         if __gb_maven_version "$pom"; then
-            __gb_quote "$REPLY"
+            __prompt_quote "$REPLY"
             __gb_add blue fg0 " ${__gb_icon_package} ${REPLY} "
         fi
     elif __gb_find_up build.gradle || __gb_find_up build.gradle.kts; then
@@ -463,7 +480,7 @@ __gb_build() {
 
     # 5 - docker context, grey.
     if __gb_docker_context; then
-        __gb_quote "$REPLY"
+        __prompt_quote "$REPLY"
         __gb_add bg3 blue_bright " ${__gb_icon_docker} ${REPLY} "
     fi
 
@@ -478,6 +495,10 @@ __gb_build() {
     fi
     if [[ -n $duration ]] && (( rc != 0 || elapsed >= PROMPT_GRUVBOX_MIN_DURATION_US )); then
         tail+=" ${__gb_icon_duration} ${duration}"
+    fi
+    if (( PROMPT_GRUVBOX_SHOW_COMMAND )) &&
+        __prompt_last_command "$PROMPT_GRUVBOX_COMMAND_MAX_LEN"; then
+        tail+=" ${__gb_fg[blue_bright]}${REPLY}${__gb_fg[fg0]}"
     fi
     if (( rc != 0 )); then
         tail+=" ${__gb_fg[red]}${__gb_icon_error} ${rc}${__gb_fg[fg0]}"

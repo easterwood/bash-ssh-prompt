@@ -128,6 +128,7 @@ degrades gracefully to a one-line note if no `ssh` is in `PATH`.
 prompt.sh
 bashrc.d/listing.sh
 bashrc.d/prompt-core.sh
+bashrc.d/prompt-gruvbox.sh
 ```
 
 Before anything is transferred, each file must exist, be readable, and pass
@@ -137,7 +138,7 @@ to a server.
 ## How change detection works
 
 1. A **signature** is computed locally: the literal format tag
-   `sshp-sync-format=4`, then for each file its relative path and its `cksum`
+   `sshp-sync-format=5`, then for each file its relative path and its `cksum`
    output, all piped through `cksum` again. Bumping the format tag in a future
    version therefore invalidates every stored state at once.
 2. The destination string is hashed with `cksum` to derive a state filename:
@@ -155,7 +156,7 @@ resolve to the same machine.
 
 ## The transfer
 
-The three files are packed with `tar -czf` into a `mktemp` archive, removed
+The four files are packed with `tar -czf` into a `mktemp` archive, removed
 again by an `EXIT` trap, and streamed on standard input to:
 
 ```bash
@@ -182,7 +183,7 @@ Read from the heredoc `REMOTE` in `ssh-prompt.sh`, it runs under `set -eu` and:
 2. Sets `umask 077`.
 3. Creates `~/.hushlogin` to silence the login banner on subsequent connections.
 4. Extracts the archive into `~/.cache/ssh-prompt` with `tar --no-same-owner`.
-5. Syntax-checks all three extracted files.
+5. Syntax-checks all four extracted files.
 6. If `~/.bashrc` does not already contain the start marker
    `# >>> sshp managed prompt >>>`, it backs the file up **once** to
    `~/.bashrc.before-sshp` (only if no backup exists yet), builds the new

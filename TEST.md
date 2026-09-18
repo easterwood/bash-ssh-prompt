@@ -51,7 +51,8 @@ line per script, and returns `1` if any of them failed.
 | `tests/install.sh` | 21 | Generated loader, backup of an existing `~/.bashrc`, `printf %q` quoting of a path with spaces, the `bash -n` gate, and `bashrc.sh` staying inert non-interactively |
 | `tests/history.sh` | 17 | `history_dedupe` on timestamped, multi-line and timestamp-less files, the live rewrite, and `HISTORY_DEDUPE_LIVE=0` end to end |
 | `tests/listing.sh` | 17 | `ll`: header, dropped `ls` summary line, hidden files, names with spaces, option pass-through. Skipped without GNU `ls` |
-| `tests/prompt-core.sh` | 22 | Clock, duration formatting across all five ranges, exit-code capture, control-character escaping in the window title |
+| `tests/prompt-core.sh` | 31 | Clock, duration formatting across all five ranges, exit-code capture, the shared `__prompt_quote`/`__prompt_last_command` helpers, control-character escaping in the window title |
+| `tests/prompt-local.sh` | 15 | `prompt_callback`: order of duration, last command and exit code, quoting, and the two repetition knobs |
 | `tests/ssh-config.sh` | 22 | Alias collection, skipped wildcards, quotes, `Include` with glob and `~/`, direct versus inherited users |
 | `tests/known-hosts.sh` | 13 | Parser, filter, hashed and marker entries, rejected option combinations, and the number of processes the rendering spawns |
 | `tests/known-hosts-clean.sh` | 39 | `known-hosts --clean`: dry run, `--apply` with backups, rejected combinations, the removed `known-hosts-clean` alias, completion |
@@ -85,6 +86,7 @@ The following files were checked individually with `bash -n`:
 - `bashrc.d/ssh-tools.sh`
 - `bashrc.d/prompt-core.sh`
 - `bashrc.d/prompt-local.sh`
+- `bashrc.d/prompt-gruvbox.sh`
 
 Result: no syntax errors.
 
@@ -142,7 +144,8 @@ Result: passed.
 
 Checked:
 
-- `prompt-core.sh` and `listing.sh` are found relative to `prompt.sh`;
+- `prompt-core.sh`, `listing.sh` and `prompt-gruvbox.sh` are found relative to
+  `prompt.sh`;
 - the remote prompt builder is installed;
 - the shared `ll` function is available;
 - `ll` can render a file without errors;
@@ -172,7 +175,8 @@ Checked:
 
 - the first call creates one sync and one login connection;
 - without a local change, the second call creates only the login connection;
-- `prompt.sh`, `listing.sh` and `prompt-core.sh` are transferred;
+- `prompt.sh`, `listing.sh`, `prompt-core.sh` and `prompt-gruvbox.sh` are
+  transferred;
 - the loader is written to the remote `.bashrc` exactly once;
 - the local sync state is only stored after a successful transfer.
 

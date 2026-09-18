@@ -165,6 +165,7 @@ sshp() (
         prompt.sh
         bashrc.d/listing.sh
         bashrc.d/prompt-core.sh
+        bashrc.d/prompt-gruvbox.sh
     )
 
     for file in "${sync_files[@]}"; do
@@ -182,7 +183,7 @@ sshp() (
 
     signature=$(
         {
-            printf '%s\n' 'sshp-sync-format=4'
+            printf '%s\n' 'sshp-sync-format=5'
             for file in "${sync_files[@]}"; do
                 printf '%s\n' "$file"
                 cksum "$config_root/$file"
@@ -226,6 +227,7 @@ tar --no-same-owner -xzf - -C "$prompt_dir"
 bash -n "$prompt_dir/prompt.sh"
 bash -n "$prompt_dir/bashrc.d/listing.sh"
 bash -n "$prompt_dir/bashrc.d/prompt-core.sh"
+bash -n "$prompt_dir/bashrc.d/prompt-gruvbox.sh"
 
 if ! { test -f "$bashrc" && grep -Fqx "$start_marker" "$bashrc"; }; then
     if test -f "$bashrc" && ! test -e "$backup"; then

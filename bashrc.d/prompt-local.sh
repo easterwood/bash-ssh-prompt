@@ -1,15 +1,30 @@
 #!/usr/bin/env bash
 
+# Repeat the command that produced the current prompt, like the gruvbox and the
+# remote prompt do. Text and truncation come from prompt-core.sh, so all three
+# prompts show the same thing.
+: "${PROMPT_LOCAL_SHOW_COMMAND:=1}"
+: "${PROMPT_LOCAL_COMMAND_MAX_LEN:=60}"
+
+# Same order as the gruvbox prompt: duration, last command, exit code.
 prompt_callback() {
     local rc=${__cmd_last_exit:-0}
     local duration=${__cmd_duration:-}
     local elapsed_us=${__cmd_elapsed_us:-0}
 
     if (( rc != 0 )); then
-        printf '  %s✗ %d%s' "$Red" "$rc" "$ResetColor"
-        [[ -z $duration ]] || printf ' · %s' "$duration"
+        [[ -z $duration ]] || printf '  %s' "$duration"
     elif (( elapsed_us >= 100000 )); then
         printf '  %s%s%s' "$Green" "$duration" "$ResetColor"
+    fi
+
+    if (( PROMPT_LOCAL_SHOW_COMMAND )) &&
+        __prompt_last_command "$PROMPT_LOCAL_COMMAND_MAX_LEN"; then
+        printf '  %s%s%s' "${BoldBlue-}" "$REPLY" "${ResetColor-}"
+    fi
+
+    if (( rc != 0 )); then
+        printf '  %s✗ %d%s' "$Red" "$rc" "$ResetColor"
     fi
 }
 

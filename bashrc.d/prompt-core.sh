@@ -28,6 +28,31 @@ __cmd_timer_now_us() {
     fi
 }
 
+# Dynamic text ends up in PS1, which bash expands. A branch called '$(id)' or a
+# repeated command carrying backticks would otherwise run. Escape the three
+# characters that matter. Both prompt modules use this.
+__prompt_quote() {
+    local s=$1
+    s=${s//\\/\\\\}
+    s=${s//\$/\\\$}
+    s=${s//\`/\\\`}
+    REPLY=$s
+}
+
+# The repetition of the last command, the way every prompt here shows it:
+# control characters folded into spaces, truncated to $1 characters (default
+# 60), PS1-safe in REPLY. Returns 1 when there is nothing to show.
+__prompt_last_command() {
+    local max=${1:-60} text=${__cmd_last_command-}
+
+    REPLY=''
+    [[ -n $text ]] || return 1
+
+    text=${text//[$'\n\r\t']/ }
+    (( ${#text} > max )) && text=${text:0:max-1}$'\u2026'
+    __prompt_quote "$text"
+}
+
 __cmd_set_window_title() {
     local cmd=$1 dir
     cmd=${cmd//$'\e'/}
@@ -49,7 +74,7 @@ __cmd_set_window_title() {
 __cmd_timer_debug() {
     local current_command=$BASH_COMMAND history_line cmd
     case "$current_command" in
-        setLastCommandState|__cmd_timer_stop|__remote_prompt_build|__cmd_timer_arm)
+        setLastCommandState|__cmd_timer_stop|__gb_build|__remote_prompt_build|__cmd_timer_arm)
             return
             ;;
     esac

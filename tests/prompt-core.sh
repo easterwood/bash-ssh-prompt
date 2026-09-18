@@ -69,6 +69,37 @@ true
 __cmd_timer_stop
 assert_equal 'no measurement without a start time' 'stale' "$__cmd_duration"
 
+# --- shared prompt text helpers --------------------------------------------
+
+__prompt_quote 'feature/$(id)'
+assert_equal 'command substitution is neutralised' 'feature/\$(id)' "$REPLY"
+
+__prompt_quote 'a`b`c'
+assert_equal 'backticks are neutralised' 'a\`b\`c' "$REPLY"
+
+__prompt_quote 'back\slash'
+assert_equal 'backslashes are doubled' 'back\\slash' "$REPLY"
+
+__cmd_last_command=''
+assert_status 'without a command there is nothing to show' 1 __prompt_last_command
+
+__cmd_last_command=$'git commit -m\tfix\nstatus'
+assert 'a command is formatted' __prompt_last_command 60
+assert_equal 'control characters become spaces' \
+    'git commit -m fix status' "$REPLY"
+
+__cmd_last_command='echo $(id)'
+__prompt_last_command 60
+assert_equal 'the repetition is PS1-safe' 'echo \$(id)' "$REPLY"
+
+# The ellipsis is written as $'\u2026' and therefore depends on the locale, so
+# the assertion looks at what is kept and what is dropped instead.
+__cmd_last_command='0123456789abcdef'
+__prompt_last_command 10
+assert_contains 'a long command keeps its head' "$REPLY" '012345678'
+assert_not_contains 'a long command drops its tail' "$REPLY" 'abcdef'
+unset __cmd_last_command
+
 # --- window title ----------------------------------------------------------
 
 # The title itself is an OSC sequence: ESC ] 0 ; TEXT BEL. Only TEXT may not
@@ -91,4 +122,4 @@ assert_contains 'the root directory shows as /' "$title" '/'
 title=$(cd "$HOME" && mkdir -p deep/dir && cd deep/dir && __cmd_set_window_title 'ls')
 assert_contains 'otherwise the basename is shown' "$title" 'dir'
 
-pass 'clock, duration formatting across all ranges, exit code, title escaping'
+pass 'clock, duration formatting across all ranges, exit code, shared text helpers, title escaping'

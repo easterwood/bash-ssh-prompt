@@ -65,7 +65,16 @@ Result, roughly: `__cmd_timer_stop` → `__history_append` →
 `setLastCommandState`/git prompt builder → `__cmd_timer_arm`. `prompt_callback` is not in `PROMPT_COMMAND` at all;
 `bash-git-prompt` calls it while assembling the prompt.
 
-**Remote** (`prompt.sh`) replaces `PROMPT_COMMAND` outright:
+**Remote** (`prompt.sh`) replaces `PROMPT_COMMAND` outright. It sources
+`prompt-gruvbox.sh` with `PROMPT_GRUVBOX_GIT=0`, so the remote prompt is the
+local powerline prompt minus the Git segment:
+
+```
+__cmd_timer_stop → __gb_build → __cmd_timer_arm
+```
+
+On a Bash older than 4.2 the associative arrays in `prompt-gruvbox.sh` are not
+available, and `prompt.sh` falls back to its own plain builder:
 
 ```
 __cmd_timer_stop → __remote_prompt_build → __cmd_timer_arm
@@ -81,6 +90,7 @@ keeps the trap from firing for each function call inside a pipeline.
 | Prefix | Meaning |
 |---|---|
 | `__cmd_*` | Command timer and window title |
+| `__prompt_*` | Shared prompt text helpers (quoting, last-command repetition) |
 | `__history_*` | History writing and duplicate detection |
 | `__remote_prompt_*` | Remote prompt only |
 | `__kh_scan_*` | Shared SSH-config scanner results |
@@ -363,7 +373,7 @@ free of local paths, Windows assumptions and `bash-git-prompt` dependencies.
 
 **Adding a file to the remote sync** — extend the `sync_files` array in
 `ssh-prompt.sh`, add a `bash -n` check for it in the remote heredoc, and bump
-`sshp-sync-format=4` so every stored state invalidates and all hosts re-sync.
+`sshp-sync-format=5` so every stored state invalidates and all hosts re-sync.
 
 **Adding an SSH helper** — put the function in `bashrc.d/lib/`, its completion
 in `bashrc.d/completions/`, then add the `source` lines, the alias and the
@@ -373,7 +383,9 @@ than re-implementing either. Finally add a row to the `rows` table in
 `bashrc.d/commands.sh` and the name to `bashrc.d/completions/commands.bash`,
 then confirm with `bash-commands --check`.
 
-**Changing the prompt** — the local prompt lives in `.git-prompt-colors.sh` and
-`prompt-local.sh`; the remote prompt in `prompt.sh`. Keep the timer variable
+**Changing the prompt** — the powerline prompt lives in `prompt-gruvbox.sh` and
+is shared by local and remote shells; `bash-git-prompt` theming lives in
+`.git-prompt-colors.sh` and `prompt-local.sh`; the remote wiring, the welcome
+banner and the pre-4.2 fallback live in `prompt.sh`. Keep the timer variable
 names (`__cmd_last_exit`, `__cmd_duration`, `__cmd_elapsed_us`) intact, since
 both prompts read them.

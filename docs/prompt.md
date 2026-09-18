@@ -8,7 +8,7 @@ local backends, and the separately synced remote prompt:
 | `bashrc.d/prompt-core.sh` | yes | yes |
 | `bashrc.d/listing.sh` | yes | yes |
 | `bashrc.d/prompt-local.sh` | selectable | no |
-| `bashrc.d/prompt-gruvbox.sh` | selectable | no |
+| `bashrc.d/prompt-gruvbox.sh` | selectable | yes |
 | `starship.toml` | selectable | no |
 | `prompt.sh` | no | yes |
 
@@ -65,6 +65,17 @@ It returns the original exit code, so it is safe as the first entry in
 **`__cmd_timer_arm`** re-applies the window title and re-arms the `DEBUG` trap.
 It must run **last** in `PROMPT_COMMAND`.
 
+Two more helpers live here because all three prompts need them:
+
+**`__prompt_quote`** escapes backslash, `$` and backtick in `REPLY`. Anything
+dynamic — a branch name, a Maven version, a repeated command — goes through it
+before it reaches `PS1`, which bash expands.
+
+**`__prompt_last_command`** returns the repetition of `__cmd_last_command` in
+`REPLY`: control characters folded into spaces, truncated to the length passed
+as `$1` (default 60) with `…`, quoted. It returns `1` when there is nothing to
+show, so the caller can use it directly as a condition.
+
 ### Window title
 
 `__cmd_set_window_title` emits an `OSC 0` sequence with the format
@@ -78,12 +89,21 @@ out of the title sequence.
 This module wires the timer into `bash-git-prompt` and adds a status segment.
 
 `prompt_callback` is the hook `bash-git-prompt` calls when building the prompt.
-It prints:
+It prints, in the same order the gruvbox prompt uses:
 
-- on a non-zero exit code: a red `✗ <code>`, plus ` · <duration>` if one was
-  measured;
-- otherwise, if the command took **100 ms or more**: the duration in green;
-- nothing at all for fast, successful commands.
+1. the **duration** — in green when the command succeeded and took **100 ms or
+   more**, plain after a failure, nothing for a fast successful command;
+2. the **last command** in light blue, unless `PROMPT_LOCAL_SHOW_COMMAND=0`;
+3. a red `✗ <code>` on a non-zero exit code.
+
+The repetition uses `__prompt_last_command` from `prompt-core.sh`, so it is the
+same text, the same truncation and the same `PS1` quoting as in the gruvbox and
+the remote prompt.
+
+| Variable | Default | Effect |
+|---|---|---|
+| `PROMPT_LOCAL_SHOW_COMMAND` | `1` | `0` drops the repetition of the last command |
+| `PROMPT_LOCAL_COMMAND_MAX_LEN` | `60` | Truncate that repetition, with `…` |
 
 Ordering is handled explicitly, and both the string and the Bash 5.1 array form
 of `PROMPT_COMMAND` are supported:
@@ -142,29 +162,45 @@ is suppressed on nested shells by the exported guard `SSHP_WELCOME_SHOWN`.
 
 ### Prompt layout
 
-`__remote_prompt_build` assembles `PS1` from up to three parts:
+`prompt.sh` sets the remote defaults and then sources `prompt-gruvbox.sh`:
+
+```bash
+PROMPT_GRUVBOX_GIT=0                                        # never on a remote host
+: "${PROMPT_GRUVBOX_SHOW_HOST:=1}"
+: "${PROMPT_GRUVBOX_SHOW_COMMAND:=$SSH_PROMPT_SHOW_COMMAND}"
+```
+
+The result is the local powerline prompt without the Git segment:
 
 ```
-letzter: git status --short          <- dim, optional
-[SSH web01] ~/projects/api  ✗ 1 · 312ms
-09:41:07 ❯
+ web01  ~/projects/api
+ 09:41  312ms  git status --short  ✗ 1
+❯
 ```
 
-- **Last-command line** — dim, prefixed `letzter:`. Controlled by
-  `SSH_PROMPT_SHOW_COMMAND`; set it to `0` before the prompt is built to hide
-  it.
-- **`[SSH <host>]`** in cyan, only when `SSH_CONNECTION` is set.
-- **Working directory** — `\w`, yellow for a normal user, red for root.
-- **Status** — red `✗ <code>` plus duration on failure, or the duration in green
-  when a successful command took 100 ms or more.
-- **Second line** — the time, then bold green `❯` or bold red `#`.
+- **Line one** — OS icon, `\u@\h`, working directory.
+- **Line two** — clock, duration, the repeated last command (plain text, no
+  icon, in light blue), exit code. That order is fixed; `SSH_PROMPT_SHOW_COMMAND=0` (or
+  `PROMPT_GRUVBOX_SHOW_COMMAND=0`) drops the repetition,
+  `PROMPT_GRUVBOX_COMMAND_MAX_LEN` truncates it.
+- **Line three** — green `❯`, red `❯` after a failure, red `#` for root.
 
-`PROMPT_COMMAND` is then set to the fixed sequence
-`__cmd_timer_stop` → `__remote_prompt_build` → `__cmd_timer_arm`, again in
-either array or string form depending on the Bash version. Unlike the local
-module this **replaces** any existing `PROMPT_COMMAND`, which is intentional:
-the remote shell should look the same regardless of what the server's default
-`.bashrc` set up.
+The knobs of `prompt-gruvbox.sh` all apply, so a host without a Nerd Font can
+be handled with `PROMPT_GRUVBOX_POWERLINE=0` exported through
+`SendEnv`/`AcceptEnv`.
+
+`PROMPT_COMMAND` is set to the fixed sequence `__cmd_timer_stop` → `__gb_build`
+→ `__cmd_timer_arm`, in either array or string form depending on the Bash
+version. Unlike the local module this **replaces** any existing
+`PROMPT_COMMAND`, which is intentional: the remote shell should look the same
+regardless of what the server's default `.bashrc` set up.
+
+### Bash older than 4.2
+
+`prompt-gruvbox.sh` needs associative arrays and `$'\Uxxxxxxxx'`. On an older
+server `prompt.sh` keeps its previous plain prompt instead — a dim
+`last: <command>` line, `[SSH <host>]`, the working directory and a status
+segment, with the clock and the input symbol on the last line.
 
 ## Listing — `bashrc.d/listing.sh`
 
@@ -313,16 +349,18 @@ powerline glyphs `U+E0B6`, `U+E0B0` and `U+E0B4`. Left to right:
 
 | Segment | Colour | Shown when |
 |---|---|---|
-| OS icon, user | orange | always |
+| OS icon, user, host | orange | the host only when `PROMPT_GRUVBOX_SHOW_HOST` is set, which follows `SSH_CONNECTION` |
 | Working directory | yellow | always |
 | Branch and Git status | aqua | `.git` exists in `$PWD` or an ancestor |
 | Java, Maven, Node, Python version | blue | the matching project marker is found |
 | Docker context | grey | a context outside `PROMPT_GRUVBOX_DOCKER_HIDE` is selected |
-| Exit code, duration, clock | dark grey | on a failure, a slow command, or always for the clock |
+| Clock, duration, last command, exit code | dark grey | clock always; duration on a slow or failed command; the last command unless `PROMPT_GRUVBOX_SHOW_COMMAND=0`; the exit code on a failure |
 
 The prompt is split across three terminal lines. The first powerline line ends
 after the working directory. The second line carries Git, toolchain, Docker,
-status/duration and the clock. The third line carries only the input symbol:
+status/duration and the clock. Within that second line the order is fixed:
+clock, duration, last command, exit code. The third line carries only the input
+symbol:
 green `❯`, red `❯` after a failure, red `#` for root.
 
 Git markers are `=n` conflicts, `+n` staged, `!n` unstaged, `?n` untracked,
@@ -395,6 +433,9 @@ All of these can be set in `local.sh`:
 | `PROMPT_GRUVBOX_DOCKER_HIDE` | `default desktop-linux desktop-windows` | Docker contexts that do not earn a segment |
 | `PROMPT_GRUVBOX_POWERLINE` | `1` | `0` falls back to ASCII separators without a Nerd Font |
 | `PROMPT_GRUVBOX_TIME_ON_INPUT_LINE` | `0` | `1` moves the clock from powerline line two in front of `❯` on line three |
+| `PROMPT_GRUVBOX_SHOW_COMMAND` | `1` | Repeat the last command in powerline line two, between the duration and the exit code, local and remote alike. `prompt.sh` seeds it from `SSH_PROMPT_SHOW_COMMAND` |
+| `PROMPT_GRUVBOX_COMMAND_MAX_LEN` | `60` | Truncate that repetition, with `…` |
+| `PROMPT_GRUVBOX_SHOW_HOST` | `1` over SSH, otherwise `0` | Show `\u@\h` instead of `\u` in the first segment |
 | `PROMPT_DIRTRIM` | `3` | Path components kept by Bash before truncating |
 
 ### Requirements
@@ -405,8 +446,12 @@ written as `$'\uXXXX'` and Bash converts those using the current locale.
 
 ### Remote shells
 
-Unaffected. `prompt.sh` stays the prompt that `sshp` pushes to remote hosts; it
-has no dependency on this module and assumes nothing about the remote font.
+`sshp` syncs this module too, and `prompt.sh` sources it. The remote prompt is
+therefore the same powerline prompt with two deliberate differences: no Git
+segment (`PROMPT_GRUVBOX_GIT=0` — remote hosts carry no Git configuration, and
+the segment is the only per-prompt fork) and `\u@\h` instead of `\u`. The
+repeated last command is shown in both. The font is the local terminal's, so a
+Nerd Font that works locally works over SSH as well.
 
 ## Starship Gruvbox prompt
 

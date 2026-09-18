@@ -132,7 +132,7 @@ bashrc.sh                  Entry point: loads every module in order
 bashrc.snippet.sh          Reference snippet for manual setup (legacy)
 local.sh.example           Template for untracked settings and prompt selection
 starship.toml              Versioned Gruvbox Starship theme
-prompt.sh                  Prompt used on remote hosts (synced by sshp)
+prompt.sh                  Remote wiring: welcome banner + gruvbox prompt (synced by sshp)
 ssh-prompt.sh              sshp: prompt sync + login
 .git-prompt-colors.sh      Custom theme for bash-git-prompt
 
@@ -142,7 +142,7 @@ bashrc.d/
   listing.sh               Shared ll implementation
   prompt-core.sh           Command timer and window title (local + remote)
   prompt-local.sh          bash-git-prompt wiring for local shells
-  prompt-gruvbox.sh        Pure-Bash Gruvbox Powerline prompt
+  prompt-gruvbox.sh        Pure-Bash Gruvbox Powerline prompt (local + remote)
   ssh-tools.sh             Loader for the SSH helpers, aliases, completion
   commands.sh              bash-commands: overview of all provided commands
   lib/
@@ -161,6 +161,7 @@ tests/
   listing.sh               ll formatting
   prompt-core.sh           Command timer and window title
   prompt-gruvbox.sh        Gruvbox prompt regression test
+  prompt-local.sh          bash-git-prompt status segment regression test
   prompt-selection.sh      local.sh backend selector regression test
   ssh-config.sh            Config scanner, Include, direct vs inherited users
   known-hosts.sh           known-hosts parser and process count

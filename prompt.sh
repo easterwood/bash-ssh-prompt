@@ -6,7 +6,6 @@
 __remote_prompt_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 source "$__remote_prompt_root/bashrc.d/listing.sh"
 source "$__remote_prompt_root/bashrc.d/prompt-core.sh"
-unset __remote_prompt_root
 
 if [[ -n ${SSH_CONNECTION-} && -z ${SSHP_WELCOME_SHOWN-} ]]; then
     read -r _ _ __ssh_server_address _ <<< "$SSH_CONNECTION"
@@ -17,6 +16,37 @@ if [[ -n ${SSH_CONNECTION-} && -z ${SSHP_WELCOME_SHOWN-} ]]; then
     export SSHP_WELCOME_SHOWN=1
     unset __ssh_server_address __ssh_remote_host
 fi
+
+# ---------------------------------------------------------------------------
+# Remote prompt: the same Gruvbox powerline prompt as locally, with the
+# differences a remote host actually needs.
+#
+#   * No Git segment. Remote hosts carry no Git configuration, and the segment
+#     is the only per-prompt fork - over SSH that is the one thing worth
+#     saving.
+#   * The host name sits next to the user, because on a remote host that is
+#     the information the local prompt does not have to carry.
+#   * The last command is repeated in the second powerline line, so scrollback
+#     read after the fact still says which command produced which exit code.
+#
+# The welcome banner above stays as it is.
+# ---------------------------------------------------------------------------
+
+PROMPT_GRUVBOX_GIT=0
+: "${PROMPT_GRUVBOX_SHOW_HOST:=1}"
+: "${PROMPT_GRUVBOX_SHOW_COMMAND:=$SSH_PROMPT_SHOW_COMMAND}"
+
+# prompt-gruvbox.sh needs associative arrays and $'\Uxxxxxxxx', both Bash 4.2.
+# Anything older - an old AIX, Solaris or a stock macOS bash - falls back to
+# the plain three-line prompt this file used before.
+if ((BASH_VERSINFO[0] > 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 2))); then
+
+source "$__remote_prompt_root/bashrc.d/prompt-gruvbox.sh"
+unset __remote_prompt_root
+
+else
+
+unset __remote_prompt_root
 
 __remote_prompt_build() {
     local rc=${__cmd_last_exit:-0} status='' first_line symbol symbol_color
@@ -60,3 +90,5 @@ else
 fi
 
 __remote_prompt_build
+
+fi

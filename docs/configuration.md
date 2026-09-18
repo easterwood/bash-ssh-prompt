@@ -28,7 +28,9 @@ Set these before sourcing, in `local.sh`, or per command.
 | `SSH_RESOLVE_IP_TIMEOUT` | `3` | `ssh-resolve-ips` | Reverse-DNS timeout in seconds. Must be a positive integer |
 | `SSH_RESOLVE_HOST_TIMEOUT` | `3` | `ssh-resolve-hosts` | Forward-DNS timeout in seconds. Must be a positive integer |
 | `SSH_KNOWN_HOSTS_CLEAN_TIMEOUT` | `3` | `known-hosts --clean` | `ssh-keyscan` timeout in seconds. Must be a positive integer |
-| `SSH_PROMPT_SHOW_COMMAND` | `1` | `prompt.sh` | `0` hides the dim `letzter: <command>` line in the remote prompt |
+| `SSH_PROMPT_SHOW_COMMAND` | `1` | `prompt.sh` | `0` hides the repetition of the last command in the remote prompt (it seeds `PROMPT_GRUVBOX_SHOW_COMMAND`) |
+| `PROMPT_LOCAL_SHOW_COMMAND` | `1` | `bashrc.d/prompt-local.sh` | `0` drops the repetition of the last command from the `bash-git-prompt` status segment |
+| `PROMPT_LOCAL_COMMAND_MAX_LEN` | `60` | `bashrc.d/prompt-local.sh` | Truncation length for that repetition |
 | `HISTORY_DEDUPE_LIVE` | `1` | `bashrc.d/history.sh` | `0` rewrites the history file only at shell start instead of also right after a repeated command. Useful on very large history files |
 | `BASH_PROMPT_BACKEND` | `auto` | `bashrc.sh` | Local prompt: `starship`, `bash-git-prompt`, `gruvbox`, or `auto`. Aliases: `prompt-local`, `git`, `prompt-gruvbox`, `prompt-gruvbox.sh` |
 | `STARSHIP_CONFIG` | `<checkout>/starship.toml` | `bashrc.sh` | Optional override for the Starship config path when the Starship backend is selected |

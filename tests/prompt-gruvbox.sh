@@ -2,7 +2,8 @@
 
 # Regression test for bashrc.d/prompt-gruvbox.sh: segment assembly, the Git
 # status parser, the pom.xml reader, the Docker context reader and the PS1
-# quoting of untrusted text.
+# quoting of untrusted text. The quoting helpers themselves live in
+# prompt-core.sh and are covered by tests/prompt-core.sh.
 
 set -u
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." || exit 1
@@ -29,17 +30,6 @@ visible() {
     s=${s//\\]/}
     printf '%s' "$s"
 }
-
-# --- __gb_quote ------------------------------------------------------------
-
-__gb_quote 'feature/$(id)'
-assert_equal 'command substitution is neutralised' 'feature/\$(id)' "$REPLY"
-
-__gb_quote 'a`b`c'
-assert_equal 'backticks are neutralised' 'a\`b\`c' "$REPLY"
-
-__gb_quote 'back\slash'
-assert_equal 'backslashes are doubled' 'back\\slash' "$REPLY"
 
 # --- __gb_find_up ----------------------------------------------------------
 
@@ -252,6 +242,71 @@ __gb_build
 
 rendered=$(visible)
 assert_not_contains 'a fast command hides its duration' "$rendered" '12ms'
+
+# --- last command in the second line ---------------------------------------
+
+# Position matters: clock, duration, command, exit code. The assertions split
+# the line at the command instead of assuming column numbers.
+assert_equal 'the repetition is on by default, locally too' \
+    1 "$PROMPT_GRUVBOX_SHOW_COMMAND"
+
+__cmd_last_exit=7
+__cmd_duration='1.500s'
+__cmd_elapsed_us=1500000
+__cmd_last_command='git push --force-with-lease'
+__gb_build
+
+rendered=$(visible)
+after_first=${rendered#*\\n}
+second_line=${after_first%%\\n*}
+
+assert_contains 'the last command is repeated' "$second_line" \
+    'git push --force-with-lease'
+before=${second_line%%git push*}
+after=${second_line#*git push --force-with-lease}
+assert_contains 'the clock comes first' "$before" '\A'
+assert_contains 'the duration comes before the command' "$before" '1.500s'
+assert_contains 'the exit code comes after the command' "$after" '7'
+assert_contains 'the error marker stays last' "$after" $'\u2718'
+
+# The repetition is untrusted text in PS1, exactly like a branch name.
+__cmd_last_command='echo $(id) `hostname`'
+__gb_build
+rendered=$(visible)
+assert_contains 'command substitution is neutralised' "$rendered" '\$(id)'
+assert_not_contains 'no live backtick survives' "$rendered" ' `hostname`'
+
+# A pasted one-liner must not push the exit code off the screen.
+__cmd_last_command=$(printf 'x%.0s' {1..200})
+PROMPT_GRUVBOX_COMMAND_MAX_LEN=20
+__gb_build
+rendered=$(visible)
+assert_contains 'a long command is truncated' "$rendered" $'\u2026'
+assert_not_contains 'the full command is not shown' "$rendered" \
+    "$(printf 'x%.0s' {1..21})"
+PROMPT_GRUVBOX_COMMAND_MAX_LEN=60
+
+__cmd_last_command='ls -la'
+PROMPT_GRUVBOX_SHOW_COMMAND=0
+__gb_build
+rendered=$(visible)
+assert_not_contains 'the repetition can be switched off' "$rendered" 'ls -la'
+unset __cmd_last_command
+
+# --- host segment ----------------------------------------------------------
+
+PROMPT_GRUVBOX_SHOW_HOST=1
+__gb_build
+rendered=$(visible)
+first_line=${rendered%%\\n*}
+assert_contains 'the host escape is on line one' "$first_line" '\h'
+
+PROMPT_GRUVBOX_SHOW_HOST=0
+__gb_build
+rendered=$(visible)
+first_line=${rendered%%\\n*}
+assert_not_contains 'locally the host is dropped' "$first_line" '\h'
+assert_contains 'the user escape survives' "$first_line" '\u'
 
 # --- ASCII fallback --------------------------------------------------------
 
