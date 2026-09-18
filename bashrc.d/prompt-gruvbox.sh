@@ -472,12 +472,12 @@ __gb_build() {
     __gb_close
     __gb_ps1+='\n'
 
-    # 6 - exit code, duration and clock, dark grey.
-    if [[ -n $duration ]] && (( rc != 0 || elapsed >= PROMPT_GRUVBOX_MIN_DURATION_US )); then
-        tail+=" ${__gb_icon_duration} ${duration}"
-    fi
+    # 6 - clock, duration and exit code dark grey.
     if (( ! PROMPT_GRUVBOX_TIME_ON_INPUT_LINE )); then
         tail+=" ${__gb_icon_clock} \\A"
+    fi
+    if [[ -n $duration ]] && (( rc != 0 || elapsed >= PROMPT_GRUVBOX_MIN_DURATION_US )); then
+        tail+=" ${__gb_icon_duration} ${duration}"
     fi
     if (( rc != 0 )); then
         tail+=" ${__gb_fg[red]}${__gb_icon_error} ${rc}${__gb_fg[fg0]}"
