@@ -42,6 +42,45 @@ neither unaliased nor redefined: the configuration no longer wraps it, so plain
 names live in `ssh-tools.sh`, which is loaded earlier — the order does not
 matter there, since `complete -F` only stores a function name.
 
+## Prompt modules, local and remote
+
+`sshp` pushes the shared prompt modules to the remote host, which is why both
+ends render the same prompt. `prompt.sh` is only the remote wiring around them —
+welcome banner, remote defaults, and the fallback for a Bash older than 4.2.
+
+```mermaid
+flowchart LR
+  subgraph local["Local shell - bashrc.sh"]
+    direction TB
+    core["prompt-core.sh<br/>timer, quoting, last command"]
+    gruvbox["prompt-gruvbox.sh<br/>powerline, git, toolchains"]
+    plocal["prompt-local.sh<br/>bash-git-prompt status"]
+    starship["starship.toml<br/>selected in local.sh"]
+    core ~~~ gruvbox ~~~ plocal ~~~ starship
+  end
+
+  subgraph remote["Remote host - ~/.cache/ssh-prompt"]
+    direction TB
+    loader["~/.bashrc loader<br/>only when SSH_CONNECTION"]
+    rprompt["prompt.sh<br/>welcome banner, remote knobs"]
+    rgruvbox["prompt-gruvbox.sh<br/>PROMPT_GRUVBOX_GIT=0"]
+    rcore["prompt-core.sh<br/>the same helpers"]
+    loader ~~~ rprompt ~~~ rgruvbox ~~~ rcore
+  end
+
+  local -- "sshp" --> remote
+
+  classDef synced fill:#E1F5EE,stroke:#0F6E56,color:#04342C;
+  classDef single fill:#EEEDFE,stroke:#534AB7,color:#26215C;
+  class core,gruvbox,rprompt,rgruvbox,rcore synced;
+  class plocal,starship,loader single;
+```
+
+Teal is synced by `sshp` — `listing.sh` travels along as well and is left out
+here — purple exists at one end only. The boxes inside a subgraph are stacked,
+not chained: they are modules, not steps. The remote differences are exactly
+two: no Git segment, and `\u@\h` instead of `\u`.
+
 ## `PROMPT_COMMAND` composition
 
 The shell prompt backends interleave with the shared history hook, and both
