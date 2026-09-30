@@ -5,7 +5,7 @@
 The modular Bash configuration was verified in an isolated Linux test
 environment. All automated checks passed.
 
-Reproducible part: `bash tests/run-all.sh` — 19 scripts, 517 checks, all passing.
+Reproducible part: `bash tests/run-all.sh` — 19 scripts, 527 checks, all passing.
 The same suite runs in CI on every push (`.github/workflows/ci.yml`), so the
 numbers above are checked rather than transcribed. The remaining sections
 describe one-off checks that are not scripted.
@@ -58,10 +58,10 @@ line per script, and returns `1` if any of them failed.
 | `tests/known-hosts-clean.sh` | 39 | `known-hosts --clean`: dry run, `--apply` with backups, rejected combinations, the removed `known-hosts-clean` alias, and the completion |
 | `tests/known-hosts.sh` | 13 | The `known_hosts` parser, the filter, hashed and marker entries, rejected option combinations, and how many processes the rendering spawns |
 | `tests/listing.sh` | 17 | The `ll` header, the dropped `ls` summary line, hidden files, names with spaces, option pass-through |
-| `tests/prompt-core.sh` | 31 | The clock, duration formatting across all five ranges, exit-code capture, the shared `__prompt_quote`/`__prompt_last_command` helpers, control-character escaping in the window title |
+| `tests/prompt-core.sh` | 40 | Central string/array `PROMPT_COMMAND` composition plus the clock, duration formatting, exit-code capture, shared text helpers, and window-title escaping |
 | `tests/prompt-gruvbox.sh` | 62 | The pure-Bash Gruvbox prompt: palette, segment engine, Git segment, toolchain detection and the second powerline line |
 | `tests/prompt-local.sh` | 19 | `prompt_callback`: order of duration, last command and exit code, quoting, the two repetition knobs, and the four performance switches |
-| `tests/remote-prompt.sh` | 30 | `prompt.sh`: the pre-4.2 fallback builder (exit code, duration threshold, SSH marker, PS1-safe repeated command, input symbol) and the remote wiring around `prompt-gruvbox.sh` with the Git segment off |
+| `tests/remote-prompt.sh` | 31 | `prompt.sh`: the pre-4.2 fallback builder and the remote Gruvbox wiring, including deliberate removal of inherited server `PROMPT_COMMAND` hooks |
 | `tests/prompt-selection.sh` | 9 | The `local.sh` backend selector: Starship, `bash-git-prompt`, Gruvbox, and the fallback warnings |
 | `tests/ssh-by-number.sh` | 19 | `ssh-nr`: help, `--list`, invalid and out-of-range numbers, alias versus raw target, `[host]:port`, markers, `-F` pass-through, both `sshp` call branches |
 | `tests/ssh-config.sh` | 22 | Alias collection, skipped wildcards, quotes, `Include` with glob and `~/`, direct versus inherited users |

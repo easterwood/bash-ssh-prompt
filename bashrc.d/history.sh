@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 
-# prompt-core.sh provides __prompt_command_is_array, which this file uses when
-# hooking into PROMPT_COMMAND. bashrc.sh sources it first; say so out loud
-# rather than failing with "command not found" halfway through.
-declare -F __prompt_command_is_array >/dev/null || {
+# prompt-core.sh owns PROMPT_COMMAND composition. bashrc.sh sources it first;
+# say so out loud rather than failing with "command not found" halfway through.
+declare -F __prompt_command_append >/dev/null || {
     printf 'history.sh: bashrc.d/prompt-core.sh has to be sourced first.\n' >&2
     return 1
 }
@@ -128,14 +127,6 @@ __history_append() {
     return 0
 }
 
-# prompt-core.sh is sourced before this file and provides
-# __prompt_command_is_array, which replaces the forking
-# $(declare -p PROMPT_COMMAND) test.
-# PROMPT_COMMAND is an array from Bash 5.1 on and a string before that.
-# Both forms are handled deliberately.
-# shellcheck disable=SC2178,SC2179
-if __prompt_command_is_array; then
-    PROMPT_COMMAND+=(__history_append)
-else
-    PROMPT_COMMAND="${PROMPT_COMMAND:+${PROMPT_COMMAND%;};}__history_append"
-fi
+# prompt-core.sh owns the string/array details and appends without replacing
+# hooks installed by anything sourced earlier.
+__prompt_command_append __history_append

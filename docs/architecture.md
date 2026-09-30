@@ -85,11 +85,24 @@ two: no Git segment, and `\u@\h` instead of `\u`.
 
 ## `PROMPT_COMMAND` composition
 
-The shell prompt backends interleave with the shared history hook, and both
-handle the string form and the Bash 5.1 array form of `PROMPT_COMMAND`. Starship
-uses its own Bash initialization and is never combined with either shell prompt.
+`bashrc.d/prompt-core.sh` is the single owner of prompt-hook composition. Prompt
+modules no longer edit `PROMPT_COMMAND` directly; they use three helpers that
+preserve whichever representation is already active (the traditional string or
+the Bash 5.1+ array form):
 
-**Local** (`prompt-local.sh`), built in three steps:
+- `__prompt_command_prepend HOOK...` inserts hooks before the current list.
+- `__prompt_command_append HOOK...` inserts hooks after the current list.
+- `__prompt_command_replace HOOK...` replaces the list; with no arguments it
+  clears it while retaining the current representation.
+
+This keeps ordering policy separate from backend code and avoids each module
+reimplementing string/array handling.
+
+**Local history** uses `__prompt_command_append __history_append`, so subsequent
+prompt backends can compose around it without losing per-command history
+persistence.
+
+**Local bash-git-prompt** is built in three steps:
 
 ```
 1. prepend  __cmd_timer_stop      capture $? and duration first
@@ -97,38 +110,28 @@ uses its own Bash initialization and is never combined with either shell prompt.
 3. append   __cmd_timer_arm       re-arm the DEBUG trap last
 ```
 
-`history.sh` is sourced before both prompt modules and appends
-`__history_append` to whatever `PROMPT_COMMAND` holds at that point. Step 1
-above prepends to it rather than replacing it, so the history entry survives and
-ends up in the middle.
-
 Result, roughly: `__cmd_timer_stop` → `__history_append` →
-`setLastCommandState`/git prompt builder → `__cmd_timer_arm`. `prompt_callback` is not in `PROMPT_COMMAND` at all;
-`bash-git-prompt` calls it while assembling the prompt.
+`setLastCommandState`/git prompt builder → `__cmd_timer_arm`. `prompt_callback`
+is not in `PROMPT_COMMAND`; `bash-git-prompt` calls it while assembling the
+prompt.
 
-**Remote** (`prompt.sh`) replaces `PROMPT_COMMAND` outright. It sources
-`prompt-gruvbox.sh` with `PROMPT_GRUVBOX_GIT=0`, so the remote prompt is the
-local powerline prompt minus the Git segment:
+**Local Gruvbox** follows the same contract: prepend `__cmd_timer_stop`, retain
+all existing hooks (including `__history_append`), then append `__gb_build` and
+`__cmd_timer_arm`.
 
-```
-__cmd_timer_stop → __gb_build → __cmd_timer_arm
-```
+**Remote** (`prompt.sh`) deliberately starts with
+`__prompt_command_replace`, because server-local prompt hooks must not alter the
+sshp prompt. It then installs the fixed sequence
+`__cmd_timer_stop` → `__gb_build` → `__cmd_timer_arm`. On Bash older than 4.2,
+the same replacement helper installs
+`__cmd_timer_stop` → `__remote_prompt_build` → `__cmd_timer_arm`.
 
-On a Bash older than 4.2 `prompt-gruvbox.sh` cannot even be parsed — it needs
-associative arrays and `$'\Uxxxxxxxx'` — so `prompt.sh` falls back to its own
-plain builder. Stock macOS is Bash 3.2, so this is the common case for a Mac,
-not an exotic one. The builder is defined unconditionally and only the wiring
-depends on the version, which is what lets `tests/remote-prompt.sh` reach it on
-a current shell: `BASH_VERSINFO` is readonly and cannot be faked.
-
-```
-__cmd_timer_stop → __remote_prompt_build → __cmd_timer_arm
-```
-
-The `DEBUG` trap is set and cleared once per command line:
-`__cmd_timer_arm` installs it, `__cmd_timer_debug` immediately removes it after
-recording the command, and `__cmd_timer_stop` removes it again defensively. This
-keeps the trap from firing for each function call inside a pipeline.
+The `DEBUG` trap remains owned directly by `prompt-core.sh`: `__cmd_timer_arm`
+installs it, `__cmd_timer_debug` removes it after the first command event, and
+`__cmd_timer_stop` removes it defensively. It is intentionally not wrapped in a
+generic helper function: Bash gives `DEBUG` trap changes made inside ordinary
+functions function-local semantics unless `functrace` is enabled, and enabling
+that globally would change trap propagation and prompt overhead.
 
 ## Naming conventions
 
@@ -287,7 +290,7 @@ bash tests/history.sh       # a single script
 
 `tests/run-all.sh` executes every `*.sh` in `tests/` except itself and
 `lib.sh`, prints one `PASS` line per script with its check count, and returns
-`1` if any script failed. Current state: 19 scripts, 517 checks, all passing.
+`1` if any script failed. Current state: 19 scripts, 527 checks, all passing.
 The same suite runs in CI on every push, together with the `bash -n` gate over
 the whole tree, `bash-commands --check` and ShellCheck; see
 `.github/workflows/ci.yml`. ShellCheck is clean and blocking: every suppression
@@ -304,10 +307,10 @@ above it, so a new finding fails the build.
 | `tests/known-hosts-clean.sh` | 39 | `known-hosts --clean`: dry run, `--apply` with backups, rejected combinations, the removed `known-hosts-clean` alias, and the completion |
 | `tests/known-hosts.sh` | 13 | The `known_hosts` parser, the filter, hashed and marker entries, rejected option combinations, and how many processes the rendering spawns |
 | `tests/listing.sh` | 17 | The `ll` header, the dropped `ls` summary line, hidden files, names with spaces, option pass-through |
-| `tests/prompt-core.sh` | 31 | The clock, duration formatting across all five ranges, exit-code capture, the shared `__prompt_quote`/`__prompt_last_command` helpers, control-character escaping in the window title |
+| `tests/prompt-core.sh` | 40 | Central string/array `PROMPT_COMMAND` composition plus the clock, duration formatting, exit-code capture, shared text helpers, and window-title escaping |
 | `tests/prompt-gruvbox.sh` | 62 | The pure-Bash Gruvbox prompt: palette, segment engine, Git segment, toolchain detection and the second powerline line |
 | `tests/prompt-local.sh` | 19 | `prompt_callback`: order of duration, last command and exit code, quoting, the two repetition knobs, and the four performance switches |
-| `tests/remote-prompt.sh` | 30 | `prompt.sh`: the pre-4.2 fallback builder (exit code, duration threshold, SSH marker, PS1-safe repeated command, input symbol) and the remote wiring around `prompt-gruvbox.sh` with the Git segment off |
+| `tests/remote-prompt.sh` | 31 | `prompt.sh`: the pre-4.2 fallback builder and the remote Gruvbox wiring, including deliberate removal of inherited server `PROMPT_COMMAND` hooks |
 | `tests/prompt-selection.sh` | 9 | The `local.sh` backend selector: Starship, `bash-git-prompt`, Gruvbox, and the fallback warnings |
 | `tests/ssh-by-number.sh` | 19 | `ssh-nr`: help, `--list`, invalid and out-of-range numbers, alias versus raw target, `[host]:port`, markers, `-F` pass-through, both `sshp` call branches |
 | `tests/ssh-config.sh` | 22 | Alias collection, skipped wildcards, quotes, `Include` with glob and `~/`, direct versus inherited users |

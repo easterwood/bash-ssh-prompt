@@ -20,6 +20,52 @@ source tests/lib.sh
 # shellcheck source=bashrc.d/prompt-core.sh
 source bashrc.d/prompt-core.sh
 
+# --- prompt hook composition -----------------------------------------------
+
+# String form: all prompt modules use the same helpers instead of hand-editing
+# PROMPT_COMMAND. Trailing semicolons are normalised while hook order is kept.
+unset PROMPT_COMMAND
+__prompt_command_append existing_hook
+assert_equal 'append creates the string hook list' 'existing_hook' "$PROMPT_COMMAND"
+
+__prompt_command_append second_hook third_hook
+assert_equal 'append keeps argument order' \
+    'existing_hook;second_hook;third_hook' "$PROMPT_COMMAND"
+
+__prompt_command_prepend first_hook zero_hook
+assert_equal 'prepend keeps argument order' \
+    'first_hook;zero_hook;existing_hook;second_hook;third_hook' "$PROMPT_COMMAND"
+
+PROMPT_COMMAND='existing_hook;'
+__prompt_command_append second_hook
+assert_equal 'append normalises a trailing separator' \
+    'existing_hook;second_hook' "$PROMPT_COMMAND"
+
+__prompt_command_replace replacement_one replacement_two
+assert_equal 'replace discards the previous string hooks' \
+    'replacement_one;replacement_two' "$PROMPT_COMMAND"
+
+__prompt_command_replace
+assert_equal 'replace can clear a string hook list' '' "$PROMPT_COMMAND"
+
+# Bash 5.1 added array-valued PROMPT_COMMAND. Exercise the same API in that
+# representation when the running test shell supports it.
+if ((BASH_VERSINFO[0] > 5 || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] >= 1))); then
+    PROMPT_COMMAND=(existing_hook)
+    __prompt_command_prepend first_hook
+    __prompt_command_append second_hook third_hook
+    assert_equal 'array hooks keep their element boundaries' \
+        'first_hook existing_hook second_hook third_hook' "${PROMPT_COMMAND[*]}"
+
+    __prompt_command_replace replacement_one replacement_two
+    assert_equal 'replace preserves the array representation' \
+        'replacement_one replacement_two' "${PROMPT_COMMAND[*]}"
+    assert '__prompt_command_is_array still sees the replaced array' \
+        __prompt_command_is_array
+fi
+
+unset PROMPT_COMMAND
+
 # --- the clock -------------------------------------------------------------
 
 __cmd_timer_now_us

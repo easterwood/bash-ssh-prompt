@@ -8,7 +8,7 @@
 # __cmd_elapsed_us) and the shared text helpers this prompt reads. bashrc.sh
 # and prompt.sh both source it first; make the requirement explicit rather
 # than failing per prompt with "command not found".
-declare -F __prompt_command_is_array >/dev/null || {
+declare -F __prompt_command_append >/dev/null || {
     printf '%s: bashrc.d/prompt-core.sh has to be sourced first.\n' \
         "${BASH_SOURCE[0]##*/}" >&2
     return 1
@@ -45,15 +45,9 @@ prompt_callback() {
     fi
 }
 
-# The timer has to run before bash-git-prompt.
-# PROMPT_COMMAND is an array from Bash 5.1 on and a string before that.
-# Both forms are handled deliberately, here and at the end of the file.
-# shellcheck disable=SC2178,SC2179,SC2128
-if __prompt_command_is_array; then
-    PROMPT_COMMAND=(__cmd_timer_stop "${PROMPT_COMMAND[@]}")
-else
-    PROMPT_COMMAND="__cmd_timer_stop${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
-fi
+# The timer has to run before bash-git-prompt. prompt-core.sh preserves the
+# current PROMPT_COMMAND representation and any hooks already present.
+__prompt_command_prepend __cmd_timer_stop
 
 # ---------------------------------------------------------------------------
 # bash-git-prompt
@@ -96,10 +90,4 @@ if [[ -r "$HOME/.bash-git-prompt/gitprompt.sh" ]]; then
 fi
 
 # Arm the DEBUG hook as the last prompt action.
-# Same string/array duality as above.
-# shellcheck disable=SC2178,SC2179,SC2128
-if __prompt_command_is_array; then
-    PROMPT_COMMAND+=(__cmd_timer_arm)
-else
-    PROMPT_COMMAND="${PROMPT_COMMAND%;};__cmd_timer_arm"
-fi
+__prompt_command_append __cmd_timer_arm

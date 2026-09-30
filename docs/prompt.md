@@ -34,8 +34,11 @@ explicit external backend falls back to Gruvbox with a warning.
 
 ## Command timer — `bashrc.d/prompt-core.sh`
 
-The timer is built from a `DEBUG` trap plus `PROMPT_COMMAND` hooks. Four
-functions do the work:
+The timer is built from a `DEBUG` trap plus `PROMPT_COMMAND` hooks.
+`prompt-core.sh` also owns hook composition through
+`__prompt_command_prepend`, `__prompt_command_append`, and
+`__prompt_command_replace`; the backend modules do not manipulate the
+string/array forms themselves. Four timer functions do the work:
 
 **`__cmd_timer_now_us`** returns the current time in microseconds via `REPLY`.
 It prefers `EPOCHREALTIME` (Bash 5.0+, and handles a comma decimal separator
@@ -105,14 +108,15 @@ the remote prompt.
 | `PROMPT_LOCAL_SHOW_COMMAND` | `1` | `0` drops the repetition of the last command |
 | `PROMPT_LOCAL_COMMAND_MAX_LEN` | `60` | Truncate that repetition, with `…` |
 
-Ordering is handled explicitly, and both the string and the Bash 5.1 array form
-of `PROMPT_COMMAND` are supported:
+Ordering is explicit, while `prompt-core.sh` handles both the string and the
+Bash 5.1 array form of `PROMPT_COMMAND`:
 
-1. `__cmd_timer_stop` is **prepended**, so the exit code and duration are
-   captured before `bash-git-prompt` reads them.
+1. `__prompt_command_prepend __cmd_timer_stop` captures exit code and duration
+   before `bash-git-prompt` reads them.
 2. `bash-git-prompt` is sourced from `~/.bash-git-prompt/gitprompt.sh`, if
    present.
-3. `__cmd_timer_arm` is **appended**, so the `DEBUG` trap is the last thing set.
+3. `__prompt_command_append __cmd_timer_arm` makes re-arming the `DEBUG` trap
+   the final prompt action.
 
 Git prompt settings applied here:
 
@@ -194,11 +198,11 @@ The knobs of `prompt-gruvbox.sh` all apply, so a host without a Nerd Font can
 be handled with `PROMPT_GRUVBOX_POWERLINE=0` exported through
 `SendEnv`/`AcceptEnv`.
 
-`PROMPT_COMMAND` is set to the fixed sequence `__cmd_timer_stop` → `__gb_build`
-→ `__cmd_timer_arm`, in either array or string form depending on the Bash
-version. Unlike the local module this **replaces** any existing
-`PROMPT_COMMAND`, which is intentional: the remote shell should look the same
-regardless of what the server's default `.bashrc` set up.
+Before loading the remote Gruvbox backend, `prompt.sh` calls
+`__prompt_command_replace` with no hooks. Gruvbox then installs the fixed
+sequence `__cmd_timer_stop` → `__gb_build` → `__cmd_timer_arm`, preserving the
+active string/array representation. Unlike the local module this deliberately
+removes inherited server prompt hooks so sshp behaves consistently.
 
 ### Bash older than 4.2
 

@@ -25,8 +25,8 @@ config_root=$PWD
 
 # --- history_dedupe as a plain function ------------------------------------
 
-# bashrc.sh sources prompt-core.sh before history.sh, because history.sh uses
-# __prompt_command_is_array from it. The test mirrors that order.
+# bashrc.sh sources prompt-core.sh before history.sh because history.sh uses
+# its central PROMPT_COMMAND composition helpers. The test mirrors that order.
 # shellcheck source=bashrc.d/prompt-core.sh
 source bashrc.d/prompt-core.sh
 # shellcheck source=bashrc.d/history.sh

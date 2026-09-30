@@ -143,6 +143,10 @@ assert_contains 'the gruvbox builder runs' "$wiring" '__gb_build'
 assert_contains 'the timer is re-armed last' "$wiring" '__cmd_timer_arm'
 assert_not_contains 'the fallback builder is not wired in' "$wiring" '__remote_prompt_build'
 
+wiring=$(render 'PROMPT_COMMAND=server_prompt_hook' '' '${PROMPT_COMMAND[*]}')
+assert_not_contains 'remote wiring discards server prompt hooks' \
+    "$wiring" 'server_prompt_hook'
+
 ps1=$(render "export SSH_CONNECTION='10.0.0.2 51000 10.0.0.9 22'" '__gb_build')
 assert_contains 'the rendered prompt carries user and host' "$ps1" '\u@\h'
 # The Git segment is the only one drawn on aqua, so its background is a

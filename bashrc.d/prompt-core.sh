@@ -20,6 +20,58 @@ __prompt_command_is_array() {
         [[ ${PROMPT_COMMAND@a} == *a* ]]
 }
 
+# Central PROMPT_COMMAND composition. Prompt modules should not manipulate the
+# variable directly: these helpers preserve whichever representation is already
+# in use (string, or the Bash 5.1+ array form) and keep the ordering rules in
+# one place. Each argument is one complete hook command.
+# shellcheck disable=SC2178,SC2179,SC2128
+__prompt_command_prepend() {
+    (($#)) || return 0
+
+    if __prompt_command_is_array; then
+        PROMPT_COMMAND=("$@" "${PROMPT_COMMAND[@]}")
+    else
+        local hook prefix='' current=${PROMPT_COMMAND-}
+        current=${current%;}
+        for hook in "$@"; do
+            prefix="${prefix:+$prefix;}$hook"
+        done
+        PROMPT_COMMAND="$prefix${current:+;$current}"
+    fi
+}
+
+# shellcheck disable=SC2178,SC2179,SC2128
+__prompt_command_append() {
+    (($#)) || return 0
+
+    if __prompt_command_is_array; then
+        PROMPT_COMMAND+=("$@")
+    else
+        local hook suffix='' current=${PROMPT_COMMAND-}
+        current=${current%;}
+        for hook in "$@"; do
+            suffix="${suffix:+$suffix;}$hook"
+        done
+        PROMPT_COMMAND="${current}${current:+;}$suffix"
+    fi
+}
+
+# Replace all existing prompt hooks. With no arguments this clears the current
+# hook list while preserving its string/array representation. Remote prompts use
+# this deliberately so server-local prompt hooks cannot leak into sshp.
+# shellcheck disable=SC2178,SC2179,SC2128
+__prompt_command_replace() {
+    if __prompt_command_is_array; then
+        PROMPT_COMMAND=("$@")
+    else
+        local hook joined=''
+        for hook in "$@"; do
+            joined="${joined:+$joined;}$hook"
+        done
+        PROMPT_COMMAND=$joined
+    fi
+}
+
 __cmd_timer_now_us() {
     local t sec usec
     if [[ -n ${EPOCHREALTIME-} ]]; then
