@@ -42,6 +42,14 @@ source bashrc.d/prompt-local.sh
 
 assert_equal 'the repetition is on by default' 1 "$PROMPT_LOCAL_SHOW_COMMAND"
 
+# These are upstream bash-git-prompt switches, not booleans with local
+# semantics. Keep their exact values covered because reversing them re-enables
+# the expensive work this backend is specifically configured to avoid.
+assert_equal 'remote fetches are disabled' 0 "$GIT_PROMPT_FETCH_REMOTE_STATUS"
+assert_equal 'untracked-file scanning is disabled' no "$GIT_PROMPT_SHOW_UNTRACKED_FILES"
+assert_equal 'submodule scanning is disabled' 1 "$GIT_PROMPT_IGNORE_SUBMODULES"
+assert_equal 'changed-file counting is disabled' 0 "$GIT_PROMPT_SHOW_CHANGED_FILES_COUNT"
+
 # --- a fast, successful command -------------------------------------------
 
 __cmd_last_exit=0

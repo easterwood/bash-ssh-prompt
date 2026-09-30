@@ -120,6 +120,8 @@ sshp myserver           # sync the prompt files, then log in
 sshp -p 2222 myserver   # OpenSSH options are passed through
 sshp --force myserver   # force a prompt re-sync before logging in
 sshp --help             # own switches plus the real client's option list
+# SSHP_WARN_WEAK_CRYPTO=yes is the default; set it to no to suppress
+# OpenSSH's weak-crypto warning when the installed client supports the option.
 ssh myserver            # untouched OpenSSH: no sync, no prompt
 
 ssh-resolve-ips         # reverse-DNS: IPs   -> hostnames
@@ -169,6 +171,7 @@ tests/
   history.sh               History deduplication and writing
   listing.sh               ll formatting
   prompt-core.sh           Command timer and window title
+  bashrc-integration.sh    Full startup hook composition for all prompt backends
   prompt-gruvbox.sh        Gruvbox prompt regression test
   prompt-local.sh          bash-git-prompt status segment regression test
   prompt-selection.sh      local.sh backend selector regression test
@@ -183,6 +186,8 @@ tests/
   commands.sh              bash-commands listing and self-check
   completion.sh            Host cache and all completion functions
   starship-config.sh       starship.toml layout and palette regression test
+  integration/
+    bash-git-prompt.sh     Compatibility check against pinned upstream 2.7.1 in CI
   known_hosts.fixture      Synthetic parser data (no real keys)
 ```
 
@@ -209,13 +214,14 @@ bash tests/history.sh       # or a single script
 bash-commands --check       # every documented command is really defined
 ```
 
-Currently 18 scripts with 481 checks, all passing. The same three commands run
+Currently 19 scripts with 501 checks, all passing. The same three commands run
 in CI on every push, together with a `bash -n` gate over the whole tree
 (`.github/workflows/ci.yml`).
 
-The tests run against throwaway home directories and stubbed `ssh`,
-`ssh-keygen` and `ssh-keyscan` binaries, so they touch neither your own
-configuration nor the network.
+The regular suite runs against throwaway home directories and stubbed `ssh`,
+`ssh-keygen` and `ssh-keyscan` binaries, so it touches neither your own
+configuration nor the network. CI additionally checks the local prompt against
+the pinned `bash-git-prompt` 2.7.1 checkout.
 
 `TEST.md` records what the suite covers plus a manual test run of the whole
 package. See [docs/architecture.md#testing](docs/architecture.md#testing).

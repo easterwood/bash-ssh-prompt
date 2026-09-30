@@ -73,7 +73,8 @@ __remote_prompt_build() {
     fi
 
     if (( SSH_PROMPT_SHOW_COMMAND )) && [[ -n ${__cmd_last_command-} ]]; then
-        PS1="\[\e[2m\]last: ${__cmd_last_command}\[\e[0m\]\n"
+        __prompt_quote "$__cmd_last_command"
+        PS1="\[\e[2m\]last: ${REPLY}\[\e[0m\]\n"
     else
         PS1=''
     fi

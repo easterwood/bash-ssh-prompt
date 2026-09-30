@@ -49,17 +49,31 @@ Options are collected into one array that is used for **both** the sync
 connection and the login connection, so `-p`, `-F`, `-J`, `-i` and friends apply
 consistently — a target on a non-standard port syncs over that same port.
 
-`sshp`'s own options are placed first:
+`sshp` leaves OpenSSH's weak-crypto warning enabled by default. With the
+default `SSHP_WARN_WEAK_CRYPTO=yes`, no `WarnWeakCrypto` option is added:
+
+```
+sync:   ssh -T -o RemoteCommand=none <your options> HOST
+login:  ssh <your options> HOST
+```
+
+Set `SSHP_WARN_WEAK_CRYPTO=no` to suppress that warning. `sshp` first probes
+the installed client with `ssh -G`; if the option is supported, the calls
+become:
 
 ```
 sync:   ssh -T -o RemoteCommand=none -o WarnWeakCrypto=no <your options> HOST
 login:  ssh -o WarnWeakCrypto=no <your options> HOST
 ```
 
+If the client predates `WarnWeakCrypto`, the option is omitted and the client's
+normal warning behaviour is left intact. The probe performs configuration
+expansion only; it does not open a network connection.
+
 The order matters. For `-o` settings OpenSSH keeps the **first** value it sees,
 so `RemoteCommand=none` cannot be overridden by a `RemoteCommand` in your
-config, while your own `-o` settings still win over anything the config file
-supplies later.
+config. When warning suppression is enabled, the sshp-owned
+`WarnWeakCrypto=no` is likewise placed before user-supplied options.
 
 `__sshp_option_takes_arg` knows which OpenSSH options consume the following
 word (`-B -b -c -D -E -e -F -I -i -J -L -l -m -O -o -P -p -Q -R -S -W -w`), so
@@ -175,8 +189,9 @@ command ssh -T -o RemoteCommand=none "${ssh_options[@]}" "$target" "$remote_scri
 - `-T` disables pseudo-terminal allocation for the sync connection.
 - `RemoteCommand=none` neutralises a `RemoteCommand` in your SSH config that
   would otherwise swallow the script.
-- `ssh_options` starts with `-o WarnWeakCrypto=no` and then holds whatever you
-  passed on the command line.
+- `ssh_options` holds whatever you passed on the command line. With
+  `SSHP_WARN_WEAK_CRYPTO=no`, it is prefixed with `-o WarnWeakCrypto=no` when
+  the installed OpenSSH supports that setting.
 
 The login connection is a separate `command ssh "${ssh_options[@]}" "$target"`
 call afterwards. This is why the first call after a change opens **two**

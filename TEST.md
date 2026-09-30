@@ -5,7 +5,7 @@
 The modular Bash configuration was verified in an isolated Linux test
 environment. All automated checks passed.
 
-Reproducible part: `bash tests/run-all.sh` — 18 scripts, 481 checks, all passing.
+Reproducible part: `bash tests/run-all.sh` — 19 scripts, 501 checks, all passing.
 The same suite runs in CI on every push (`.github/workflows/ci.yml`), so the
 numbers above are checked rather than transcribed. The remaining sections
 describe one-off checks that are not scripted.
@@ -15,7 +15,7 @@ describe one-off checks that are not scripted.
 | Automated suite (`tests/run-all.sh`) | Passed |
 | Syntax of all shell files | Passed |
 | Modular local loader | Passed |
-| Local `bash-git-prompt` integration | Passed (with a test double) |
+| Local `bash-git-prompt` integration | Passed with a test double; pinned 2.7.1 compatibility is enforced in CI |
 | Remote prompt and `ll` | Passed |
 | Installation and backup of `.bashrc` | Passed |
 | Multi-file sync | Passed (SSH simulated) |
@@ -50,6 +50,7 @@ line per script, and returns `1` if any of them failed.
 
 | Script | Checks | Covers |
 |---|---|---|
+| `tests/bashrc-integration.sh` | 3 | Full `bashrc.sh` composition: history survives Starship, `bash-git-prompt`, and Gruvbox initialization |
 | `tests/commands.sh` | 26 | `bash-commands`: listing, `--details`, the `--check` self-test including a deliberately stale row, filter, rejected combinations |
 | `tests/completion.sh` | 35 | The shared host cache, its invalidation after a config edit, `ssh`/`sshp` destinations including `user@`, every per-command completion, and that both resolvers share one registration |
 | `tests/history.sh` | 20 | `history_dedupe` on timestamped, multi-line and timestamp-less files, the shipped `HISTORY_DEDUPE_LIVE=0` default, the live rewrite end to end, and the `prompt-core.sh` guard |
@@ -59,15 +60,17 @@ line per script, and returns `1` if any of them failed.
 | `tests/listing.sh` | 17 | The `ll` header, the dropped `ls` summary line, hidden files, names with spaces, option pass-through |
 | `tests/prompt-core.sh` | 31 | The clock, duration formatting across all five ranges, exit-code capture, the shared `__prompt_quote`/`__prompt_last_command` helpers, control-character escaping in the window title |
 | `tests/prompt-gruvbox.sh` | 62 | The pure-Bash Gruvbox prompt: palette, segment engine, Git segment, toolchain detection and the second powerline line |
-| `tests/prompt-local.sh` | 15 | `prompt_callback`: order of duration, last command and exit code, quoting, and the two repetition knobs |
-| `tests/remote-prompt.sh` | 28 | `prompt.sh`: the pre-4.2 fallback builder (exit code, duration threshold, SSH marker, repeated command, input symbol) and the remote wiring around `prompt-gruvbox.sh` with the Git segment off |
+| `tests/prompt-local.sh` | 19 | `prompt_callback`: order of duration, last command and exit code, quoting, the two repetition knobs, and the four performance switches |
+| `tests/remote-prompt.sh` | 30 | `prompt.sh`: the pre-4.2 fallback builder (exit code, duration threshold, SSH marker, PS1-safe repeated command, input symbol) and the remote wiring around `prompt-gruvbox.sh` with the Git segment off |
 | `tests/prompt-selection.sh` | 9 | The `local.sh` backend selector: Starship, `bash-git-prompt`, Gruvbox, and the fallback warnings |
 | `tests/ssh-by-number.sh` | 19 | `ssh-nr`: help, `--list`, invalid and out-of-range numbers, alias versus raw target, `[host]:port`, markers, `-F` pass-through, both `sshp` call branches |
 | `tests/ssh-config.sh` | 22 | Alias collection, skipped wildcards, quotes, `Include` with glob and `~/`, direct versus inherited users |
 | `tests/ssh-resolve-table.sh` | 27 | `__ssh_resolve_table` against a stubbed `ssh -G` and pre-seeded DNS caches: columns, merged references, bracketed IPv6, skipped hashed entries, filter, empty results, cache invalidation |
 | `tests/ssh-resolve.sh` | 40 | The IPv4/IPv6 predicates, help, argument and timeout validation, and the source-time guard both resolvers carry |
-| `tests/sshp.sh` | 34 | The `sshp` argument parser, `--force`, `--`, the remote-command rejection, and the check for missing sync files |
+| `tests/sshp.sh` | 45 | The `sshp` argument parser, configurable/version-gated `WarnWeakCrypto`, `--force`, `--`, the remote-command rejection, and the check for missing sync files |
 | `tests/starship-config.sh` | 23 | `starship.toml`: the removed helper script, the constant bg1 field on line one, the rounded caps on line two, and the palette matching `prompt-gruvbox.sh` |
+
+The network-free suite is complemented in CI by `tests/integration/bash-git-prompt.sh`, which runs against the pinned upstream 2.7.1 checkout and performs a real prompt render in a temporary Git repository.
 
 ## Checks performed
 
@@ -363,7 +366,7 @@ Result: passed. 17 scripts, 448 checks.
 The following checks can only be carried out in the actual environment:
 
 1. Installation in Git Bash on Windows.
-2. Interaction with the really installed version of `bash-git-prompt`.
+2. Interaction with the locally installed `bash-git-prompt` if it differs from the pinned 2.7.1 CI version.
 3. Connection to an actual target server through a gateway or jump host.
 4. Rendering of colours and Unicode characters in the terminal in use.
 5. Behaviour with password-based SSH authentication.

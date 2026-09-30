@@ -32,16 +32,49 @@ __sshp_target=''
 __sshp_force=0
 __sshp_help_requested=0
 
+# WarnWeakCrypto was added in newer OpenSSH releases. The safe default is to
+# leave OpenSSH's warning behaviour alone; when suppression is requested, only
+# add the option if the installed client actually understands it.
+__sshp_warn_weak_crypto_supported() {
+    local binary
+
+    binary=$(type -P ssh 2>/dev/null) || return 1
+    "$binary" -G -o WarnWeakCrypto=no sshp-option-probe.invalid \
+        >/dev/null 2>&1
+}
+
+__sshp_add_warn_weak_crypto_option() {
+    case ${SSHP_WARN_WEAK_CRYPTO:-yes} in
+        yes)
+            # OpenSSH's default is to show the warning. Not passing the option
+            # also keeps sshp compatible with clients predating the setting.
+            return 0
+            ;;
+        no)
+            if __sshp_warn_weak_crypto_supported; then
+                __sshp_options+=(-o WarnWeakCrypto=no)
+            fi
+            return 0
+            ;;
+        *)
+            printf 'sshp: SSHP_WARN_WEAK_CRYPTO must be yes or no.\n' >&2
+            return 2
+            ;;
+    esac
+}
+
 __sshp_parse_args() {
     local arg option expect_arg=0
 
-    # Our own options come first on purpose: with -o, OpenSSH honours the first
-    # occurrence, so WarnWeakCrypto=no survives a user-supplied -o.
-    __sshp_options=(-o WarnWeakCrypto=no)
+    # sshp-owned options come first on purpose: with -o, OpenSSH honours the
+    # first occurrence. The weak-crypto warning remains enabled by default; a
+    # configured suppression is added here before user-supplied options.
+    __sshp_options=()
     __sshp_extra=()
     __sshp_target=''
     __sshp_force=0
     __sshp_help_requested=0
+    __sshp_add_warn_weak_crypto_option || return $?
 
     while (( $# )); do
         arg=$1

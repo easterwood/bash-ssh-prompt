@@ -287,7 +287,7 @@ bash tests/history.sh       # a single script
 
 `tests/run-all.sh` executes every `*.sh` in `tests/` except itself and
 `lib.sh`, prints one `PASS` line per script with its check count, and returns
-`1` if any script failed. Current state: 18 scripts, 481 checks, all passing.
+`1` if any script failed. Current state: 19 scripts, 501 checks, all passing.
 The same suite runs in CI on every push, together with the `bash -n` gate over
 the whole tree, `bash-commands --check` and ShellCheck; see
 `.github/workflows/ci.yml`. ShellCheck is clean and blocking: every suppression
@@ -296,6 +296,7 @@ above it, so a new finding fails the build.
 
 | Script | Checks | Covers |
 |---|---|---|
+| `tests/bashrc-integration.sh` | 3 | Full `bashrc.sh` composition: history survives Starship, `bash-git-prompt`, and Gruvbox initialization |
 | `tests/commands.sh` | 26 | `bash-commands`: listing, `--details`, the `--check` self-test including a deliberately stale row, filter, rejected combinations |
 | `tests/completion.sh` | 35 | The shared host cache, its invalidation after a config edit, `ssh`/`sshp` destinations including `user@`, every per-command completion, and that both resolvers share one registration |
 | `tests/history.sh` | 20 | `history_dedupe` on timestamped, multi-line and timestamp-less files, the shipped `HISTORY_DEDUPE_LIVE=0` default, the live rewrite end to end, and the `prompt-core.sh` guard |
@@ -305,15 +306,17 @@ above it, so a new finding fails the build.
 | `tests/listing.sh` | 17 | The `ll` header, the dropped `ls` summary line, hidden files, names with spaces, option pass-through |
 | `tests/prompt-core.sh` | 31 | The clock, duration formatting across all five ranges, exit-code capture, the shared `__prompt_quote`/`__prompt_last_command` helpers, control-character escaping in the window title |
 | `tests/prompt-gruvbox.sh` | 62 | The pure-Bash Gruvbox prompt: palette, segment engine, Git segment, toolchain detection and the second powerline line |
-| `tests/prompt-local.sh` | 15 | `prompt_callback`: order of duration, last command and exit code, quoting, and the two repetition knobs |
-| `tests/remote-prompt.sh` | 28 | `prompt.sh`: the pre-4.2 fallback builder (exit code, duration threshold, SSH marker, repeated command, input symbol) and the remote wiring around `prompt-gruvbox.sh` with the Git segment off |
+| `tests/prompt-local.sh` | 19 | `prompt_callback`: order of duration, last command and exit code, quoting, the two repetition knobs, and the four performance switches |
+| `tests/remote-prompt.sh` | 30 | `prompt.sh`: the pre-4.2 fallback builder (exit code, duration threshold, SSH marker, PS1-safe repeated command, input symbol) and the remote wiring around `prompt-gruvbox.sh` with the Git segment off |
 | `tests/prompt-selection.sh` | 9 | The `local.sh` backend selector: Starship, `bash-git-prompt`, Gruvbox, and the fallback warnings |
 | `tests/ssh-by-number.sh` | 19 | `ssh-nr`: help, `--list`, invalid and out-of-range numbers, alias versus raw target, `[host]:port`, markers, `-F` pass-through, both `sshp` call branches |
 | `tests/ssh-config.sh` | 22 | Alias collection, skipped wildcards, quotes, `Include` with glob and `~/`, direct versus inherited users |
 | `tests/ssh-resolve-table.sh` | 27 | `__ssh_resolve_table` against a stubbed `ssh -G` and pre-seeded DNS caches: columns, merged references, bracketed IPv6, skipped hashed entries, filter, empty results, cache invalidation |
 | `tests/ssh-resolve.sh` | 40 | The IPv4/IPv6 predicates, help, argument and timeout validation, and the source-time guard both resolvers carry |
-| `tests/sshp.sh` | 34 | The `sshp` argument parser, `--force`, `--`, the remote-command rejection, and the check for missing sync files |
+| `tests/sshp.sh` | 45 | The `sshp` argument parser, configurable/version-gated `WarnWeakCrypto`, `--force`, `--`, the remote-command rejection, and the check for missing sync files |
 | `tests/starship-config.sh` | 23 | `starship.toml`: the removed helper script, the constant bg1 field on line one, the rounded caps on line two, and the palette matching `prompt-gruvbox.sh` |
+
+`tests/integration/bash-git-prompt.sh` is separate from `run-all.sh`: CI checks out the pinned upstream `bash-git-prompt` 2.7.1 tree, sources the real `gitprompt.sh`, verifies the performance switches survive initialization, and renders one prompt in a temporary Git repository.
 
 `tests/lib.sh` holds the shared parts: `assert`, `assert_equal`,
 `assert_contains`, `assert_not_contains`, `assert_status`, `assert_file`, and

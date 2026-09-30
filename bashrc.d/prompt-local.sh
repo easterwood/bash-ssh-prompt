@@ -72,22 +72,22 @@ GIT_PROMPT_THEME_FILE="$BASH_CONFIG_ROOT/.git-prompt-colors.sh"
 # prompt, which means the prompt waits for the network whenever the remote is
 # slow or unreachable (VPN down, proxy, laptop offline). The up/down arrows
 # then only reflect the last explicit fetch, which is the usual trade.
-GIT_PROMPT_FETCH_REMOTE_STATUS=1
+GIT_PROMPT_FETCH_REMOTE_STATUS=0
 
 # "git status --untracked-files=no" does not walk untracked directories.
 # node_modules, target/ and build/ alone can cost hundreds of milliseconds.
 # The price is that the "…n" untracked marker disappears from the prompt; set
 # this to "normal" if you would rather keep it.
-GIT_PROMPT_SHOW_UNTRACKED_FILES=normal
+GIT_PROMPT_SHOW_UNTRACKED_FILES=no
 
 # No extra Git call per submodule.
-GIT_PROMPT_IGNORE_SUBMODULES=0
+GIT_PROMPT_IGNORE_SUBMODULES=1
 
 # No node/python/conda environment detection per prompt.
 GIT_PROMPT_WITH_VIRTUAL_ENV=0
 
 # No counting of changed files.
-GIT_PROMPT_SHOW_CHANGED_FILES_COUNT=1
+GIT_PROMPT_SHOW_CHANGED_FILES_COUNT=0
 
 # bash-git-prompt is a third-party checkout in $HOME, not part of this repo.
 # shellcheck disable=SC1091

@@ -30,6 +30,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Keep this pinned: the compatibility test should fail only when either
+      # our wiring changes or we deliberately move the supported upstream.
+      - name: Check out bash-git-prompt 2.7.1
+        uses: actions/checkout@v4
+        with:
+          repository: magicmonty/bash-git-prompt
+          ref: 2.7.1
+          path: .ci/bash-git-prompt
+          persist-credentials: false
+
       - name: Record the environment the report refers to
         run: |
           bash --version | head -n 1
@@ -40,6 +50,9 @@ jobs:
       # ssh-keygen and ssh-keyscan binaries. It opens no network connection.
       - name: tests/run-all.sh
         run: bash tests/run-all.sh
+
+      - name: bash-git-prompt 2.7.1 integration
+        run: bash tests/integration/bash-git-prompt.sh .ci/bash-git-prompt
 
       # bash-commands is an alias, and aliases are expanded when the -c string
       # is parsed, before bashrc.sh has defined it. The underlying function is

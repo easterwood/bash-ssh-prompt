@@ -9,3 +9,7 @@
 #   gruvbox          bashrc.d/prompt-gruvbox.sh
 #   auto             Starship if installed, otherwise Gruvbox
 BASH_PROMPT_BACKEND=auto
+
+# Keep the project default (yes) to show OpenSSH weak-crypto warnings.
+# This checkout currently suppresses them; change to yes to restore warnings.
+SSHP_WARN_WEAK_CRYPTO=no

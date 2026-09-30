@@ -122,6 +122,11 @@ Git prompt settings applied here:
 | `GIT_PROMPT_THEME` | `Custom` | Selects the bundled theme |
 | `GIT_PROMPT_SHOW_UPSTREAM` | `1` | Shows the tracked upstream branch |
 | `GIT_PROMPT_THEME_FILE` | `$BASH_CONFIG_ROOT/.git-prompt-colors.sh` | Uses the versioned theme from this repo |
+| `GIT_PROMPT_FETCH_REMOTE_STATUS` | `0` | Does not fetch remotes while rendering the prompt |
+| `GIT_PROMPT_SHOW_UNTRACKED_FILES` | `no` | Skips the untracked-file walk |
+| `GIT_PROMPT_IGNORE_SUBMODULES` | `1` | Skips searching submodules for changes |
+| `GIT_PROMPT_WITH_VIRTUAL_ENV` | `0` | Skips node/python/conda environment detection |
+| `GIT_PROMPT_SHOW_CHANGED_FILES_COUNT` | `0` | Does not count changed files |
 
 ## Git prompt theme
 
@@ -200,7 +205,9 @@ regardless of what the server's default `.bashrc` set up.
 `prompt-gruvbox.sh` needs associative arrays and `$'\Uxxxxxxxx'`. On an older
 server `prompt.sh` keeps its previous plain prompt instead — a dim
 `last: <command>` line, `[SSH <host>]`, the working directory and a status
-segment, with the clock and the input symbol on the last line.
+segment, with the clock and the input symbol on the last line. Dynamic command
+text is escaped before it enters `PS1`, so `$()` and backticks in a previous
+command are displayed literally instead of being evaluated by prompt expansion.
 
 ## Listing — `bashrc.d/listing.sh`
 

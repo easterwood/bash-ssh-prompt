@@ -14,7 +14,8 @@
 | `HISTTIMEFORMAT` | `bashrc.d/history.sh` | `'%F %T '` |
 | `HISTCONTROL` | `bashrc.d/history.sh` | `erasedups:ignorespace` — a repeated command keeps only its most recent occurrence, and a command typed with a leading space is not recorded at all |
 | `SSHP_WELCOME_SHOWN` | `prompt.sh` | Exported guard so the remote welcome banner appears once per connection, not in nested shells |
-| `GIT_PROMPT_ONLY_IN_REPO`, `GIT_PROMPT_THEME`, `GIT_PROMPT_SHOW_UPSTREAM`, `GIT_PROMPT_THEME_FILE` | `bashrc.d/prompt-local.sh` | `bash-git-prompt` settings |
+| `GIT_PROMPT_ONLY_IN_REPO`, `GIT_PROMPT_THEME`, `GIT_PROMPT_SHOW_UPSTREAM`, `GIT_PROMPT_THEME_FILE` | `bashrc.d/prompt-local.sh` | `bash-git-prompt` layout settings |
+| `GIT_PROMPT_FETCH_REMOTE_STATUS`, `GIT_PROMPT_SHOW_UNTRACKED_FILES`, `GIT_PROMPT_IGNORE_SUBMODULES`, `GIT_PROMPT_WITH_VIRTUAL_ENV`, `GIT_PROMPT_SHOW_CHANGED_FILES_COUNT` | `bashrc.d/prompt-local.sh` | `bash-git-prompt` performance settings |
 
 ### Read by the configuration
 
@@ -28,6 +29,7 @@ Set these before sourcing, in `local.sh`, or per command.
 | `SSH_RESOLVE_HOST_TIMEOUT` | `3` | `ssh-resolve-hosts` | Forward-DNS timeout in seconds. Must be a positive integer |
 | `SSH_KNOWN_HOSTS_CLEAN_TIMEOUT` | `3` | `known-hosts --clean` | `ssh-keyscan` timeout in seconds. Must be a positive integer |
 | `SSH_PROMPT_SHOW_COMMAND` | `1` | `prompt.sh` | `0` hides the repetition of the last command in the remote prompt (it seeds `PROMPT_GRUVBOX_SHOW_COMMAND`) |
+| `SSHP_WARN_WEAK_CRYPTO` | `yes` | `ssh-prompt.sh` / `sshp` | `yes` leaves OpenSSH's weak-crypto warnings enabled. `no` adds `-o WarnWeakCrypto=no` when the installed client supports that option; older clients keep their normal warning behaviour |
 | `PROMPT_LOCAL_SHOW_COMMAND` | `1` | `bashrc.d/prompt-local.sh` | `0` drops the repetition of the last command from the `bash-git-prompt` status segment |
 | `PROMPT_LOCAL_COMMAND_MAX_LEN` | `60` | `bashrc.d/prompt-local.sh` | Truncation length for that repetition |
 | `HISTORY_DEDUPE_LIVE` | `0` | `bashrc.d/history.sh` | `0` rewrites the history file only at shell start instead of also right after a repeated command. Useful on very large history files |
@@ -110,13 +112,16 @@ selected. That lets it select and configure the prompt without being sourced
 twice. It is covered by `.gitignore` along with `*.bak`, `*.backup`, `.idea`
 and `*.iml`.
 
-Prompt selection example:
+Prompt and SSH policy example:
 
 ```bash
 BASH_PROMPT_BACKEND=starship
 # BASH_PROMPT_BACKEND=bash-git-prompt
 # BASH_PROMPT_BACKEND=gruvbox
 # BASH_PROMPT_BACKEND=auto
+
+# sshp defaults to yes. This checkout currently suppresses the warning.
+SSHP_WARN_WEAK_CRYPTO=no
 ```
 
 Open a new shell after changing the value. `auto` keeps the previous behaviour:

@@ -101,6 +101,10 @@ assert_not_contains 'a local shell is not' "$ps1" '[SSH'
 ps1=$(fallback '' '__cmd_last_exit=0; __cmd_last_command="make build"')
 assert_contains 'the last command is repeated' "$ps1" 'last: make build'
 
+ps1=$(fallback '' '__cmd_last_exit=0; __cmd_last_command="echo \$(id) \`uname\`"')
+assert_contains 'command substitutions are escaped in the fallback PS1' "$ps1" '\$(id)'
+assert_contains 'backticks are escaped in the fallback PS1' "$ps1" '\`uname\`'
+
 ps1=$(fallback 'export SSH_PROMPT_SHOW_COMMAND=0' \
     '__cmd_last_exit=0; __cmd_last_command="make build"')
 assert_not_contains 'SSH_PROMPT_SHOW_COMMAND=0 switches it off' "$ps1" 'last:'

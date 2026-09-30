@@ -23,12 +23,59 @@ test_sandbox
 # shellcheck source=ssh-prompt.sh
 source "$config_root/ssh-prompt.sh"
 
+# --- weak-crypto warning policy -------------------------------------------
+
+# Exercise the real capability probe once with a fake client. This proves the
+# check is configuration-only (-G) and asks for the exact setting we gate.
+export SSH_PROBE_LOG="$TEST_TMP/ssh-probe.log"
+test_stub ssh <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$SSH_PROBE_LOG"
+[[ $* == *'WarnWeakCrypto=no'* ]]
+STUB
+assert 'WarnWeakCrypto support is probed through ssh -G' __sshp_warn_weak_crypto_supported
+probe_args=$(< "$SSH_PROBE_LOG")
+assert_contains 'the probe asks for the exact OpenSSH option' "$probe_args" \
+    '-G -o WarnWeakCrypto=no sshp-option-probe.invalid'
+rm -f "$TEST_STUB_DIR/ssh"
+unset SSH_PROBE_LOG
+
+template_policy=$(bash -c 'source "$1"; printf "%s" "$SSHP_WARN_WEAK_CRYPTO"' \
+    _ "$config_root/local.sh.example")
+assert_equal 'the current local configuration template suppresses the warning' \
+    'no' "$template_policy"
+
+# Keep the remaining policy tests deterministic: they are about sshp's policy,
+# not the OpenSSH version installed on the CI runner.
+__sshp_warn_weak_crypto_supported() { return 0; }
+
+unset SSHP_WARN_WEAK_CRYPTO
+assert 'the default weak-crypto policy parses' __sshp_parse_args user@host
+assert_not_contains 'warnings stay enabled by default' "${__sshp_options[*]}" 'WarnWeakCrypto'
+
+SSHP_WARN_WEAK_CRYPTO=no
+assert 'warning suppression can be enabled' __sshp_parse_args user@host
+assert_contains 'supported clients get the suppression option' "${__sshp_options[*]}" 'WarnWeakCrypto=no'
+
+SSHP_WARN_WEAK_CRYPTO=yes
+assert 'warnings can be explicitly enabled' __sshp_parse_args user@host
+assert_not_contains 'yes relies on the OpenSSH default' "${__sshp_options[*]}" 'WarnWeakCrypto'
+
+SSHP_WARN_WEAK_CRYPTO=no
+__sshp_warn_weak_crypto_supported() { return 1; }
+assert 'old OpenSSH clients still parse the destination' __sshp_parse_args user@host
+assert_not_contains 'unsupported clients do not receive the option' "${__sshp_options[*]}" 'WarnWeakCrypto'
+
+SSHP_WARN_WEAK_CRYPTO=maybe
+assert_status 'an invalid weak-crypto policy is rejected' 2 __sshp_parse_args user@host
+unset SSHP_WARN_WEAK_CRYPTO
+__sshp_warn_weak_crypto_supported() { return 0; }
+
 # --- destination and options ----------------------------------------------
 
 assert 'a plain destination parses' __sshp_parse_args user@host
 assert_equal 'destination recognised' 'user@host' "$__sshp_target"
 assert_equal 'no remote command' 0 "${#__sshp_extra[@]}"
-assert_contains 'WarnWeakCrypto is set first' "${__sshp_options[*]}" 'WarnWeakCrypto=no'
 
 assert 'options before the destination' __sshp_parse_args -v -p 2222 host
 assert_equal 'the destination is still found' 'host' "$__sshp_target"
