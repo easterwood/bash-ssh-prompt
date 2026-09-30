@@ -334,7 +334,24 @@ above it, so a new finding fails the build.
 | `tests/sshp.sh` | 67 | The `sshp` parser, weak-crypto policy, connection-aware cache identity, staged remote publication, preservation on validation failure, `--force`, `--`, remote-command rejection and missing sync files |
 | `tests/starship-config.sh` | 23 | `starship.toml`: the removed helper script, the constant bg1 field on line one, the rounded caps on line two, and the palette matching `prompt-gruvbox.sh` |
 
-`tests/integration/bash-git-prompt.sh` is separate from `run-all.sh`: CI checks out the pinned upstream `bash-git-prompt` 2.7.1 tree, sources the real `gitprompt.sh`, verifies the performance switches survive initialization, and renders one prompt in a temporary Git repository.
+The integration scripts stay separate from `run-all.sh` because they depend on
+external runtimes or upstream projects:
+
+- `tests/integration/bash-git-prompt.sh` runs against the pinned upstream
+  `bash-git-prompt` 2.7.1 tree, verifies the performance switches survive
+  initialization, and renders one prompt in a temporary Git repository.
+- `tests/integration/starship.sh` runs against pinned Starship 1.26.0, renders
+  `starship.toml` with the real binary, then loads the complete `bashrc.sh` and
+  verifies Starship preserves the history hook while taking over
+  `PROMPT_COMMAND`.
+- `tests/integration/legacy-bash.sh` runs under Bash 3.2.57 and proves that
+  `prompt.sh` itself parses and selects the pre-4.2 remote fallback without
+  loading the associative-array Gruvbox implementation.
+
+`.github/workflows/ci.yml` runs the regular suite on the current Ubuntu runner,
+Git Bash on `windows-latest`, and the official Bash 4.2.53, 4.4.23, 5.1.16
+and 5.3.20 container images. The Bash 3.2 job is deliberately limited to the
+remote fallback because local shells require Bash 4.2 or newer.
 
 `tests/lib.sh` holds the shared parts: `assert`, `assert_equal`,
 `assert_contains`, `assert_not_contains`, `assert_status`, `assert_file`, and
@@ -370,10 +387,10 @@ find . -name '*.sh' -o -name '*.bash' | xargs -n1 bash -n
 `TEST.md` in the repository root lists what the automated suite covers and
 reports the manual test run covering the installer, the local and remote prompts, the
 `ll` layout, multi-file sync with a stubbed `ssh` client, per-connection change
-detection, and the `known-hosts` overview. It also lists what could not be
-tested automatically: Git Bash on Windows, a real `bash-git-prompt` install,
-real target servers, terminal colour and Unicode rendering, password-based
-logins, and GNU `ls` option availability on every target.
+detection, and the `known-hosts` overview. It also lists what still cannot be
+tested automatically: real target servers, terminal colour and Unicode rendering,
+password-based logins, Windows reboot
+history persistence, and GNU `ls` option availability on every target.
 
 ## Known limitations
 

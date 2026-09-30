@@ -2,20 +2,25 @@
 
 ## Summary
 
-The modular Bash configuration was verified in an isolated Linux test
-environment. All automated checks passed.
+The modular Bash configuration was verified locally in an isolated Linux test
+environment. All locally executable automated checks passed.
 
 Reproducible part: `bash tests/run-all.sh` — 19 scripts, 574 checks, all passing.
-The same suite runs in CI on every push (`.github/workflows/ci.yml`), so the
-numbers above are checked rather than transcribed. The remaining sections
-describe one-off checks that are not scripted.
+CI is configured to run the same suite on the current Ubuntu runner, Git Bash
+on Windows, and explicit Bash 4.2.53, 4.4.23, 5.1.16 and 5.3.20 runtimes. A
+dedicated Bash 3.2.57 job covers the supported legacy remote prompt. The
+remaining sections distinguish local verification from CI-only compatibility
+checks.
 
 | Area | Result |
 |---|---|
 | Automated suite (`tests/run-all.sh`) | Passed |
 | Syntax of all shell files | Passed |
 | Modular local loader | Passed |
-| Local `bash-git-prompt` integration | Passed with a test double; pinned 2.7.1 compatibility is enforced in CI |
+| Local `bash-git-prompt` integration | Passed with a test double; pinned 2.7.1 real integration is configured in CI |
+| Local Starship integration | Config tested locally; pinned 1.26.0 real integration is configured in CI |
+| Bash version compatibility | CI matrix: 4.2.53, 4.4.23, 5.1.16, 5.3.20; remote fallback separately on 3.2.57 |
+| Git Bash compatibility | Full suite and syntax gate configured on `windows-latest` |
 | Remote prompt and `ll` | Passed |
 | Installation and backup of `.bashrc` | Passed |
 | Multi-file sync | Passed (SSH simulated) |
@@ -30,13 +35,14 @@ describe one-off checks that are not scripted.
 | Component | Version |
 |---|---|
 | Operating system | Linux, x86-64 |
-| Bash | GNU Bash 5.2.21 |
-| GNU coreutils (`ls`) | 9.4 |
-| AWK | mawk 1.3.4 (2024-01-23) |
+| Bash | GNU Bash 5.2.37 |
+| GNU coreutils (`ls`) | 9.7 |
+| AWK | mawk 1.3.4 (20250131) |
 | ZIP | Info-ZIP 3.0 |
 
-Git Bash on Windows and the actual target servers were not part of the
-executable test environment.
+Git Bash on Windows, the old Bash containers and the actual target servers
+were not available in this local execution environment. They are represented by
+CI jobs where applicable; real SSH targets remain manual-only.
 
 ## Automated suite
 
@@ -70,7 +76,17 @@ line per script, and returns `1` if any of them failed.
 | `tests/sshp.sh` | 67 | The `sshp` argument parser, configurable/version-gated `WarnWeakCrypto`, effective `ssh -G` cache identity, per-port/config state separation, equivalent-alias cache sharing, staged remote publication/rollback safety, `--force`, `--`, remote-command rejection, and missing sync files |
 | `tests/starship-config.sh` | 23 | `starship.toml`: the removed helper script, the constant bg1 field on line one, the rounded caps on line two, and the palette matching `prompt-gruvbox.sh` |
 
-The network-free suite is complemented in CI by `tests/integration/bash-git-prompt.sh`, which runs against the pinned upstream 2.7.1 checkout and performs a real prompt render in a temporary Git repository.
+The network-free suite is complemented in CI by three integration checks:
+
+- `tests/integration/bash-git-prompt.sh` runs against pinned upstream 2.7.1 and
+  performs a real prompt render in a temporary Git repository.
+- `tests/integration/starship.sh` runs against pinned Starship 1.26.0, renders
+  the versioned TOML and loads the complete Starship backend.
+- `tests/integration/legacy-bash.sh` runs under Bash 3.2.57 and exercises the
+  actual pre-4.2 branch in `prompt.sh`.
+
+The full regular suite additionally runs under Bash 4.2.53, 4.4.23, 5.1.16
+and 5.3.20, and under Git Bash on `windows-latest`.
 
 ## Checks performed
 
@@ -369,19 +385,19 @@ assignment was replaced by the loop form used elsewhere in the tree.
   hex in `starship.toml`. `tests/starship-config.sh` now converts and compares
   them, so drift fails the build.
 
-Result: passed. 17 scripts, 448 checks.
+Result: passed. 19 scripts, 574 checks.
 
 ## Still to be checked manually
 
 The following checks can only be carried out in the actual environment:
 
-1. Installation in Git Bash on Windows.
-2. Interaction with the locally installed `bash-git-prompt` if it differs from the pinned 2.7.1 CI version.
-3. Connection to an actual target server through a gateway or jump host.
-4. Rendering of colours and Unicode characters in the terminal in use.
-5. Behaviour with password-based SSH authentication.
-6. Availability of the GNU `ls` options used on every target server.
-7. History persistence across a real Windows reboot, and the runtime cost of
+1. Interaction with a locally installed `bash-git-prompt` if it differs from
+   the pinned 2.7.1 CI version.
+2. Connection to an actual target server through a gateway or jump host.
+3. Rendering of colours and Unicode characters in the terminal in use.
+4. Behaviour with password-based SSH authentication.
+5. Availability of the GNU `ls` options used on every target server.
+6. History persistence across a real Windows reboot, and the runtime cost of
    `history_dedupe` on a grown `~/.bash_history` under Git Bash.
 
 ## Manual acceptance test

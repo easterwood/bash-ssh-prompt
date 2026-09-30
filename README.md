@@ -188,6 +188,8 @@ tests/
   starship-config.sh       starship.toml layout and palette regression test
   integration/
     bash-git-prompt.sh     Compatibility check against pinned upstream 2.7.1 in CI
+    starship.sh            Compatibility check against pinned Starship 1.26.0 in CI
+    legacy-bash.sh         Actual pre-4.2 remote fallback under Bash 3.2 in CI
   known_hosts.fixture      Synthetic parser data (no real keys)
 ```
 
@@ -214,14 +216,17 @@ bash tests/history.sh       # or a single script
 bash-commands --check       # every documented command is really defined
 ```
 
-Currently 19 scripts with 574 checks, all passing. The same three commands run
-in CI on every push, together with a `bash -n` gate over the whole tree
-(`.github/workflows/ci.yml`).
+Currently 19 scripts with 574 checks, all passing locally. CI runs the same
+suite on the current Ubuntu runner, on Git Bash under `windows-latest`, and in
+official Bash containers for 4.2.53, 4.4.23, 5.1.16 and 5.3.20. A separate
+Bash 3.2.57 job exercises only the supported pre-4.2 remote fallback. The
+workflow also runs the whole-tree `bash -n` gate, `bash-commands --check` and
+ShellCheck.
 
 The regular suite runs against throwaway home directories and stubbed `ssh`,
 `ssh-keygen` and `ssh-keyscan` binaries, so it touches neither your own
-configuration nor the network. CI additionally checks the local prompt against
-the pinned `bash-git-prompt` 2.7.1 checkout.
+configuration nor the network. CI additionally runs real prompt integration
+tests against pinned `bash-git-prompt` 2.7.1 and Starship 1.26.0.
 
 `TEST.md` records what the suite covers plus a manual test run of the whole
 package. See [docs/architecture.md#testing](docs/architecture.md#testing).
