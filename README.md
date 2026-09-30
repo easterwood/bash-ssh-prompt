@@ -214,7 +214,7 @@ bash tests/history.sh       # or a single script
 bash-commands --check       # every documented command is really defined
 ```
 
-Currently 19 scripts with 545 checks, all passing. The same three commands run
+Currently 19 scripts with 574 checks, all passing. The same three commands run
 in CI on every push, together with a `bash -n` gate over the whole tree
 (`.github/workflows/ci.yml`).
 

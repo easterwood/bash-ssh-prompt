@@ -42,15 +42,91 @@ shopt -s cmdhist
 
 # HISTCONTROL only ever touches the history list of the running shell, never
 # the file on disk. Entries written by earlier sessions therefore stay
-# duplicated in ~/.bash_history and come back at the next start. This rewrites
-# the file so that every command appears exactly once, at the position of its
-# most recent use, with that use's timestamp.
+# duplicated in ~/.bash_history and come back at the next start. Rewriting the
+# shared file has to be serialized with every history -a writer: otherwise a
+# second shell can append to the old inode between our read and the final mv.
 #
-# Multi-line entries and entries without a "#<epoch>" line are preserved.
-# Called without an argument on purpose: the default is $HISTFILE.
-# shellcheck disable=SC2119,SC2120
-history_dedupe() {
-    local target=${1:-$HISTFILE} temporary
+# The lock uses Bash noclobber for atomic creation, so the uncontended acquire
+# itself does not fork. Releasing it needs one rm. A dead owner is recovered by
+# PID after contention; the random token prevents a shell from removing a lock
+# that has already been replaced by another owner.
+__history_lock_token=''
+__history_lock_warned=0
+
+__history_lock_try() {
+    local lock=$1 token=$2 status had_noclobber=0
+
+    [[ $- == *C* ]] && had_noclobber=1
+    set -C
+    { printf '%s\n' "$token" > "$lock"; } 2>/dev/null
+    status=$?
+    (( had_noclobber )) || set +C
+    return "$status"
+}
+
+__history_lock_acquire() {
+    local target=$1 lock owner='' owner_pid='' current=''
+    local pid=${BASHPID:-$$} token attempt
+
+    lock="${target}.lock"
+
+    token="${pid}:${RANDOM}:${SECONDS}"
+
+    for ((attempt=0; attempt<100; attempt++)); do
+        if __history_lock_try "$lock" "$token"; then
+            REPLY=$lock
+            __history_lock_token=$token
+            return 0
+        fi
+
+        owner=''
+        [[ ! -r $lock ]] || IFS= read -r owner < "$lock" || owner=''
+        owner_pid=${owner%%:*}
+
+        # An interrupted PROMPT_COMMAND can leave this shell's own lock behind
+        # while the process itself stays alive. There is no nested acquisition
+        # in the implementation, so a lock carrying our PID is safe to reclaim.
+        if [[ $owner_pid == "$pid" ]]; then
+            current=''
+            [[ ! -r $lock ]] || IFS= read -r current < "$lock" || current=''
+            if [[ $current == "$owner" ]]; then
+                command rm -f -- "$lock" 2>/dev/null || true
+                continue
+            fi
+        fi
+
+        # Other stale locks are uncommon (normally SIGKILL/power loss). Only
+        # recover one when its recorded owner definitely no longer exists.
+        if [[ $owner_pid =~ ^[0-9]+$ ]] && ! kill -0 "$owner_pid" 2>/dev/null; then
+            # Re-read before unlinking so a lock replaced while we inspected it
+            # is not removed by the stale-owner path.
+            current=''
+            [[ ! -r $lock ]] || IFS= read -r current < "$lock" || current=''
+            if [[ $current == "$owner" ]]; then
+                command rm -f -- "$lock" 2>/dev/null || true
+                continue
+            fi
+        fi
+
+        # Only contended paths sleep/fork; the normal history append does not.
+        sleep 0.05
+    done
+
+    return 1
+}
+
+__history_lock_release() {
+    local lock=$1 token=$2 owner=''
+
+    [[ ! -r $lock ]] || IFS= read -r owner < "$lock" || owner=''
+    [[ $owner == "$token" ]] || return 1
+    command rm -f -- "$lock"
+}
+
+# The rewrite body assumes the caller owns the history lock. Keeping it
+# separate avoids a nested lock when __history_append detects a repeat.
+__history_dedupe_locked() {
+    local target=$1 temporary
 
     [[ -n $target && -s $target && -w $target ]] || return 0
     command -v awk >/dev/null 2>&1 || return 0
@@ -92,10 +168,38 @@ history_dedupe() {
         }
     ' "$target" > "$temporary" && [[ -s $temporary ]]; then
         chmod --reference="$target" -- "$temporary" 2>/dev/null || chmod 600 -- "$temporary"
-        mv -f -- "$temporary" "$target" || rm -f -- "$temporary"
+        mv -f -- "$temporary" "$target" || {
+            rm -f -- "$temporary"
+            return 1
+        }
     else
         rm -f -- "$temporary"
     fi
+}
+
+# Multi-line entries and entries without a "#<epoch>" line are preserved.
+# Called without an argument on purpose: the default is $HISTFILE.
+# shellcheck disable=SC2119,SC2120
+history_dedupe() {
+    local target=${1:-$HISTFILE} lock token status=0
+
+    [[ -n $target && -s $target && -w $target ]] || return 0
+    command -v awk >/dev/null 2>&1 || return 0
+
+    if ! __history_lock_acquire "$target"; then
+        if (( ! __history_lock_warned )); then
+            printf 'history: could not acquire lock for %s; skipping deduplication.\n' \
+                "$target" >&2
+            __history_lock_warned=1
+        fi
+        return 0
+    fi
+
+    lock=$REPLY
+    token=$__history_lock_token
+    __history_dedupe_locked "$target" || status=$?
+    __history_lock_release "$lock" "$token" || status=1
+    return "$status"
 }
 
 # Bash reads the history file only after the startup files have run, so
@@ -115,14 +219,33 @@ history_dedupe() {
 __history_previous_histcmd=$HISTCMD
 
 __history_append() {
-    local repeated=0
+    local repeated=0 lock token status=0
 
     (( HISTCMD == __history_previous_histcmd )) && repeated=1
     __history_previous_histcmd=$HISTCMD
 
-    history -a
-    if (( repeated && HISTORY_DEDUPE_LIVE )); then
-        history_dedupe
+    if __history_lock_acquire "$HISTFILE"; then
+        lock=$REPLY
+        token=$__history_lock_token
+
+        history -a || status=$?
+        if (( repeated && HISTORY_DEDUPE_LIVE )); then
+            __history_dedupe_locked "$HISTFILE" || status=$?
+        fi
+
+        __history_lock_release "$lock" "$token" || status=1
+        return "$status"
+    fi
+
+    # A wedged live owner should not block the prompt forever. The lock waits
+    # up to five seconds; after that defer the flush. Bash keeps unappended
+    # entries in memory, so the next successful history -a writes them all. Do
+    # not write without the lock: that would reintroduce the inode-replacement
+    # race this protocol exists to prevent.
+    if (( ! __history_lock_warned )); then
+        printf 'history: could not acquire lock for %s; deferring history flush.\n' \
+            "$HISTFILE" >&2
+        __history_lock_warned=1
     fi
     return 0
 }

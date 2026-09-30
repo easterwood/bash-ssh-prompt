@@ -209,13 +209,17 @@ control master.
 
 Read from the heredoc `REMOTE` in `ssh-prompt.sh`, it runs under `set -eu` and:
 
-1. Verifies that `tar`, `bash`, `grep`, `mktemp` and `touch` all exist,
+1. Verifies that `tar`, `bash`, `grep`, `mktemp`, `touch` and `rm` all exist,
    reporting the missing one by name.
 2. Sets `umask 077`.
 3. Creates `~/.hushlogin` to silence the login banner on subsequent connections.
-4. Extracts the archive into `~/.cache/ssh-prompt` with `tar --no-same-owner`.
-5. Syntax-checks all four extracted files.
-6. If `~/.bashrc` does not already contain the start marker
+4. Extracts the archive into a temporary sibling under `~/.cache`, never into
+   the active `~/.cache/ssh-prompt` tree.
+5. Syntax-checks all four files in that staging tree.
+6. Publishes the validated tree by renaming the old prompt directory aside and
+   moving the staged directory into place. An `EXIT`/signal cleanup restores
+   the old tree if activation fails and removes staging/backup leftovers.
+7. If `~/.bashrc` does not already contain the start marker
    `# >>> sshp managed prompt >>>`, it backs the file up **once** to
    `~/.bashrc.before-sshp` (only if no backup exists yet), builds the new
    content in a `mktemp` file, appends the guarded loader block, syntax-checks
@@ -232,14 +236,16 @@ fi
 ```
 
 Idempotency comes from the marker check, so repeated syncs only replace the
-files under `~/.cache/ssh-prompt` and never append the block twice.
+validated tree under `~/.cache/ssh-prompt` and never append the block twice. A
+bad archive or a syntax-invalid prompt therefore cannot partially overwrite the
+currently working remote prompt.
 
 ## Prerequisites and constraints
 
 | Side | Requirement |
 |---|---|
 | Local | `cksum`, `tar`, `gzip`, `mktemp`, OpenSSH client with `ssh -G` configuration expansion |
-| Remote | `bash`, `tar`, `grep`, `mktemp`, `touch`; GNU `ls` for correct `ll` output |
+| Remote | `bash`, `tar`, `grep`, `mktemp`, `touch`, `rm`; GNU `ls` for correct `ll` output |
 | Remote | A writable `$HOME`, and a `~/.bashrc` that is actually read on login |
 
 Hosts whose login shell is not Bash, or where `~/.bashrc` is not sourced for
@@ -255,7 +261,7 @@ One of the three sync files is missing from the checkout. Check
 No `cksum` in `PATH`. Install GNU coreutils.
 
 **"sshp: `<tool>` is missing on the destination."**
-The remote host lacks one of the five required tools. Either install it or use
+The remote host lacks one of the six required tools. Either install it or use
 `command ssh` for that host.
 
 **"sshp: sync or .bashrc update failed."**

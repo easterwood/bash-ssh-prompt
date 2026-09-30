@@ -305,7 +305,7 @@ bash tests/history.sh       # a single script
 
 `tests/run-all.sh` executes every `*.sh` in `tests/` except itself and
 `lib.sh`, prints one `PASS` line per script with its check count, and returns
-`1` if any script failed. Current state: 19 scripts, 545 checks, all passing.
+`1` if any script failed. Current state: 19 scripts, 574 checks, all passing.
 The same suite runs in CI on every push, together with the `bash -n` gate over
 the whole tree, `bash-commands --check` and ShellCheck; see
 `.github/workflows/ci.yml`. ShellCheck is clean and blocking: every suppression
@@ -317,11 +317,11 @@ above it, so a new finding fails the build.
 | `tests/bashrc-integration.sh` | 4 | Full `bashrc.sh` composition: history survives all prompt backends and source-time settings are loaded before `history.sh` |
 | `tests/commands.sh` | 26 | `bash-commands`: listing, `--details`, the `--check` self-test including a deliberately stale row, filter, rejected combinations |
 | `tests/completion.sh` | 35 | Completion lists derived from the shared SSH inventory, invalidation after a config edit, `ssh`/`sshp` destinations including `user@`, every per-command completion, and the shared resolver registration |
-| `tests/history.sh` | 20 | `history_dedupe` on timestamped, multi-line and timestamp-less files, the shipped `HISTORY_DEDUPE_LIVE=0` default, the live rewrite end to end, and the `prompt-core.sh` guard |
+| `tests/history.sh` | 26 | `history_dedupe`, serialized writers, stale-lock recovery, timestamped/multi-line/timestamp-less files, the shipped `HISTORY_DEDUPE_LIVE=0` default, live rewrite, and the `prompt-core.sh` guard |
 | `tests/install.sh` | 21 | The generated loader, the backup, `printf %q` quoting of a path with spaces, the `bash -n` gate, and that `bashrc.sh` stays inert in a non-interactive shell |
 | `tests/known-hosts-clean.sh` | 39 | `known-hosts --clean`: dry run, `--apply` with backups, rejected combinations, the removed `known-hosts-clean` alias, and the completion |
 | `tests/known-hosts.sh` | 15 | The `known_hosts` parser, filter/process behaviour, and automatic invalidation after an SSH config edit |
-| `tests/listing.sh` | 17 | The `ll` header, the dropped `ls` summary line, hidden files, names with spaces, option pass-through |
+| `tests/listing.sh` | 18 | The `ll` header, dropped summary line, hidden files, names with spaces, option pass-through and `ls` exit-status propagation |
 | `tests/prompt-core.sh` | 40 | Central string/array `PROMPT_COMMAND` composition plus the clock, duration formatting, exit-code capture, shared text helpers, and window-title escaping |
 | `tests/prompt-gruvbox.sh` | 62 | The pure-Bash Gruvbox prompt: palette, segment engine, Git segment, toolchain detection and the second powerline line |
 | `tests/prompt-local.sh` | 19 | `prompt_callback`: order of duration, last command and exit code, quoting, the two repetition knobs, and the four performance switches |
@@ -330,8 +330,8 @@ above it, so a new finding fails the build.
 | `tests/ssh-by-number.sh` | 19 | `ssh-nr`: help, `--list`, invalid and out-of-range numbers, alias versus raw target, `[host]:port`, markers, `-F` pass-through, both `sshp` call branches |
 | `tests/ssh-config.sh` | 37 | Scanner behaviour plus the shared config/known_hosts inventory, generation invalidation, Include-glob changes, cached `ssh -G`, and removed legacy completion files |
 | `tests/ssh-resolve-table.sh` | 27 | `__ssh_resolve_table` against a stubbed `ssh -G` and pre-seeded DNS caches: columns, merged references, bracketed IPv6, skipped hashed entries, filter, empty results, cache invalidation |
-| `tests/ssh-resolve.sh` | 40 | The IPv4/IPv6 predicates, help, argument and timeout validation, and the source-time guard both resolvers carry |
-| `tests/sshp.sh` | 61 | The `sshp` argument parser, configurable/version-gated `WarnWeakCrypto`, effective `ssh -G` cache identity, per-port/config state separation, equivalent-alias cache sharing, `--force`, `--`, remote-command rejection, and missing sync files |
+| `tests/ssh-resolve.sh` | 56 | Strict IPv4/IPv6 predicates, compression/scoped/embedded-IPv4 cases, help, argument/timeout validation, and resolver source-time guards |
+| `tests/sshp.sh` | 67 | The `sshp` parser, weak-crypto policy, connection-aware cache identity, staged remote publication, preservation on validation failure, `--force`, `--`, remote-command rejection and missing sync files |
 | `tests/starship-config.sh` | 23 | `starship.toml`: the removed helper script, the constant bg1 field on line one, the rounded caps on line two, and the palette matching `prompt-gruvbox.sh` |
 
 `tests/integration/bash-git-prompt.sh` is separate from `run-all.sh`: CI checks out the pinned upstream `bash-git-prompt` 2.7.1 tree, sources the real `gitprompt.sh`, verifies the performance switches survive initialization, and renders one prompt in a temporary Git repository.
@@ -463,18 +463,20 @@ are guarded and reversible, but on shared or managed accounts you may not want
 this. Undo instructions are in
 [installation.md](installation.md#what-sshp-changes-on-a-remote-host).
 
-### 11. History deduplication is unlocked and file-wide
+### 11. History deduplication is file-wide
 
-`history_dedupe` reads and rewrites the whole history file. Two shells that
-start at the very same moment, or a rewrite that races an append from another
-terminal, can lose a single line; there is no portable locking under Git Bash.
-The cost also scales with the file, which is why `HISTFILESIZE` was lowered to
-`200000` and why the in-session rewrite is limited to actual repeats and can be
-turned off with `HISTORY_DEDUPE_LIVE=0`.
+`history_dedupe` still reads and rewrites the whole history file, so its cost
+scales with `HISTFILESIZE`. The rewrite and every `history -a` writer now share
+a noclobber lock next to the history file. That serializes the final `mv` with
+other shells and prevents a command from being appended to the inode that has
+just been replaced. Lock creation is implemented with Bash redirection; only
+release needs `rm`, while the contention path sleeps and can recover a lock
+whose recorded PID no longer exists.
 
-`HISTCONTROL` never applies to entries read from the file, only to commands
-typed at the prompt. Duplicates created by another terminal are therefore
-visible until the next shell start cleans the file.
+The live rewrite remains limited to actual repeats and can be disabled with
+`HISTORY_DEDUPE_LIVE=0`. `HISTCONTROL` still applies only to commands typed in
+the running shell, not entries read from disk, so duplicates created by other
+terminals can remain visible until a rewrite occurs.
 
 ## Extension points
 

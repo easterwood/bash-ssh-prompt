@@ -5,7 +5,7 @@
 The modular Bash configuration was verified in an isolated Linux test
 environment. All automated checks passed.
 
-Reproducible part: `bash tests/run-all.sh` — 19 scripts, 545 checks, all passing.
+Reproducible part: `bash tests/run-all.sh` — 19 scripts, 574 checks, all passing.
 The same suite runs in CI on every push (`.github/workflows/ci.yml`), so the
 numbers above are checked rather than transcribed. The remaining sections
 describe one-off checks that are not scripted.
@@ -53,11 +53,11 @@ line per script, and returns `1` if any of them failed.
 | `tests/bashrc-integration.sh` | 4 | Full `bashrc.sh` composition: prompt hooks survive all backends and source-time settings load before `history.sh` |
 | `tests/commands.sh` | 26 | `bash-commands`: listing, `--details`, the `--check` self-test including a deliberately stale row, filter, rejected combinations |
 | `tests/completion.sh` | 35 | Completion lists derived from the shared SSH inventory, invalidation after a config edit, `ssh`/`sshp` destinations including `user@`, every per-command completion, and the shared resolver registration |
-| `tests/history.sh` | 20 | `history_dedupe` on timestamped, multi-line and timestamp-less files, the shipped `HISTORY_DEDUPE_LIVE=0` default, the live rewrite end to end, and the `prompt-core.sh` guard |
+| `tests/history.sh` | 26 | `history_dedupe`, serialized concurrent writers, stale-lock recovery, timestamped/multi-line/timestamp-less files, the shipped `HISTORY_DEDUPE_LIVE=0` default, live rewrite, and the `prompt-core.sh` guard |
 | `tests/install.sh` | 21 | The generated loader, the backup, `printf %q` quoting of a path with spaces, the `bash -n` gate, and that `bashrc.sh` stays inert in a non-interactive shell |
 | `tests/known-hosts-clean.sh` | 39 | `known-hosts --clean`: dry run, `--apply` with backups, rejected combinations, the removed `known-hosts-clean` alias, and the completion |
 | `tests/known-hosts.sh` | 15 | The `known_hosts` parser, filter/process behaviour, and automatic invalidation after an SSH config edit |
-| `tests/listing.sh` | 17 | The `ll` header, the dropped `ls` summary line, hidden files, names with spaces, option pass-through |
+| `tests/listing.sh` | 18 | The `ll` header, the dropped `ls` summary line, hidden files, names with spaces, option pass-through, and propagation of the underlying `ls` exit status |
 | `tests/prompt-core.sh` | 40 | Central string/array `PROMPT_COMMAND` composition plus the clock, duration formatting, exit-code capture, shared text helpers, and window-title escaping |
 | `tests/prompt-gruvbox.sh` | 62 | The pure-Bash Gruvbox prompt: palette, segment engine, Git segment, toolchain detection and the second powerline line |
 | `tests/prompt-local.sh` | 19 | `prompt_callback`: order of duration, last command and exit code, quoting, the two repetition knobs, and the four performance switches |
@@ -66,8 +66,8 @@ line per script, and returns `1` if any of them failed.
 | `tests/ssh-by-number.sh` | 19 | `ssh-nr`: help, `--list`, invalid and out-of-range numbers, alias versus raw target, `[host]:port`, markers, `-F` pass-through, both `sshp` call branches |
 | `tests/ssh-config.sh` | 37 | Scanner behaviour plus the shared config/known_hosts inventory, Include-glob invalidation, cached `ssh -G`, and removed legacy resolver completions |
 | `tests/ssh-resolve-table.sh` | 27 | `__ssh_resolve_table` against a stubbed `ssh -G` and pre-seeded DNS caches: columns, merged references, bracketed IPv6, skipped hashed entries, filter, empty results, cache invalidation |
-| `tests/ssh-resolve.sh` | 40 | The IPv4/IPv6 predicates, help, argument and timeout validation, and the source-time guard both resolvers carry |
-| `tests/sshp.sh` | 61 | The `sshp` argument parser, configurable/version-gated `WarnWeakCrypto`, effective `ssh -G` cache identity, per-port/config state separation, equivalent-alias cache sharing, `--force`, `--`, remote-command rejection, and missing sync files |
+| `tests/ssh-resolve.sh` | 56 | Strict IPv4/IPv6 predicates including compression, scoped addresses and embedded IPv4, plus help, argument/timeout validation and resolver source-time guards |
+| `tests/sshp.sh` | 67 | The `sshp` argument parser, configurable/version-gated `WarnWeakCrypto`, effective `ssh -G` cache identity, per-port/config state separation, equivalent-alias cache sharing, staged remote publication/rollback safety, `--force`, `--`, remote-command rejection, and missing sync files |
 | `tests/starship-config.sh` | 23 | `starship.toml`: the removed helper script, the constant bg1 field on line one, the rounded caps on line two, and the palette matching `prompt-gruvbox.sh` |
 
 The network-free suite is complemented in CI by `tests/integration/bash-git-prompt.sh`, which runs against the pinned upstream 2.7.1 checkout and performs a real prompt render in a temporary Git repository.
@@ -259,7 +259,7 @@ Result: passed.
 
 ### 12. History writing and deduplication
 
-Reproducible regression test: `bash tests/history.sh` (passed, 17 checks). The
+Reproducible regression test: `bash tests/history.sh` (passed, 26 checks). The
 file-level checks call `history_dedupe` directly; the behavioural checks start
 `bash --rcfile ... -i` in a throwaway home directory, because `history -a` and
 `erasedups` only do anything in an interactive shell.
@@ -268,6 +268,12 @@ file-level checks call `history_dedupe` directly; the behavioural checks start
 `~/.bash_history` immediately, without the shell having exited. Without it the
 file stayed at the state of the last `exit`, which is the failure mode a Windows
 reboot produces.
+
+**Concurrency.** `history -a` and `history_dedupe` use the same noclobber lock
+file. The regression test holds that lock in one shell and verifies that a
+second shell cannot append until it is released; it also verifies recovery from
+a stale lock owned by a dead PID. This prevents an append from landing on the
+old inode while another shell replaces the history file.
 
 **`history -a` vs. `history -n`.** A foreign entry was appended to the file
 mid-session to emulate a second terminal.

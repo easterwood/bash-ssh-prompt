@@ -248,7 +248,9 @@ comparing against the current user, which matters on Windows and AD-joined
 hosts. The `total`/`insgesamt` summary line from `ls` is dropped.
 
 `unalias ll` runs first, so the function wins over a distribution-provided
-alias.
+alias. After the `ls | awk` pipeline, `ll` captures `PIPESTATUS[0]` and returns
+that value, so a missing path or other `ls` failure is not hidden by a
+successful formatter.
 
 Because the reformatting is positional (`$1`–`$6` plus `$7…NF` for the name),
 `ll` needs GNU `ls`. On a host with BusyBox or BSD `ls` the columns will not
@@ -317,6 +319,14 @@ entries stay intact and entries without a timestamp line — pasted blocks, file
 written by an older configuration — are preserved. The new file is built via
 `mktemp`, gets the permissions of the original, and replaces it with `mv -f`; if
 anything fails the original is left untouched.
+
+Every rewrite and every `history -a` append uses the same lock file next to
+`HISTFILE`. Lock acquisition uses Bash `noclobber` so creation is atomic; a
+second shell waits instead of writing to an inode that another shell is about
+to replace. Locks record their owner PID so a lock left behind by a killed
+shell can be recovered. If contention remains wedged for five seconds, the
+prompt defers that flush rather than writing without the lock; the next
+successful `history -a` writes all still-unappended entries.
 
 It runs in two places:
 

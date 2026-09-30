@@ -36,12 +36,64 @@ __ssh_resolve_is_ipv4() {
     return 0
 }
 
+__ssh_resolve_ipv6_side_count() {
+    local side=$1 part
+    local -a groups=()
+
+    REPLY=0
+    [[ -n $side ]] || return 0
+    [[ $side != :* && $side != *: ]] || return 1
+
+    IFS=: read -r -a groups <<< "$side"
+    for part in "${groups[@]}"; do
+        [[ $part =~ ^[0-9A-Fa-f]{1,4}$ ]] || return 1
+    done
+
+    REPLY=${#groups[@]}
+}
+
 __ssh_resolve_is_ipv6() {
-    local ip=${1%%%*}
+    local ip=$1 zone='' ipv4='' left='' right=''
+    local left_count=0 right_count=0
 
     [[ $ip == *:* ]] || return 1
-    [[ $ip != *[^0-9A-Fa-f:.]* ]] || return 1
-    [[ $ip == *:*:* ]] || return 1
+
+    # A scoped literal such as fe80::1%eth0 is valid, but the zone itself must
+    # be present exactly once and contain only interface-name-safe characters.
+    if [[ $ip == *%* ]]; then
+        zone=${ip#*%}
+        ip=${ip%%\%*}
+        [[ -n $zone && $zone != *%* && $zone != *[^[:alnum:]_.-]* ]] || return 1
+    fi
+
+    [[ -n $ip && $ip != *[^0-9A-Fa-f:.]* ]] || return 1
+    [[ $ip != *:::* ]] || return 1
+
+    # An embedded IPv4 tail consumes two of the eight 16-bit groups.
+    if [[ $ip == *.* ]]; then
+        ipv4=${ip##*:}
+        [[ $ipv4 != "$ip" ]] || return 1
+        __ssh_resolve_is_ipv4 "$ipv4" || return 1
+        ip="${ip%:*}:0:0"
+    fi
+
+    if [[ $ip == *::* ]]; then
+        left=${ip%%::*}
+        right=${ip#*::}
+        [[ $right != *::* ]] || return 1
+
+        __ssh_resolve_ipv6_side_count "$left" || return 1
+        left_count=$REPLY
+        __ssh_resolve_ipv6_side_count "$right" || return 1
+        right_count=$REPLY
+
+        # :: must stand for at least one omitted 16-bit group.
+        (( left_count + right_count < 8 )) || return 1
+    else
+        __ssh_resolve_ipv6_side_count "$ip" || return 1
+        (( REPLY == 8 )) || return 1
+    fi
+
     return 0
 }
 

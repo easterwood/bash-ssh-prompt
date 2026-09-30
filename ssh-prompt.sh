@@ -296,7 +296,7 @@ EOF
 
     read -r -d '' remote_script <<'REMOTE' || true
 set -eu
-for command_name in tar bash grep mktemp touch; do
+for command_name in tar bash grep mktemp touch rm; do
     command -v "$command_name" >/dev/null 2>&1 || {
         printf "sshp: %s is missing on the destination.\n" "$command_name" >&2
         exit 1
@@ -304,22 +304,65 @@ for command_name in tar bash grep mktemp touch; do
 done
 
 umask 077
-prompt_dir="$HOME/.cache/ssh-prompt"
+cache_dir="$HOME/.cache"
+prompt_dir="$cache_dir/ssh-prompt"
 bashrc="$HOME/.bashrc"
-backup="$HOME/.bashrc.before-sshp"
+bashrc_backup="$HOME/.bashrc.before-sshp"
 start_marker="# >>> sshp managed prompt >>>"
+staging=''
+prompt_backup=''
+
+__sshp_remote_cleanup() {
+    if test -n "$staging"; then
+        rm -rf -- "$staging"
+    fi
+
+    if test -n "$prompt_backup"; then
+        if ! test -e "$prompt_dir" && ! test -L "$prompt_dir"; then
+            mv -- "$prompt_backup" "$prompt_dir" 2>/dev/null || true
+        else
+            rm -rf -- "$prompt_backup"
+        fi
+    fi
+}
+trap '__sshp_remote_cleanup' EXIT HUP INT TERM
 
 touch "$HOME/.hushlogin"
-mkdir -p "$prompt_dir"
-tar --no-same-owner -xzf - -C "$prompt_dir"
-bash -n "$prompt_dir/prompt.sh"
-bash -n "$prompt_dir/bashrc.d/listing.sh"
-bash -n "$prompt_dir/bashrc.d/prompt-core.sh"
-bash -n "$prompt_dir/bashrc.d/prompt-gruvbox.sh"
+mkdir -p "$cache_dir"
+staging=$(mktemp -d "$cache_dir/.ssh-prompt.new.XXXXXX")
+tar --no-same-owner -xzf - -C "$staging"
+bash -n "$staging/prompt.sh"
+bash -n "$staging/bashrc.d/listing.sh"
+bash -n "$staging/bashrc.d/prompt-core.sh"
+bash -n "$staging/bashrc.d/prompt-gruvbox.sh"
+
+# Only publish a fully extracted and syntax-checked tree. The old prompt stays
+# live until this point; if activation fails, the EXIT trap restores it.
+if test -e "$prompt_dir" || test -L "$prompt_dir"; then
+    prompt_backup=$(mktemp "$cache_dir/.ssh-prompt.old.XXXXXX")
+    rm -f -- "$prompt_backup"
+    mv -- "$prompt_dir" "$prompt_backup"
+fi
+
+if mv -- "$staging" "$prompt_dir"; then
+    staging=''
+else
+    if test -n "$prompt_backup"; then
+        mv -- "$prompt_backup" "$prompt_dir" 2>/dev/null || true
+        prompt_backup=''
+    fi
+    exit 1
+fi
+
+if test -n "$prompt_backup"; then
+    rm -rf -- "$prompt_backup"
+    prompt_backup=''
+fi
+trap - EXIT HUP INT TERM
 
 if ! { test -f "$bashrc" && grep -Fqx "$start_marker" "$bashrc"; }; then
-    if test -f "$bashrc" && ! test -e "$backup"; then
-        cp -p "$bashrc" "$backup"
+    if test -f "$bashrc" && ! test -e "$bashrc_backup"; then
+        cp -p "$bashrc" "$bashrc_backup"
     fi
     temporary=$(mktemp "$HOME/.bashrc.sshp.XXXXXX")
     trap 'rm -f -- "$temporary"' EXIT HUP INT TERM

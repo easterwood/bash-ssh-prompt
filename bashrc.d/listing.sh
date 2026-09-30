@@ -12,6 +12,8 @@ __listing_user=${__listing_user%%@*}
 
 unalias ll 2>/dev/null
 ll() {
+    local -a pipeline_status
+
     command ls \
         -oah \
         --color=always \
@@ -58,4 +60,6 @@ ll() {
                 yellow, $4, reset, blue, $5, $6, reset, name
         }
     '
+    pipeline_status=("${PIPESTATUS[@]}")
+    return "${pipeline_status[0]}"
 }

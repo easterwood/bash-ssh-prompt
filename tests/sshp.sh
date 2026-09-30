@@ -251,6 +251,76 @@ assert 'the equivalent alias uses the same state' sshp alias-b
 state_count=$(find "$HOME/.cache/sshp" -type f -name 'connection-v1_*.state' | wc -l | tr -d ' ')
 assert_equal 'equivalent aliases do not duplicate state' "$alias_state_count" "$state_count"
 
+# --- staged remote publication --------------------------------------------
+
+# Execute the real remote heredoc in a throwaway HOME. A remote syntax failure
+# must happen in the staging directory and leave the previously published tree
+# untouched; the next successful sync must then replace it as one validated
+# directory tree.
+remote_home="$TEST_TMP/remote-home"
+remote_bin="$TEST_TMP/remote-bin"
+mkdir -p "$remote_home/.cache/ssh-prompt" "$remote_bin"
+printf 'old prompt\n' > "$remote_home/.cache/ssh-prompt/prompt.sh"
+
+real_bash=$(command -v bash)
+export SSHP_REMOTE_HOME="$remote_home" SSHP_REMOTE_BIN="$remote_bin" SSHP_REAL_BASH="$real_bash"
+
+cat > "$remote_bin/bash" <<'STUB'
+#!/bin/sh
+if [ "${1-}" = -n ]; then
+    case ${2-} in
+        */prompt.sh) exit 42 ;;
+    esac
+fi
+exec "$SSHP_REAL_BASH" "$@"
+STUB
+chmod +x "$remote_bin/bash"
+
+test_stub ssh <<'STUB'
+#!/usr/bin/env bash
+if [[ ${1-} == -G ]]; then
+    cat <<'CONFIG'
+host atomic-host
+hostname atomic.internal
+user tester
+port 22
+addressfamily any
+proxyjump none
+proxycommand none
+hostkeyalias none
+CONFIG
+    exit 0
+fi
+
+case " $* " in
+    *' -T '*)
+        script=${!#}
+        HOME="$SSHP_REMOTE_HOME" PATH="$SSHP_REMOTE_BIN:$PATH" \
+            "$SSHP_REAL_BASH" -c "$script"
+        exit $?
+        ;;
+esac
+
+# Login connection after a successful sync.
+exit 0
+STUB
+
+assert_status 'a staged remote syntax failure aborts the sync' 1 \
+    sshp --force atomic-host
+assert_file 'a failed staged sync preserves the live prompt tree' \
+    "$remote_home/.cache/ssh-prompt/prompt.sh" 'old prompt'
+assert_equal 'failed staging is cleaned up' '' \
+    "$(compgen -G "$remote_home/.cache/.ssh-prompt.new.*" || true)"
+
+rm -f "$remote_bin/bash"
+assert 'a valid staged remote tree is published successfully' sshp --force atomic-host
+assert 'the published prompt matches the local source' \
+    cmp -s "$config_root/prompt.sh" "$remote_home/.cache/ssh-prompt/prompt.sh"
+assert_equal 'successful publication leaves no old-tree backup behind' '' \
+    "$(compgen -G "$remote_home/.cache/.ssh-prompt.old.*" || true)"
+
+unset SSHP_REMOTE_HOME SSHP_REMOTE_BIN SSHP_REAL_BASH
+
 # --- the function itself ---------------------------------------------------
 
 assert_status 'sshp without a destination' 2 sshp

@@ -76,8 +76,11 @@ output=$(cd "$TEST_TMP" && ll listing)
 plain_arg=$(printf '%s' "$output" | sed 's/\x1b\[[0-9;]*m//g')
 assert_contains 'a path argument works' "$plain_arg" 'plain-file'
 
+assert_status 'll returns the underlying ls failure status' 2 \
+    ll "$workdir/does-not-exist"
+
 # --- colour ----------------------------------------------------------------
 
 assert_contains 'the output is colourised' "$output" $'\e['
 
-pass 'header, dropped summary line, hidden files, spaces in names, option pass-through'
+pass 'header, entries, option pass-through, colour, and ls exit status'

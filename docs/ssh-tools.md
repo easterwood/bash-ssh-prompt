@@ -379,9 +379,13 @@ Where the IPs come from:
   `Include`. Config paths are displayed with `~/` shortened.
 - The host field of every non-hashed `known_hosts` line, split on commas.
 
-Both plain IPs and `[IP]:port` are recognised, for IPv4 and IPv6. The system
-`/etc/ssh/ssh_config` is deliberately **not** scanned here, since it is not part
-of your personal inventory.
+Both plain IPs and `[IP]:port` are recognised, for IPv4 and IPv6. IPv6
+literals are validated structurally: exactly eight 16-bit groups unless a
+single `::` compresses at least one group, optional scoped suffixes such as
+`%eth0`, and a valid embedded IPv4 tail are supported. Malformed forms such as
+`1::2::3` or five-digit groups are rejected. The system `/etc/ssh/ssh_config`
+is deliberately **not** scanned here, since it is not part of your personal
+inventory.
 
 ### Reverse-DNS backends
 

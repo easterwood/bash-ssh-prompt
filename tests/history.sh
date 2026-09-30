@@ -82,6 +82,52 @@ assert_status 'empty file is a no-op' 0 history_dedupe "$fixture"
 assert_status 'missing file is a no-op' 0 history_dedupe "$TEST_TMP/does-not-exist"
 assert_equal 'no temporary files left behind' '' "$(compgen -G "$TEST_TMP/history.fixture.*" || true)"
 
+# Every writer and every rewrite use the same lock. Hold it in this shell and
+# prove that a second shell's __history_append cannot touch the file until the
+# lock is released. The child shadows the history builtin so the test remains
+# non-interactive and deterministic.
+printf '#1500\nbase\n' > "$fixture"
+assert 'the history lock can be acquired' __history_lock_acquire "$fixture"
+held_lock=$REPLY
+held_token=$__history_lock_token
+
+env CONFIG_ROOT="$config_root" FIXTURE="$fixture" bash -c '
+    HISTORY_DEDUPE_ON_START=0
+    source "$CONFIG_ROOT/bashrc.d/prompt-core.sh"
+    source "$CONFIG_ROOT/bashrc.d/history.sh"
+    HISTFILE=$FIXTURE
+    HISTORY_DEDUPE_LIVE=0
+    history() {
+        [[ ${1-} == -a ]] && printf "#1501\nfrom-second-shell\n" >> "$HISTFILE"
+    }
+    __history_append
+' &
+append_pid=$!
+sleep 0.15
+assert_not_contains 'a concurrent history writer waits for the lock' \
+    "$(< "$fixture")" 'from-second-shell'
+__history_lock_release "$held_lock" "$held_token" || fail 'could not release the held history lock'
+wait "$append_pid" || fail 'the concurrent history writer failed after lock release'
+assert_contains 'the waiting writer appends after the lock is released' \
+    "$(< "$fixture")" 'from-second-shell'
+assert_equal 'the history lock is removed after the writer finishes' '0' \
+    "$([[ -e ${fixture}.lock ]] && printf 1 || printf 0)"
+
+# A signal can interrupt PROMPT_COMMAND after acquisition without killing the
+# shell. The next prompt must be able to reclaim that same-process lock.
+printf '%s:1:0\n' "${BASHPID:-$$}" > "${fixture}.lock"
+assert 'an interrupted same-shell history lock is recovered' __history_lock_acquire "$fixture"
+same_lock=$REPLY
+same_token=$__history_lock_token
+__history_lock_release "$same_lock" "$same_token" || fail 'could not release the same-shell lock'
+
+# A lock left behind by a dead process must not wedge every future shell.
+printf '999999:1:0\n' > "${fixture}.lock"
+assert 'a stale history lock is recovered' __history_lock_acquire "$fixture"
+stale_lock=$REPLY
+stale_token=$__history_lock_token
+__history_lock_release "$stale_lock" "$stale_token" || fail 'could not release the recovered history lock'
+
 # --- end to end in an interactive shell ------------------------------------
 
 # The shipped default is 0: the live rewrite is the most expensive thing in
@@ -165,4 +211,4 @@ assert_equal 'disabled rewrite still cleans at shell start' 'git push
 ll
 echo done' "$commands"
 
-pass 'dedupe of files, timestamps, multi-line entries, live rewrite, HISTORY_DEDUPE_LIVE=0'
+pass 'dedupe, serialized history writes, stale-lock recovery, live rewrite, HISTORY_DEDUPE_LIVE=0'

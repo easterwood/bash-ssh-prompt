@@ -36,11 +36,18 @@ done
 
 # --- IPv6 ------------------------------------------------------------------
 
-for ip in ::1 2001:db8::1 fe80::1 2001:0db8:0000:0000:0000:0000:0000:0001; do
+for ip in \
+    :: ::1 2001:db8::1 2001:db8:: fe80::1 fe80::1%eth0 \
+    ::ffff:192.0.2.128 1:2:3:4:5:6:192.0.2.1 \
+    2001:0db8:0000:0000:0000:0000:0000:0001; do
     assert "IPv6 accepted: $ip" __ssh_resolve_is_ipv6 "$ip"
 done
 
-for ip in 'nocolon' '' 'example.com' '10.0.0.1'; do
+for ip in \
+    'nocolon' '' 'example.com' '10.0.0.1' '::::' '1::2::3' '12345::1' \
+    '1:2:3:4:5:6:7' '1:2:3:4:5:6:7:8:9' '1:2:3:4:5:6:7::8' \
+    'gggg::1' 'fe80::1%' 'fe80::1%eth0%bad' '::ffff:999.1.1.1' \
+    '1.2.3.4::'; do
     assert_status "IPv6 rejected: '$ip'" 1 __ssh_resolve_is_ipv6 "$ip"
 done
 
