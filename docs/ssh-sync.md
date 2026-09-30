@@ -69,6 +69,13 @@ On a sync failure the animation is cleared and ends with
 The local cleanup trap also stops the spinner on `HUP`, `INT` and `TERM`, so an
 interrupted sync cannot leave a background animation running.
 
+The internal upload/install SSH connection uses `LogLevel=ERROR`. OpenSSH only
+prints the server's pre-authentication `SSH_MSG_USERAUTH_BANNER` at `INFO` or
+higher, so a legal/login banner is hidden during synchronization and appears
+only on the following real interactive login. `~/.hushlogin` is still created
+for its separate post-authentication MOTD/last-login behaviour. User `-v` flags
+are retained for the real login but intentionally omitted from the sync call.
+
 ## Option pass-through
 
 Options are collected into one array that is used for **both** the sync
@@ -238,7 +245,7 @@ Read from the heredoc `REMOTE` in `ssh-prompt.sh`, it runs under `set -eu` and:
 1. Verifies that `tar`, `bash`, `grep`, `mktemp`, `touch` and `rm` all exist,
    reporting the missing one by name.
 2. Sets `umask 077`.
-3. Creates `~/.hushlogin` to silence the login banner on subsequent connections.
+3. Creates `~/.hushlogin` to suppress post-authentication MOTD/last-login output on subsequent connections. This file does not suppress an sshd pre-authentication `Banner`.
 4. Extracts the archive into a temporary sibling under `~/.cache`, never into
    the active `~/.cache/ssh-prompt` tree.
 5. Syntax-checks all four files in that staging tree.

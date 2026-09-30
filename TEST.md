@@ -5,7 +5,7 @@
 The modular Bash configuration was verified locally in an isolated Linux test
 environment. All locally executable automated checks passed.
 
-Reproducible part: `bash tests/run-all.sh` — 19 scripts, 586 checks, all passing.
+Reproducible part: `bash tests/run-all.sh` — 19 scripts, 593 checks, all passing.
 CI is configured to run the same suite on the current Ubuntu runner, Git Bash
 on Windows, and explicit Bash 4.2.53, 4.4.23, 5.1.16 and 5.3.20 runtimes. A
 dedicated Bash 3.2.57 job covers the supported legacy remote prompt. The
@@ -385,7 +385,7 @@ assignment was replaced by the loop form used elsewhere in the tree.
   hex in `starship.toml`. `tests/starship-config.sh` now converts and compares
   them, so drift fails the build.
 
-Result: passed. 19 scripts, 586 checks.
+Result: passed. 19 scripts, 593 checks.
 
 ## Still to be checked manually
 

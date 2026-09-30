@@ -283,6 +283,13 @@ assert 'first connection syncs successfully' sshp -p 2201 cache-host
 state_count=$(find "$HOME/.cache/sshp" -type f -name 'connection-v1_*.state' | wc -l | tr -d ' ')
 assert_equal 'the first endpoint creates one connection-aware state file' 1 "$state_count"
 
+sync_call=$(grep -m1 -- '-T -o RemoteCommand=none' "$SSHP_TEST_LOG")
+assert_contains 'the internal sync suppresses the pre-authentication SSH banner' \
+    "$sync_call" '-o LogLevel=ERROR'
+login_call=$(grep -m1 -x -- '-p 2201 cache-host' "$SSHP_TEST_LOG")
+assert_not_contains 'the real login keeps its normal SSH log level' \
+    "$login_call" 'LogLevel=ERROR'
+
 assert 'the same effective connection reuses its cache state' sshp -p 2201 cache-host
 state_count=$(find "$HOME/.cache/sshp" -type f -name 'connection-v1_*.state' | wc -l | tr -d ' ')
 assert_equal 'a cache hit does not create another state file' 1 "$state_count"
@@ -297,6 +304,18 @@ assert 'config-b syncs independently' sshp -F "$TEST_TMP/config-b" cache-host
 state_count=$(find "$HOME/.cache/sshp" -type f -name 'connection-v1_*.state' | wc -l | tr -d ' ')
 assert_equal 'configs resolving the same alias differently keep separate state' \
     $((config_state_count + 1)) "$state_count"
+
+# Verbose flags belong to the real login, but the internal sync must stay at
+# LogLevel=ERROR or OpenSSH would print SSH_MSG_USERAUTH_BANNER again.
+: > "$SSHP_TEST_LOG"
+assert 'verbose login options do not re-enable the sync banner' \
+    sshp --force -vv -p 2298 verbose-host
+sync_call=$(grep -m1 -- '-T -o RemoteCommand=none' "$SSHP_TEST_LOG")
+assert_not_contains 'the internal sync strips verbose flags' "$sync_call" '-vv'
+assert_contains 'the internal sync still forces LogLevel=ERROR' \
+    "$sync_call" '-o LogLevel=ERROR'
+login_call=$(grep -m1 -x -- '-vv -p 2298 verbose-host' "$SSHP_TEST_LOG")
+assert_contains 'the real login retains the verbose flag' "$login_call" '-vv'
 
 # Two destination strings that ssh -G resolves identically intentionally share
 # state: the cache follows the effective endpoint rather than the spelling.
@@ -382,6 +401,7 @@ assert_equal 'failed staging is cleaned up' '' \
 
 rm -f "$remote_bin/bash"
 assert 'a valid staged remote tree is published successfully' sshp --force atomic-host
+assert 'the remote sync still creates .hushlogin' test -f "$remote_home/.hushlogin"
 assert 'the published prompt matches the local source' \
     cmp -s "$config_root/prompt.sh" "$remote_home/.cache/ssh-prompt/prompt.sh"
 assert_equal 'successful publication leaves no old-tree backup behind' '' \

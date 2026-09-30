@@ -217,7 +217,7 @@ bash tests/history.sh       # or a single script
 bash-commands --check       # every documented command is really defined
 ```
 
-Currently 19 scripts with 586 checks, all passing locally. CI runs the same
+Currently 19 scripts with 593 checks, all passing locally. CI runs the same
 suite on the current Ubuntu runner, on Git Bash under `windows-latest`, and in
 official Bash containers for 4.2.53, 4.4.23, 5.1.16 and 5.3.20. A separate
 Bash 3.2.57 job exercises only the supported pre-4.2 remote fallback. The
@@ -235,7 +235,10 @@ package. See [docs/architecture.md#testing](docs/architecture.md#testing).
 ## Safety notes
 
 - `sshp` appends a marked block to the **remote** `~/.bashrc` and creates
-  `~/.hushlogin` there. Both are reversible; see
+  `~/.hushlogin` there for post-authentication MOTD/last-login suppression.
+  The internal sync connection separately suppresses any sshd pre-authentication
+  banner; the real interactive login still shows that banner once. Both remote
+  file changes are reversible; see
   [docs/installation.md#what-sshp-changes-on-a-remote-host](docs/installation.md#what-sshp-changes-on-a-remote-host).
 - `known-hosts --clean` treats an unreachable host as stale and would remove it.
   Always run the dry run first, and never run `--apply` while off the VPN.

@@ -76,7 +76,7 @@ Not meant to be set by hand, but useful when debugging:
 | `~/.cache/ssh-prompt/bashrc.d/prompt-core.sh` | Shared command timer |
 | `~/.bashrc` | Gains the marked `sshp` loader block |
 | `~/.bashrc.before-sshp` | One-time backup |
-| `~/.hushlogin` | Empty file suppressing the login banner |
+| `~/.hushlogin` | Empty file suppressing post-authentication MOTD/last-login output; it does not control the sshd pre-authentication `Banner` |
 
 ## `bashrc.d/environment.sh`
 

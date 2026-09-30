@@ -157,7 +157,7 @@ The first successful sync to a host makes these changes in the remote `$HOME`:
 | `~/.cache/ssh-prompt/bashrc.d/prompt-gruvbox.sh` | Shared powerline prompt (Git segment off on remote hosts) |
 | `~/.bashrc` | Gains a marked loader block (see below) |
 | `~/.bashrc.before-sshp` | One-time backup, created only if `~/.bashrc` existed |
-| `~/.hushlogin` | Created (empty) to suppress the MOTD/last-login banner |
+| `~/.hushlogin` | Created (empty) to suppress post-authentication MOTD/last-login output |
 
 The block appended to the remote `~/.bashrc` is written exactly once, guarded by
 its start marker:

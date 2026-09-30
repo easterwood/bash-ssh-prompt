@@ -320,7 +320,7 @@ sshp() (
     local config_root=${BASH_CONFIG_ROOT:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)}
     local state_dir="$HOME/.cache/sshp"
     local archive remote_script signature saved_signature connection_identity
-    local connection_crc connection_size state_file temporary_state file
+    local connection_crc connection_size state_file temporary_state file option
     local -a sync_files=(
         prompt.sh
         bashrc.d/listing.sh
@@ -475,8 +475,23 @@ fi
 REMOTE
 
     __sshp_status_start 'sshp: uploading and installing prompt...'
-    if ! command ssh -T -o RemoteCommand=none "${ssh_options[@]}" \
-        "$target" "$remote_script" < "$archive"; then
+    # sshd may send a pre-authentication SSH_MSG_USERAUTH_BANNER before the
+    # remote script starts. Suppress that banner only for this internal sync
+    # connection; the real interactive login below keeps the user's normal
+    # SSH logging and therefore still displays the banner once. Put LogLevel
+    # first because OpenSSH keeps the first -o value.
+    local -a sync_ssh_options=()
+    for option in "${ssh_options[@]}"; do
+        case $option in
+            -v|-vv|-vvv)
+                # -v changes LogLevel directly and would re-enable auth banners.
+                continue
+                ;;
+        esac
+        sync_ssh_options+=("$option")
+    done
+    if ! command ssh -T -o RemoteCommand=none -o LogLevel=ERROR \
+        "${sync_ssh_options[@]}" "$target" "$remote_script" < "$archive"; then
         __sshp_status_finish 1 'sshp: prompt synchronization failed'
         printf 'sshp: sync or .bashrc update failed.\n' >&2
         return 1
