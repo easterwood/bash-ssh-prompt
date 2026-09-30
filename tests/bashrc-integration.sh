@@ -63,4 +63,22 @@ output=$(prompt_command_for gruvbox)
 assert_equal 'Gruvbox preserves history between timer stop and prompt build' \
     '__cmd_timer_stop;__history_append;__gb_build;__cmd_timer_arm' "$output"
 
-pass 'all local backends preserve the startup hook composition'
+# Source-time settings must be visible before history.sh initializes. The
+# duplicate file is deliberately left untouched when local configuration turns
+# startup deduplication off.
+cat > "$root/local.sh" <<'EOF'
+BASH_PROMPT_BACKEND=gruvbox
+HISTORY_DEDUPE_ON_START=0
+EOF
+cat > "$HOME/.bash_history" <<'EOF'
+#100
+echo duplicate
+#200
+echo duplicate
+EOF
+env HOME="$HOME" PATH="$PATH" bash --noprofile --rcfile "$root/bashrc.sh" -i -c true \
+    >/dev/null 2>&1 || fail 'load bashrc with source-time history override'
+assert_equal 'local configuration is loaded before history source-time actions' 2 \
+    "$(grep -c '^echo duplicate$' "$HOME/.bash_history")"
+
+pass 'all prompt hooks compose and source-time settings load before modules'

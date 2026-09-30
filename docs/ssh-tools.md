@@ -179,11 +179,12 @@ rendering — the parsing is done in pure Bash. What does run:
 - `ssh-keygen -F` once per alias, to find the matching `known_hosts` lines.
 - Exactly one `ssh-keygen -l -E sha256` for `--fingerprints`.
 
-Results are cached in the shell. The cache is keyed by the
-`known_hosts`/config pair and additionally holds a copy of the `known_hosts`
-contents, so editing that file invalidates the cache automatically.
-`--refresh` clears the `known-hosts` cache, the completion cache and the
-`ssh-resolve-ips` DNS cache in one go.
+Results are derived from the shared SSH inventory in `lib/ssh-config.sh`. The
+inventory watches `known_hosts`, the primary config, system config, included
+files and Include-glob matches, so edits to any of them invalidate the mapping
+automatically. Cached `ssh -G` results are shared with completion and both
+resolvers. `--refresh` drops the inventory, both derived views and both resolver
+DNS caches in one go.
 
 ---
 
@@ -525,21 +526,20 @@ What it completes:
   `@host` depends on whether `@` is in your `COMP_WORDBREAKS` — both cases are
   handled.
 
-### The shared host cache
+### Completion on top of the shared SSH inventory
 
-`bashrc.d/completions/ssh-hosts.bash` holds one lazy cache used by every
-completion. It is built on the first `TAB` and keeps two lists:
+`bashrc.d/completions/ssh-hosts.bash` derives two lazy lists from the shared
+SSH inventory on the first `TAB`:
 
 - **filter hosts** — everything, including `[host]:port` and patterns, used by
   the `known-hosts` filter completion;
 - **connect hosts** — only valid `ssh` destinations, plus resolved `user@alias`
   targets.
 
-Invalidation compares stored contents against current contents for the user
-config, `/etc/ssh/ssh_config` and every `Include`d file, and re-runs each
-`Include` glob through `compgen -G` so that added or removed files are noticed
-too. `known_hosts` is watched the same way. All of this uses Bash builtins, so
-pressing `TAB` does not fork processes just to validate the cache.
+The completion layer does not maintain a second file-watching cache. It only
+remembers the inventory generation that produced those lists. File contents and
+Include-glob matches are validated centrally in `lib/ssh-config.sh`, and
+resolved `user@alias` values reuse that inventory's cached `ssh -G` output.
 
 ### The other completions
 

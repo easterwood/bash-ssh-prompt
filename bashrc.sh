@@ -7,6 +7,14 @@ BASH_CONFIG_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 export BASH_CONFIG_ROOT
 
 source "$BASH_CONFIG_ROOT/bashrc.d/environment.sh"
+
+# Untracked, machine-specific overrides are optional. Load them before modules
+# that consume configuration at source time (notably history.sh) as well as
+# before the local prompt backend is selected.
+# local.sh is untracked and optional, so it is not there to be followed.
+# shellcheck disable=SC1091
+[[ ! -r "$BASH_CONFIG_ROOT/local.sh" ]] || source "$BASH_CONFIG_ROOT/local.sh"
+
 # prompt-core.sh only defines functions and has to come first: history.sh and
 # prompt-local.sh use __prompt_command_is_array from it.
 source "$BASH_CONFIG_ROOT/bashrc.d/prompt-core.sh"
@@ -14,12 +22,6 @@ source "$BASH_CONFIG_ROOT/bashrc.d/history.sh"
 source "$BASH_CONFIG_ROOT/bashrc.d/listing.sh"
 source "$BASH_CONFIG_ROOT/bashrc.d/ssh-tools.sh"
 source "$BASH_CONFIG_ROOT/ssh-prompt.sh"
-
-# Untracked, machine-specific overrides are optional. They are loaded before
-# the local prompt backend so local.sh can select and configure that backend.
-# local.sh is untracked and optional, so it is not there to be followed.
-# shellcheck disable=SC1091
-[[ ! -r "$BASH_CONFIG_ROOT/local.sh" ]] || source "$BASH_CONFIG_ROOT/local.sh"
 
 # Local prompt backend. Set BASH_PROMPT_BACKEND in local.sh to one of:
 #   starship | bash-git-prompt | gruvbox | auto

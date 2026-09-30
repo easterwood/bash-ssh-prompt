@@ -54,8 +54,9 @@ cp local.sh.example local.sh
 ```
 
 `local.sh` is optional and is listed in `.gitignore` together with `*.bak`,
-`*.backup`, `.idea` and `*.iml`. It is loaded after the common modules and just
-before the local prompt backend is initialized, so it can select the prompt.
+`*.backup`, `.idea` and `*.iml`. It is loaded immediately after
+`environment.sh`, before modules with source-time settings and before the local
+prompt backend is initialized.
 
 For example:
 

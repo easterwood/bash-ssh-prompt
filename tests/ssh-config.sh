@@ -111,4 +111,77 @@ assert_equal 'a second scan does not accumulate' "$count_before" "${#__kh_scan_a
 assert_status 'a missing config is not an error' 0 __kh_scan_configs "$HOME/.ssh/does-not-exist" 1
 assert_equal 'a missing config yields no aliases' 0 "${#__kh_scan_aliases[@]}"
 
-pass 'aliases, wildcards, quotes, Include with glob and ~, direct vs inherited users'
+# --- shared inventory cache -------------------------------------------------
+
+known="$HOME/.ssh/known_hosts"
+printf 'inventory.example.com ssh-ed25519 AAAAINVENTORY\n' > "$known"
+SSH_CONFIG_TEST_CALLS="$TEST_TMP/ssh-config.calls"
+: > "$SSH_CONFIG_TEST_CALLS"
+export SSH_CONFIG_TEST_CALLS
+
+test_stub ssh <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "${!#}" >> "$SSH_CONFIG_TEST_CALLS"
+target=${!#}
+user=default
+hostname=$target
+case $target in
+    web01|web02)
+        hostname=web.example.com
+        user=$(awk '/^Host web01 web02$/{in_block=1; next} in_block && /^[[:space:]]*User[[:space:]]+/{print $2; exit}' "$HOME/.ssh/config")
+        ;;
+esac
+printf 'hostname %s\nuser %s\nport 22\nhostkeyalias none\n' "$hostname" "$user"
+STUB
+
+__ssh_inventory_ensure "$known" "$config"
+inventory_generation=$__ssh_inventory_generation
+assert_contains 'the inventory exposes user aliases' " ${__ssh_inventory_user_aliases[*]} " ' web01 '
+assert_contains 'the inventory tracks included user files' " ${__ssh_inventory_user_files[*]} " "$HOME/.ssh/conf.d/10-extra.conf"
+
+__ssh_inventory_ensure "$known" "$config"
+assert_equal 'an unchanged inventory keeps its generation' "$inventory_generation" "$__ssh_inventory_generation"
+
+__ssh_inventory_target_dump "$config" web01 1
+first_dump=$REPLY
+__kh_ssh_config_field "$first_dump" user
+assert_equal 'the target cache stores ssh -G output' deploy "$REPLY"
+assert_equal 'the first target lookup executes ssh once' 1 "$(wc -l < "$SSH_CONFIG_TEST_CALLS" | tr -d ' ')"
+
+__ssh_inventory_target_dump "$config" web01 1
+assert_equal 'a repeated target lookup reuses ssh -G output' 1 "$(wc -l < "$SSH_CONFIG_TEST_CALLS" | tr -d ' ')"
+
+sed -i 's/User deploy/User changed/' "$config"
+__ssh_inventory_ensure "$known" "$config"
+assert_greater 'editing the main config advances the inventory generation' \
+    "$__ssh_inventory_generation" "$inventory_generation"
+inventory_generation=$__ssh_inventory_generation
+__ssh_inventory_target_dump "$config" web01 1
+__kh_ssh_config_field "$REPLY" user
+assert_equal 'a config edit invalidates cached ssh -G output' changed "$REPLY"
+assert_equal 'the target is resolved again after config invalidation' 2 "$(wc -l < "$SSH_CONFIG_TEST_CALLS" | tr -d ' ')"
+
+cat > "$HOME/.ssh/conf.d/20-later.conf" <<'EOF'
+Host cache-added
+    HostName cache-added.example.com
+EOF
+__ssh_inventory_ensure "$known" "$config"
+assert_greater 'a new Include glob match advances the inventory generation' \
+    "$__ssh_inventory_generation" "$inventory_generation"
+assert_contains 'a new Include glob match enters the inventory' \
+    " ${__ssh_inventory_user_aliases[*]} " ' cache-added '
+inventory_generation=$__ssh_inventory_generation
+
+printf 'second.example.com ssh-ed25519 AAAASECOND\n' >> "$known"
+__ssh_inventory_ensure "$known" "$config"
+assert_greater 'editing known_hosts advances the same inventory generation' \
+    "$__ssh_inventory_generation" "$inventory_generation"
+assert_contains 'the shared known_hosts snapshot is refreshed' \
+    "$__ssh_inventory_known_content" 'second.example.com'
+
+assert_status 'legacy ssh-resolve-ips completion file is removed' 1 \
+    test -e bashrc.d/completions/ssh-resolve-ips.bash
+assert_status 'legacy ssh-resolve-hosts completion file is removed' 1 \
+    test -e bashrc.d/completions/ssh-resolve-hosts.bash
+
+pass 'scanner plus shared config/known_hosts inventory, invalidation and ssh -G cache'

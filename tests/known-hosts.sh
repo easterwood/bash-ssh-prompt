@@ -69,4 +69,45 @@ assert_status 'fingerprints with a filter' 2 ssh_known_hosts --fingerprints serv
 assert_status 'fingerprints with --lines' 2 ssh_known_hosts --fingerprints --lines
 assert_status 'two filters' 2 ssh_known_hosts one two
 
-pass 'zero processes for list and filter, one for fingerprints, filter and hash display'
+# --- config edits invalidate the shared inventory automatically ------------
+
+SSH_KNOWN_HOSTS_FILE="$HOME/.ssh/known_hosts"
+SSH_CONFIG_FILE="$HOME/.ssh/config"
+printf 'app.example.com ssh-ed25519 AAAAAPP\n' > "$SSH_KNOWN_HOSTS_FILE"
+cat > "$SSH_CONFIG_FILE" <<'EOF'
+Host app
+    HostName app.example.com
+    User olduser
+EOF
+
+test_stub ssh <<'STUB'
+#!/usr/bin/env bash
+target=${!#}
+user=$(awk '/^[[:space:]]*User[[:space:]]+/{print $2; exit}' "$HOME/.ssh/config")
+printf 'hostname app.example.com\nuser %s\nport 22\nhostkeyalias none\n' "$user"
+STUB
+
+test_stub ssh-keygen <<'STUB'
+#!/usr/bin/env bash
+lookup='' file=''
+while (( $# )); do
+    case $1 in
+        -F) lookup=$2; shift 2 ;;
+        -f) file=$2; shift 2 ;;
+        *) shift ;;
+    esac
+done
+[[ $lookup == app.example.com && -r $file ]] || exit 1
+printf '# Host %s found: line 1 \n%s\n' "$lookup" "$(< "$file")"
+STUB
+
+__ssh_inventory_invalidate
+__kh_cache_invalidate
+__kh_groups_build "$SSH_KNOWN_HOSTS_FILE" "$SSH_CONFIG_FILE"
+assert_equal 'known-hosts initially uses the configured user' olduser "${__kh_group_user[0]-}"
+
+sed -i 's/User olduser/User newuser/' "$SSH_CONFIG_FILE"
+__kh_groups_build "$SSH_KNOWN_HOSTS_FILE" "$SSH_CONFIG_FILE"
+assert_equal 'known-hosts notices a config edit without --refresh' newuser "${__kh_group_user[0]-}"
+
+pass 'process count, parsing, and shared-inventory invalidation on config edits'

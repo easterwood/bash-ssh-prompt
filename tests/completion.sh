@@ -100,7 +100,7 @@ assert_contains 'config aliases are connectable' "$connect_hosts" ' web01 '
 assert_not_contains 'hashed entries never appear' "$filter_hosts" 'TESTHASH'
 assert_not_contains 'wildcard patterns never appear' "$connect_hosts" '*.wildcard'
 
-assert_contains 'the scanned config is recorded' " ${__ssh_completion_config_files[*]} " "$HOME/.ssh/config"
+assert_contains 'the shared inventory records the config' " ${__ssh_inventory_files[*]} " "$HOME/.ssh/config"
 
 # A second call must not duplicate the entries.
 count_before=${#__ssh_completion_filter_hosts[@]}

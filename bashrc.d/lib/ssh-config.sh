@@ -141,6 +141,197 @@ __kh_scan_configs() {
 }
 
 # ---------------------------------------------------------------------------
+# Shared SSH inventory cache
+#
+# Completion, known-hosts and both resolvers all need the same view of the SSH
+# configuration and known_hosts. Keep one content-based cache here so an edit
+# to the main config, an included file, an Include glob or known_hosts is seen
+# consistently by every consumer.
+# ---------------------------------------------------------------------------
+
+declare -a __ssh_inventory_user_aliases=()
+declare -a __ssh_inventory_aliases=()
+declare -a __ssh_inventory_user_files=()
+declare -a __ssh_inventory_files=()
+declare -a __ssh_inventory_include_patterns=()
+declare -A __ssh_inventory_alias_direct_user=()
+declare -A __ssh_inventory_target_direct_user=()
+declare -A __ssh_inventory_file_content=()
+declare -A __ssh_inventory_file_readable=()
+declare -A __ssh_inventory_include_matches=()
+declare -A __ssh_inventory_target_dumps=()
+declare -A __ssh_inventory_target_status=()
+__ssh_inventory_known_content=''
+__ssh_inventory_known_readable=0
+__ssh_inventory_cache_id=''
+__ssh_inventory_generation=0
+
+__ssh_inventory_reset() {
+    __ssh_inventory_user_aliases=()
+    __ssh_inventory_aliases=()
+    __ssh_inventory_user_files=()
+    __ssh_inventory_files=()
+    __ssh_inventory_include_patterns=()
+    __ssh_inventory_alias_direct_user=()
+    __ssh_inventory_target_direct_user=()
+    __ssh_inventory_file_content=()
+    __ssh_inventory_file_readable=()
+    __ssh_inventory_include_matches=()
+    __ssh_inventory_target_dumps=()
+    __ssh_inventory_target_status=()
+    __ssh_inventory_known_content=''
+    __ssh_inventory_known_readable=0
+    __ssh_inventory_cache_id=''
+}
+
+__ssh_inventory_invalidate() {
+    __ssh_inventory_reset
+}
+
+__ssh_inventory_snapshot_file() {
+    local file=$1
+
+    if [[ -r $file ]]; then
+        __ssh_inventory_file_readable["$file"]=1
+        __ssh_inventory_file_content["$file"]=$(< "$file")
+    else
+        __ssh_inventory_file_readable["$file"]=0
+        __ssh_inventory_file_content["$file"]=''
+    fi
+}
+
+__ssh_inventory_refresh() {
+    local known=$1 config=$2 key file pattern current
+    local -A watched_seen=()
+    local -a watched_files=()
+
+    __ssh_inventory_reset
+    __kh_scan_reset
+
+    # First scan only the user configuration. The resolvers intentionally use
+    # this subset when showing CONFIG references.
+    __kh_scan_file "$config" "$HOME/.ssh" 1 1
+    __ssh_inventory_user_aliases=("${__kh_scan_aliases[@]}")
+    __ssh_inventory_user_files=("${__kh_scan_files[@]}")
+    for key in "${!__kh_scan_alias_direct_user[@]}"; do
+        __ssh_inventory_alias_direct_user["$key"]=${__kh_scan_alias_direct_user["$key"]}
+    done
+    for key in "${!__kh_scan_target_direct_user[@]}"; do
+        __ssh_inventory_target_direct_user["$key"]=${__kh_scan_target_direct_user["$key"]}
+    done
+
+    # Add the system configuration without resetting the scan. Completion and
+    # known-hosts historically considered concrete aliases from both sources.
+    __kh_scan_file /etc/ssh/ssh_config /etc/ssh 1 0
+    __ssh_inventory_aliases=("${__kh_scan_aliases[@]}")
+    __ssh_inventory_files=("${__kh_scan_files[@]}")
+    __ssh_inventory_include_patterns=("${__kh_scan_include_patterns[@]}")
+
+    # Watch the two root paths even when they do not exist yet. This lets a
+    # newly created ~/.ssh/config invalidate an already-built cache.
+    for file in "$config" /etc/ssh/ssh_config "${__ssh_inventory_files[@]}"; do
+        [[ -n $file && -z ${watched_seen["$file"]+x} ]] || continue
+        watched_seen["$file"]=1
+        watched_files+=("$file")
+    done
+    __ssh_inventory_files=("${watched_files[@]}")
+
+    for file in "${__ssh_inventory_files[@]}"; do
+        __ssh_inventory_snapshot_file "$file"
+    done
+
+    for pattern in "${__ssh_inventory_include_patterns[@]}"; do
+        current=$(compgen -G "$pattern" || true)
+        __ssh_inventory_include_matches["$pattern"]=$current
+    done
+
+    if [[ -r $known ]]; then
+        __ssh_inventory_known_readable=1
+        __ssh_inventory_known_content=$(< "$known")
+    else
+        __ssh_inventory_known_readable=0
+        __ssh_inventory_known_content=''
+    fi
+
+    __ssh_inventory_cache_id="$known|$config"
+    ((__ssh_inventory_generation+=1))
+}
+
+__ssh_inventory_cache_valid() {
+    local known=$1 config=$2 file pattern current readable
+
+    [[ $__ssh_inventory_cache_id == "$known|$config" ]] || return 1
+
+    if [[ -r $known ]]; then
+        readable=1
+        current=$(< "$known")
+    else
+        readable=0
+        current=''
+    fi
+    [[ $__ssh_inventory_known_readable == "$readable" ]] || return 1
+    [[ $__ssh_inventory_known_content == "$current" ]] || return 1
+
+    for file in "${__ssh_inventory_files[@]}"; do
+        if [[ -r $file ]]; then
+            readable=1
+            current=$(< "$file")
+        else
+            readable=0
+            current=''
+        fi
+        [[ ${__ssh_inventory_file_readable["$file"]-0} == "$readable" ]] || return 1
+        [[ ${__ssh_inventory_file_content["$file"]-} == "$current" ]] || return 1
+    done
+
+    # compgen is a Bash builtin. Comparing the current matches also notices a
+    # new or removed file under an unchanged Include glob.
+    for pattern in "${__ssh_inventory_include_patterns[@]}"; do
+        current=$(compgen -G "$pattern" || true)
+        [[ ${__ssh_inventory_include_matches["$pattern"]-} == "$current" ]] || return 1
+    done
+
+    return 0
+}
+
+__ssh_inventory_ensure() {
+    local known=${1:-${SSH_KNOWN_HOSTS_FILE:-$HOME/.ssh/known_hosts}}
+    local config=${2:-${SSH_CONFIG_FILE:-$HOME/.ssh/config}}
+
+    __ssh_inventory_cache_valid "$known" "$config" || \
+        __ssh_inventory_refresh "$known" "$config"
+}
+
+# Resolve one target through ssh -G and cache the result for the lifetime of
+# the current inventory generation. Callers decide whether a failed resolution
+# is fatal. The optional QUIET flag is passed through on the first attempt.
+__ssh_inventory_target_dump() {
+    local config=$1 target=$2 quiet=${3:-0}
+    local cache_key="$config"$'\x1f'"$target" rc
+
+    if [[ -n ${__ssh_inventory_target_status["$cache_key"]+x} ]]; then
+        REPLY=${__ssh_inventory_target_dumps["$cache_key"]-}
+        return "${__ssh_inventory_target_status["$cache_key"]}"
+    fi
+
+    REPLY=''
+    __kh_ssh_config_dump "$config" "$target" "$quiet"
+    rc=$?
+    __ssh_inventory_target_status["$cache_key"]=$rc
+    __ssh_inventory_target_dumps["$cache_key"]=$REPLY
+    return "$rc"
+}
+
+__ssh_inventory_target_field() {
+    local config=$1 target=$2 field=$3 quiet=${4:-0}
+    local dump
+
+    __ssh_inventory_target_dump "$config" "$target" "$quiet" || return
+    dump=$REPLY
+    __kh_ssh_config_field "$dump" "$field"
+}
+
+# ---------------------------------------------------------------------------
 # Shared known_hosts and "ssh -G" primitives
 #
 # These used to be copy-pasted into every command that reads known_hosts or

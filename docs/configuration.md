@@ -33,6 +33,7 @@ Set these before sourcing, in `local.sh`, or per command.
 | `PROMPT_LOCAL_SHOW_COMMAND` | `1` | `bashrc.d/prompt-local.sh` | `0` drops the repetition of the last command from the `bash-git-prompt` status segment |
 | `PROMPT_LOCAL_COMMAND_MAX_LEN` | `60` | `bashrc.d/prompt-local.sh` | Truncation length for that repetition |
 | `HISTORY_DEDUPE_LIVE` | `0` | `bashrc.d/history.sh` | `0` rewrites the history file only at shell start instead of also right after a repeated command. Useful on very large history files |
+| `HISTORY_DEDUPE_ON_START` | `1` | `bashrc.d/history.sh` | `0` skips the source-time history rewrite when a shell starts |
 | `BASH_PROMPT_BACKEND` | `auto` | `bashrc.sh` | Local prompt: `starship`, `bash-git-prompt`, `gruvbox`, or `auto`. Aliases: `prompt-local`, `git`, `prompt-gruvbox`, `prompt-gruvbox.sh` |
 | `STARSHIP_CONFIG` | `<checkout>/starship.toml` | `bashrc.sh` | Optional override for the Starship config path when the Starship backend is selected |
 
@@ -58,7 +59,7 @@ Not meant to be set by hand, but useful when debugging:
 | `~/.bashrc` | `install.sh` | Three-line loader for the checkout |
 | `~/.bashrc.before-modular-config.<timestamp>` | `install.sh` | Backup of the previous `~/.bashrc` |
 | `~/.cache/sshp/connection-v1_<crc>_<size>.state` | `sshp` | Sync signature, keyed by the effective SSH connection resolved with `ssh -G` |
-| `<checkout>/local.sh` | you | Untracked machine-local settings, loaded after the common modules and immediately before the local prompt backend is selected |
+| `<checkout>/local.sh` | you | Untracked machine-local settings, loaded after `environment.sh` and before modules that consume source-time configuration |
 | `~/.ssh/known_hosts.bak.<timestamp>` | `known-hosts --clean --apply` | Backup, only when the file actually changes |
 | `~/.ssh/config.bak.<timestamp>` | `known-hosts --clean --apply` | Backup, only when the file actually changes |
 | `~/.bash-git-prompt/` | you | Optional `bash-git-prompt` checkout |
@@ -106,10 +107,10 @@ Copy the template and edit:
 cp local.sh.example local.sh
 ```
 
-It is sourced near the end of `bashrc.sh`, only if readable: after the common
-history/listing/SSH modules and immediately before the local prompt backend is
-selected. That lets it select and configure the prompt without being sourced
-twice. It is covered by `.gitignore` along with `*.bak`, `*.backup`, `.idea`
+It is sourced near the start of `bashrc.sh`, only if readable: immediately after
+`environment.sh` and before `prompt-core.sh`, `history.sh`, the SSH helpers and
+the local prompt backend. That makes source-time settings such as
+`HISTORY_DEDUPE_ON_START=0` effective without sourcing the file twice. It is covered by `.gitignore` along with `*.bak`, `*.backup`, `.idea`
 and `*.iml`.
 
 Prompt and SSH policy example:

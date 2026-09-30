@@ -154,7 +154,7 @@ bashrc.d/
   ssh-tools.sh             Loader for the SSH helpers, aliases, completion
   commands.sh              bash-commands: overview of all provided commands
   lib/
-    ssh-config.sh          Config scanner plus the shared known_hosts/ssh -G primitives
+    ssh-config.sh          Config scanner, shared SSH inventory cache and primitives
     known-hosts.sh         known-hosts: cache, grouping model, display
     known-hosts-clean.sh   known-hosts --clean
     ssh-by-number.sh       ssh-nr
@@ -176,7 +176,7 @@ tests/
   prompt-local.sh          bash-git-prompt status segment regression test
   prompt-selection.sh      local.sh backend selector regression test
   remote-prompt.sh         Remote wiring and the pre-4.2 fallback prompt
-  ssh-config.sh            Config scanner, Include, direct vs inherited users
+  ssh-config.sh            Scanner plus shared config/known_hosts inventory cache
   known-hosts.sh           known-hosts parser and process count
   known-hosts-clean.sh     known-hosts --clean, dry run and --apply
   ssh-by-number.sh         ssh-nr target resolution
@@ -214,7 +214,7 @@ bash tests/history.sh       # or a single script
 bash-commands --check       # every documented command is really defined
 ```
 
-Currently 19 scripts with 527 checks, all passing. The same three commands run
+Currently 19 scripts with 545 checks, all passing. The same three commands run
 in CI on every push, together with a `bash -n` gate over the whole tree
 (`.github/workflows/ci.yml`).
 

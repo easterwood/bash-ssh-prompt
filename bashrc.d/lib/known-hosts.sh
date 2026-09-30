@@ -24,11 +24,10 @@ declare -A __kh_rows=()
 declare -A __kh_target_users=()
 # 1 if the user is set directly in a concrete Host block of the user config.
 declare -A __kh_target_user_explicit=()
-__kh_cache_id=''
-__kh_known_content=''
+__kh_inventory_generation=-1
 
 __kh_cache_invalidate() {
-    __kh_cache_id=''
+    __kh_inventory_generation=-1
     __kh_rows=()
     __kh_target_users=()
     __kh_target_user_explicit=()
@@ -41,11 +40,13 @@ __kh_refresh() {
     local -A row_seen=()
 
     __kh_cache_invalidate
-    __kh_scan_configs "$config" 0
+    __ssh_inventory_ensure "$known" "$config"
 
-    for alias in "${__kh_scan_aliases[@]}"; do
+    for alias in "${__ssh_inventory_aliases[@]}"; do
         # -G does not open an SSH session. Configured Match exec rules may run.
-        __kh_ssh_config_dump "$config" "$alias" || {
+        # Its result is shared with completion and the resolvers for this
+        # inventory generation.
+        __ssh_inventory_target_dump "$config" "$alias" || {
             printf 'known-hosts: could not evaluate the SSH configuration for alias %q.\n' "$alias" >&2
             return 1
         }
@@ -81,7 +82,7 @@ __kh_refresh() {
                 [[ -z ${row_seen["$row_token"]+x} ]] || continue
                 row_seen["$row_token"]=1
                 user_explicit=0
-                if [[ ${__kh_scan_alias_direct_user["$alias"]-} == "$user" ]]; then
+                if [[ ${__ssh_inventory_alias_direct_user["$alias"]-} == "$user" ]]; then
                     user_explicit=1
                 fi
                 __kh_rows[$n]+="$alias"$'\t'"$user"$'\t'"$lookup"$'\t'"$user_explicit"$'\n'
@@ -110,7 +111,7 @@ __kh_refresh() {
         __kh_split_host_port "$raw_hosts"
         raw_host=$__kh_host
 
-        __kh_ssh_config_dump "$config" "$raw_host" 1 || true
+        __ssh_inventory_target_dump "$config" "$raw_host" 1 || true
         resolved=$REPLY
 
         effective_user=''
@@ -123,21 +124,20 @@ __kh_refresh() {
         # explicitly to a concrete host/alias or its literal HostName. A user
         # coming from "Host *" or wildcard blocks stays inherited.
         if [[ -n $effective_user &&
-              ( ${__kh_scan_alias_direct_user["$raw_host"]-} == "$effective_user" ||
-                ${__kh_scan_target_direct_user["$raw_host"]-} == "$effective_user" ) ]]; then
+              ( ${__ssh_inventory_alias_direct_user["$raw_host"]-} == "$effective_user" ||
+                ${__ssh_inventory_target_direct_user["$raw_host"]-} == "$effective_user" ) ]]; then
             __kh_target_user_explicit["$raw_hosts"]=1
         fi
-    done < "$known"
+    done <<< "$__ssh_inventory_known_content"
 
-    __kh_cache_id="$known|$config"
-    __kh_known_content=$(< "$known")
+    __kh_inventory_generation=$__ssh_inventory_generation
 }
 
 __kh_cache_ensure() {
     local known=$1 config=$2
 
-    if [[ $__kh_cache_id != "$known|$config" ||
-          $__kh_known_content != "$(< "$known")" ]]; then
+    __ssh_inventory_ensure "$known" "$config"
+    if [[ $__kh_inventory_generation != "$__ssh_inventory_generation" ]]; then
         __kh_refresh "$known" "$config"
     fi
 }
@@ -381,6 +381,7 @@ ssh_known_hosts() {
         # would not reach this shell. Dropping the caches after a successful
         # --apply is cheap and always correct: they are rebuilt on demand.
         if (( apply && clean_status == 0 )); then
+            declare -F __ssh_inventory_invalidate >/dev/null && __ssh_inventory_invalidate
             declare -F __kh_cache_invalidate >/dev/null && __kh_cache_invalidate
             declare -F __ssh_completion_cache_invalidate >/dev/null && __ssh_completion_cache_invalidate
         fi
@@ -402,6 +403,7 @@ ssh_known_hosts() {
     fi
 
     if (( refresh )); then
+        __ssh_inventory_invalidate
         __kh_cache_invalidate
         __kh_groups_reset
         __ssh_completion_cache_invalidate

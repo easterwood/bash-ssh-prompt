@@ -12,10 +12,10 @@
 # by setting a handful of locals before calling it; Bash's dynamic scoping
 # makes them visible here. See ssh-resolve-ips.sh for a worked example.
 #
-# This file requires lib/ssh-config.sh for __kh_scan_file, __kh_scan_reset and
-# __kh_ssh_config_dump.
+# This file requires lib/ssh-config.sh for the shared SSH inventory and the
+# known_hosts parser.
 
-declare -F __kh_scan_file >/dev/null || {
+declare -F __ssh_inventory_ensure >/dev/null || {
     printf 'ssh-resolve.sh: lib/ssh-config.sh has to be sourced first.\n' >&2
     return 1
 }
@@ -172,17 +172,15 @@ __ssh_resolve_table() {
         return 2
     }
 
-    # Scan the user config and its includes. The system-wide ssh_config is
-    # deliberately not treated as part of the user's own inventory.
-    __kh_scan_reset
-    if [[ -r $config ]]; then
-        __kh_scan_file "$config" "$HOME/.ssh" 0
-    fi
+    # Share the same file snapshots and ssh -G results as known-hosts and
+    # completion. The resolver still considers only the user-config subset
+    # when attributing CONFIG references.
+    __ssh_inventory_ensure "$known" "$config"
 
-    # Resolve the effective HostName for every concrete config alias. That also
-    # catches keys coming from a more general Host rule.
-    for alias in "${__kh_scan_aliases[@]}"; do
-        __kh_ssh_config_dump "$config" "$alias" 1 || continue
+    # Resolve the effective HostName for every concrete user-config alias. That
+    # also catches keys coming from a more general Host rule.
+    for alias in "${__ssh_inventory_user_aliases[@]}"; do
+        __ssh_inventory_target_dump "$config" "$alias" 1 || continue
         resolved=$REPLY
 
         __kh_ssh_config_field "$resolved" hostname || continue
@@ -196,8 +194,8 @@ __ssh_resolve_table() {
 
     # Additionally read raw Host/HostName literals, so entries from host
     # patterns without a concrete alias show up as well.
-    for file in "${__kh_scan_files[@]}"; do
-        [[ -r $file ]] || continue
+    for file in "${__ssh_inventory_user_files[@]}"; do
+        [[ ${__ssh_inventory_file_readable["$file"]-0} == 1 ]] || continue
         display_file=$(__ssh_resolve_display_path "$file")
         config_line_number=0
         current_aliases=()
@@ -254,12 +252,12 @@ __ssh_resolve_table() {
                     fi
                     ;;
             esac
-        done < "$file"
+        done <<< "${__ssh_inventory_file_content["$file"]-}"
     done
 
     # known_hosts: the host field may carry several names. Hashed entries
     # cannot, by their nature, be traced back to anything.
-    if [[ -r $known ]]; then
+    if (( __ssh_inventory_known_readable )); then
         line_number=0
         while IFS= read -r line || [[ -n $line ]]; do
             ((line_number+=1))
@@ -273,7 +271,7 @@ __ssh_resolve_table() {
                     __ssh_resolve_add_known_line "$key" "$line_number"
                 fi
             done
-        done < "$known"
+        done <<< "$__ssh_inventory_known_content"
     fi
 
     # One lookup per key. Missing answers are shown as '-'.
