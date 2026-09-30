@@ -114,8 +114,12 @@ local powerline prompt minus the Git segment:
 __cmd_timer_stop → __gb_build → __cmd_timer_arm
 ```
 
-On a Bash older than 4.2 the associative arrays in `prompt-gruvbox.sh` are not
-available, and `prompt.sh` falls back to its own plain builder:
+On a Bash older than 4.2 `prompt-gruvbox.sh` cannot even be parsed — it needs
+associative arrays and `$'\Uxxxxxxxx'` — so `prompt.sh` falls back to its own
+plain builder. Stock macOS is Bash 3.2, so this is the common case for a Mac,
+not an exotic one. The builder is defined unconditionally and only the wiring
+depends on the version, which is what lets `tests/remote-prompt.sh` reach it on
+a current shell: `BASH_VERSINFO` is readonly and cannot be faked.
 
 ```
 __cmd_timer_stop → __remote_prompt_build → __cmd_timer_arm
@@ -283,7 +287,7 @@ bash tests/history.sh       # a single script
 
 `tests/run-all.sh` executes every `*.sh` in `tests/` except itself and
 `lib.sh`, prints one `PASS` line per script with its check count, and returns
-`1` if any script failed. Current state: 17 scripts, 448 checks, all passing.
+`1` if any script failed. Current state: 18 scripts, 476 checks, all passing.
 The same suite runs in CI on every push, together with the `bash -n` gate over
 the whole tree and `bash-commands --check`; see `.github/workflows/ci.yml`.
 
@@ -299,6 +303,7 @@ the whole tree and `bash-commands --check`; see `.github/workflows/ci.yml`.
 | `tests/prompt-core.sh` | 31 | The clock, duration formatting across all five ranges, exit-code capture, the shared `__prompt_quote`/`__prompt_last_command` helpers, control-character escaping in the window title |
 | `tests/prompt-gruvbox.sh` | 62 | The pure-Bash Gruvbox prompt: palette, segment engine, Git segment, toolchain detection and the second powerline line |
 | `tests/prompt-local.sh` | 15 | `prompt_callback`: order of duration, last command and exit code, quoting, and the two repetition knobs |
+| `tests/remote-prompt.sh` | 28 | `prompt.sh`: the pre-4.2 fallback builder (exit code, duration threshold, SSH marker, repeated command, input symbol) and the remote wiring around `prompt-gruvbox.sh` with the Git segment off |
 | `tests/prompt-selection.sh` | 9 | The `local.sh` backend selector: Starship, `bash-git-prompt`, Gruvbox, and the fallback warnings |
 | `tests/ssh-by-number.sh` | 19 | `ssh-nr`: help, `--list`, invalid and out-of-range numbers, alias versus raw target, `[host]:port`, markers, `-F` pass-through, both `sshp` call branches |
 | `tests/ssh-config.sh` | 22 | Alias collection, skipped wildcards, quotes, `Include` with glob and `~/`, direct versus inherited users |

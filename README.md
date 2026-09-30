@@ -47,6 +47,12 @@ every server you connect to — without installing anything there by hand.
 - Bash, plus `tar`, `grep`, `mktemp` and `touch`
 - GNU `ls` if you want the `ll` listing to render correctly
 
+A remote host with Bash older than 4.2 gets a simpler fallback prompt: the
+powerline prompt needs associative arrays and `$'\Uxxxxxxxx'`, which such a
+shell cannot even parse. Stock macOS ships Bash 3.2, so a Mac lands there by
+default; the command timer, the exit code and the repeated command work the
+same, only the powerline segments are plain.
+
 The project targets both Linux and Git Bash on Windows.
 
 ## Installation
@@ -166,6 +172,7 @@ tests/
   prompt-gruvbox.sh        Gruvbox prompt regression test
   prompt-local.sh          bash-git-prompt status segment regression test
   prompt-selection.sh      local.sh backend selector regression test
+  remote-prompt.sh         Remote wiring and the pre-4.2 fallback prompt
   ssh-config.sh            Config scanner, Include, direct vs inherited users
   known-hosts.sh           known-hosts parser and process count
   known-hosts-clean.sh     known-hosts --clean, dry run and --apply
@@ -202,7 +209,7 @@ bash tests/history.sh       # or a single script
 bash-commands --check       # every documented command is really defined
 ```
 
-Currently 17 scripts with 448 checks, all passing. The same three commands run
+Currently 18 scripts with 476 checks, all passing. The same three commands run
 in CI on every push, together with a `bash -n` gate over the whole tree
 (`.github/workflows/ci.yml`).
 

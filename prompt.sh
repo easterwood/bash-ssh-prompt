@@ -36,18 +36,16 @@ PROMPT_GRUVBOX_GIT=0
 : "${PROMPT_GRUVBOX_SHOW_HOST:=1}"
 : "${PROMPT_GRUVBOX_SHOW_COMMAND:=$SSH_PROMPT_SHOW_COMMAND}"
 
-# prompt-gruvbox.sh needs associative arrays and $'\Uxxxxxxxx', both Bash 4.2.
-# Anything older - an old AIX, Solaris or a stock macOS bash - falls back to
-# the plain three-line prompt this file used before.
-if ((BASH_VERSINFO[0] > 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 2))); then
-
-source "$__remote_prompt_root/bashrc.d/prompt-gruvbox.sh"
-unset __remote_prompt_root
-
-else
-
-unset __remote_prompt_root
-
+# The pre-4.2 fallback prompt.
+#
+# prompt-gruvbox.sh needs associative arrays and $'\Uxxxxxxxx', both Bash 4.2,
+# and would not even parse on an older shell. A stock macOS bash is 3.2, so on
+# a Mac this is the prompt sshp actually gives you, not an exotic corner; an
+# old AIX or Solaris lands here too.
+#
+# The function is defined unconditionally. Only the wiring below depends on the
+# version, which is what makes the builder reachable from tests/remote-prompt.sh
+# on a modern shell -- BASH_VERSINFO is readonly and cannot be faked.
 __remote_prompt_build() {
     local rc=${__cmd_last_exit:-0} status='' first_line symbol symbol_color
 
@@ -82,13 +80,18 @@ __remote_prompt_build() {
     PS1+="${first_line}${status}\n\t ${symbol_color}${symbol}\[\e[0m\] "
 }
 
-# __prompt_command_is_array comes from prompt-core.sh, which is sourced above.
-if __prompt_command_is_array; then
-    PROMPT_COMMAND=(__cmd_timer_stop __remote_prompt_build __cmd_timer_arm)
+if ((BASH_VERSINFO[0] > 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 2))); then
+    # prompt-gruvbox.sh installs its own PROMPT_COMMAND.
+    source "$__remote_prompt_root/bashrc.d/prompt-gruvbox.sh"
 else
-    PROMPT_COMMAND='__cmd_timer_stop;__remote_prompt_build;__cmd_timer_arm'
+    # __prompt_command_is_array comes from prompt-core.sh, sourced above.
+    if __prompt_command_is_array; then
+        PROMPT_COMMAND=(__cmd_timer_stop __remote_prompt_build __cmd_timer_arm)
+    else
+        PROMPT_COMMAND='__cmd_timer_stop;__remote_prompt_build;__cmd_timer_arm'
+    fi
+
+    __remote_prompt_build
 fi
 
-__remote_prompt_build
-
-fi
+unset __remote_prompt_root
