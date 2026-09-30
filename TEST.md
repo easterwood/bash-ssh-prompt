@@ -5,7 +5,7 @@
 The modular Bash configuration was verified in an isolated Linux test
 environment. All automated checks passed.
 
-Reproducible part: `bash tests/run-all.sh` — 16 scripts, 401 checks, all passing.
+Reproducible part: `bash tests/run-all.sh` — 17 scripts, 448 checks, all passing.
 The same suite runs in CI on every push (`.github/workflows/ci.yml`), so the
 numbers above are checked rather than transcribed. The remaining sections
 describe one-off checks that are not scripted.
@@ -51,8 +51,8 @@ line per script, and returns `1` if any of them failed.
 | Script | Checks | Covers |
 |---|---|---|
 | `tests/commands.sh` | 26 | `bash-commands`: listing, `--details`, the `--check` self-test including a deliberately stale row, filter, rejected combinations |
-| `tests/completion.sh` | 27 | The shared host cache, its invalidation after a config edit, `ssh`/`sshp` destinations including `user@`, and every per-command completion |
-| `tests/history.sh` | 18 | `history_dedupe` on timestamped, multi-line and timestamp-less files, the shipped `HISTORY_DEDUPE_LIVE=0` default, and the live rewrite end to end in an interactive shell |
+| `tests/completion.sh` | 30 | The shared host cache, its invalidation after a config edit, `ssh`/`sshp` destinations including `user@`, every per-command completion, and that both resolvers share one registration |
+| `tests/history.sh` | 20 | `history_dedupe` on timestamped, multi-line and timestamp-less files, the shipped `HISTORY_DEDUPE_LIVE=0` default, the live rewrite end to end, and the `prompt-core.sh` guard |
 | `tests/install.sh` | 21 | The generated loader, the backup, `printf %q` quoting of a path with spaces, the `bash -n` gate, and that `bashrc.sh` stays inert in a non-interactive shell |
 | `tests/known-hosts-clean.sh` | 39 | `known-hosts --clean`: dry run, `--apply` with backups, rejected combinations, the removed `known-hosts-clean` alias, and the completion |
 | `tests/known-hosts.sh` | 13 | The `known_hosts` parser, the filter, hashed and marker entries, rejected option combinations, and how many processes the rendering spawns |
@@ -63,9 +63,10 @@ line per script, and returns `1` if any of them failed.
 | `tests/prompt-selection.sh` | 9 | The `local.sh` backend selector: Starship, `bash-git-prompt`, Gruvbox, and the fallback warnings |
 | `tests/ssh-by-number.sh` | 19 | `ssh-nr`: help, `--list`, invalid and out-of-range numbers, alias versus raw target, `[host]:port`, markers, `-F` pass-through, both `sshp` call branches |
 | `tests/ssh-config.sh` | 22 | Alias collection, skipped wildcards, quotes, `Include` with glob and `~/`, direct versus inherited users |
-| `tests/ssh-resolve.sh` | 38 | The IPv4/IPv6 predicates, help, argument and timeout validation, and the load-order dependency between the two resolvers |
+| `tests/ssh-resolve-table.sh` | 27 | `__ssh_resolve_table` against a stubbed `ssh -G` and pre-seeded DNS caches: columns, merged references, bracketed IPv6, skipped hashed entries, filter, empty results, cache invalidation |
+| `tests/ssh-resolve.sh` | 40 | The IPv4/IPv6 predicates, help, argument and timeout validation, and the source-time guard both resolvers carry |
 | `tests/sshp.sh` | 34 | The `sshp` argument parser, `--force`, `--`, the remote-command rejection, and the check for missing sync files |
-| `tests/starship-config.sh` | 10 | `starship.toml`: the removed helper script, the constant bg1 field on line one, the optional context groups and the rounded caps on line two |
+| `tests/starship-config.sh` | 23 | `starship.toml`: the removed helper script, the constant bg1 field on line one, the rounded caps on line two, and the palette matching `prompt-gruvbox.sh` |
 
 ## Checks performed
 
@@ -221,6 +222,12 @@ Result: no corrupted entries.
 implementation moved into `bashrc.d/lib/known-hosts.sh` behind the `--clean`
 option.
 
+> Later update: the merged file had grown to 1148 lines across four concerns,
+> so the `--clean` implementation moved back into
+> `bashrc.d/lib/known-hosts-clean.sh` — see section 13. The user-visible
+> interface is unchanged: `--clean` is still an option of `known-hosts`, the
+> `known-hosts-clean` alias is still gone, and the 39 checks below still pass.
+
 Reproducible regression test: `bash tests/known-hosts-clean.sh` (passed, 39
 checks). The fixture is a throwaway home directory with one reachable host, one
 unreachable host, a hashed entry and matching config aliases; `ssh`,
@@ -283,6 +290,72 @@ line — as produced by pasting a script into the terminal — was deduplicated
 without corrupting the remaining timestamps.
 
 Result: passed.
+
+### 13. Second pass on duplication
+
+Three code paths existed more than once and were merged. Each change was
+verified against the suite, and the resolver merge additionally against the
+output of the previous implementation.
+
+**The two resolvers.** `ssh_resolve_ips` and `ssh_resolve_hosts` were 245 and
+246 lines, around 80 % identical once the identifiers were normalised: the
+three local accumulators, the config scan, the `known_hosts` scan, the filter
+loop and both output blocks were character-for-character copies. The shared
+part is now `__ssh_resolve_table` in `bashrc.d/lib/ssh-resolve.sh`; each
+command supplies an extractor, a lookup and its column headers.
+
+Equivalence was checked by running both implementations against the same
+fixture — a config with IP literals, a wildcard `Host`, a `%h` token and an
+alias, plus a `known_hosts` with a comment, a blank line, a bracketed IPv6
+target with a port, a hashed entry, a `@cert-authority` marker and a
+multi-name line — across five invocations, filtered and unfiltered, with
+pre-seeded DNS caches. **The output was byte-identical.**
+
+| File | Before | After |
+|---|---|---|
+| `lib/ssh-resolve.sh` | — | 320 |
+| `lib/ssh-resolve-ips.sh` | 438 | 171 |
+| `lib/ssh-resolve-hosts.sh` | 443 | 217 |
+
+`tests/ssh-resolve-table.sh` (27 checks) was added, because the shared body had
+no coverage at all: `tests/ssh-resolve.sh` only exercises paths that return
+before any DNS lookup.
+
+**The `known_hosts` parser and the `ssh -G` call.** Both existed at seven
+sites. They are now `__kh_parse_known_line`, `__kh_split_host_port`,
+`__kh_ssh_config_dump`, `__kh_ssh_config_field` and `__kh_lookup_key` in
+`lib/ssh-config.sh`. Two defects surfaced while migrating:
+
+- `__kh_refresh` did not strip `\r`, while the resolvers did, so a CRLF
+  `known_hosts` behaved differently depending on the command. Now uniform.
+- In `__kh_clean_run` an unparsable non-comment line fell through to the
+  `CHECK` branch and was effectively dropped by `--apply`. It is now written
+  back unchanged and reported as `SKIP unparsable line`.
+
+**The resolver completions.** `completions/ssh-resolve-ips.bash` and
+`completions/ssh-resolve-hosts.bash` were byte-identical apart from the
+function name. One `_ssh_resolve_completion` in `completions/ssh-resolve.bash`
+is registered for both commands. The unquoted `COMPREPLY=( $(compgen ...) )`
+assignment was replaced by the loop form used elsewhere in the tree.
+
+### 14. Structure and error paths
+
+- `lib/known-hosts.sh` was split at 1148 lines into `known-hosts.sh` (482:
+  cache, grouping model, display) and `known-hosts-clean.sh` (646). Only
+  `ssh_known_hosts` reaches across the boundary.
+- `__kh_clean_run` runs in a subshell with one `trap ... EXIT HUP INT TERM`,
+  replacing eight hand-placed `rm -f` calls. Because a subshell cannot
+  invalidate the caller's caches, `ssh_known_hosts` drops them after a
+  successful `--apply`.
+- Every module that needs another one now says so at source time with a
+  `declare -F ... || return 1` guard: `history.sh`, both prompt backends,
+  `ssh-by-number.sh`, both resolvers and both `known-hosts` files. Two tests
+  had been relying on the previously silent load order and were corrected.
+- The Gruvbox palette still exists twice, as RGB in `prompt-gruvbox.sh` and as
+  hex in `starship.toml`. `tests/starship-config.sh` now converts and compares
+  them, so drift fails the build.
+
+Result: passed. 17 scripts, 448 checks.
 
 ## Still to be checked manually
 

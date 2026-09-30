@@ -10,12 +10,17 @@ __ssh_tools_dir=$(cd -- "$__ssh_tools_dir" && pwd) || return 1
 source "$__ssh_tools_dir/lib/ssh-config.sh"
 # shellcheck source=lib/known-hosts.sh
 source "$__ssh_tools_dir/lib/known-hosts.sh"
+# The --clean pass builds on the cache above and is a separate file.
+# shellcheck source=lib/known-hosts-clean.sh
+source "$__ssh_tools_dir/lib/known-hosts-clean.sh"
 # shellcheck source=lib/ssh-by-number.sh
 source "$__ssh_tools_dir/lib/ssh-by-number.sh"
+# Both resolvers are thin wrappers around lib/ssh-resolve.sh, which therefore
+# has to be loaded before them.
+# shellcheck source=lib/ssh-resolve.sh
+source "$__ssh_tools_dir/lib/ssh-resolve.sh"
 # shellcheck source=lib/ssh-resolve-ips.sh
 source "$__ssh_tools_dir/lib/ssh-resolve-ips.sh"
-# ssh-resolve-hosts uses helpers from ssh-resolve-ips.sh and therefore has to
-# be loaded after it.
 # shellcheck source=lib/ssh-resolve-hosts.sh
 source "$__ssh_tools_dir/lib/ssh-resolve-hosts.sh"
 # shellcheck source=completions/ssh-hosts.bash
@@ -24,10 +29,8 @@ source "$__ssh_tools_dir/completions/ssh-hosts.bash"
 source "$__ssh_tools_dir/completions/known-hosts.bash"
 # shellcheck source=completions/ssh-by-number.bash
 source "$__ssh_tools_dir/completions/ssh-by-number.bash"
-# shellcheck source=completions/ssh-resolve-ips.bash
-source "$__ssh_tools_dir/completions/ssh-resolve-ips.bash"
-# shellcheck source=completions/ssh-resolve-hosts.bash
-source "$__ssh_tools_dir/completions/ssh-resolve-hosts.bash"
+# shellcheck source=completions/ssh-resolve.bash
+source "$__ssh_tools_dir/completions/ssh-resolve.bash"
 # shellcheck source=completions/ssh.bash
 source "$__ssh_tools_dir/completions/ssh.bash"
 # shellcheck source=commands.sh
@@ -48,11 +51,10 @@ complete -F _ssh_known_hosts_completion known-hosts
 complete -F _ssh_known_hosts_completion ssh-known-hosts
 complete -F _ssh_known_hosts_completion ssh_known_hosts
 
-complete -F _ssh_resolve_ips_completion ssh-resolve-ips
-complete -F _ssh_resolve_ips_completion ssh_resolve_ips
-
-complete -F _ssh_resolve_hosts_completion ssh-resolve-hosts
-complete -F _ssh_resolve_hosts_completion ssh_resolve_hosts
+complete -F _ssh_resolve_completion ssh-resolve-ips
+complete -F _ssh_resolve_completion ssh_resolve_ips
+complete -F _ssh_resolve_completion ssh-resolve-hosts
+complete -F _ssh_resolve_completion ssh_resolve_hosts
 
 complete -F _ssh_by_number_completion ssh-nr
 complete -F _ssh_by_number_completion ssh_by_number

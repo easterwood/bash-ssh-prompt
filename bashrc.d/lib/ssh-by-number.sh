@@ -4,6 +4,12 @@
 # Once the target is resolved, sshp is used so that ssh-nr behaves exactly like
 # a direct sshp call.
 
+# The target numbers come from the grouping model in lib/known-hosts.sh.
+declare -F __kh_groups_build >/dev/null || {
+    printf 'ssh-by-number.sh: lib/known-hosts.sh has to be sourced first.\n' >&2
+    return 1
+}
+
 __ssh_by_number_run_sshp() {
     local kind rc arg command_line='sshp'
     local had_expand_aliases=0

@@ -11,11 +11,13 @@
        ├─ bashrc.d/history.sh        history sizes, timestamps, dedup, history -a
        ├─ bashrc.d/listing.sh        ll, TIME_STYLE
        ├─ bashrc.d/ssh-tools.sh      ┐
-       │    ├─ lib/ssh-config.sh     │
-       │    ├─ lib/known-hosts.sh    │ libraries
-       │    ├─ lib/ssh-by-number.sh  │
-       │    ├─ lib/ssh-resolve-ips.sh│
-       │    ├─ lib/ssh-resolve-hosts.sh┘
+       │    ├─ lib/ssh-config.sh     │ scanner + shared known_hosts/ssh -G
+       │    ├─ lib/known-hosts.sh    │ cache, grouping model, display
+       │    ├─ lib/known-hosts-clean.sh│ --clean
+       │    ├─ lib/ssh-by-number.sh  │ ssh-nr
+       │    ├─ lib/ssh-resolve.sh    │ shared resolver table
+       │    ├─ lib/ssh-resolve-ips.sh│ reverse direction
+       │    ├─ lib/ssh-resolve-hosts.sh┘ forward direction
        │    ├─ commands.sh          bash-commands
        │    ├─ completions/*.bash
        │    └─ aliases + complete registrations
@@ -133,12 +135,16 @@ keeps the trap from firing for each function call inside a pipeline.
 | `__history_*` | History writing and duplicate detection |
 | `__remote_prompt_*` | Remote prompt only |
 | `__kh_scan_*` | Shared SSH-config scanner results |
+| `__kh_line_*`, `__kh_host`, `__kh_port` | Results of the shared `known_hosts` line parser |
+| `__kh_parse_*`, `__kh_split_*`, `__kh_ssh_config_*`, `__kh_lookup_key` | Shared primitives in `lib/ssh-config.sh` |
 | `__kh_rows`, `__kh_target_*`, `__kh_cache_*` | `known-hosts` cache |
 | `__kh_group_*` | The shared grouping model behind `known-hosts` and `ssh-nr` |
 | `__kh_clean_*` | `known-hosts --clean` state |
 | `__ssh_completion_*` | Shared completion cache and helpers |
-| `__ssh_resolve_ips_*` | `ssh-resolve-ips` internals, IP predicates and PTR cache |
-| `__ssh_resolve_hosts_*` | `ssh-resolve-hosts` internals and forward-DNS cache |
+| `__ssh_resolve_*` | Shared resolver machinery: IP predicates, accumulators, `__ssh_resolve_table` |
+| `__ssh_resolve_ips_*` | `ssh-resolve-ips` only: PTR cache, extractor, lookup |
+| `__ssh_resolve_hosts_*` | `ssh-resolve-hosts` only: forward-DNS cache, extractor, lookup |
+| `resolve_*` (locals) | The spec a resolver hands to `__ssh_resolve_table` |
 | `__ssh_tools_dir` | Loader-local path helper in `ssh-tools.sh`, unset again at the end |
 | `__sshp_*` | Shared `ssh`/`sshp` argument parser, option tables and help |
 | `__bash_commands_*` | `bash-commands` helpers: kind lookup and usage text |
@@ -182,6 +188,22 @@ The "direct user" maps deliberately exclude `Host *`, wildcard blocks and
 `Match` blocks. That is what lets `known-hosts` distinguish an explicitly
 configured user from an inherited one and colour it accordingly.
 
+### Shared primitives in the same file
+
+Reading a `known_hosts` line and asking `ssh -G` about a target used to be
+copy-pasted into every command that needed it: `known-hosts` twice, the
+grouping model, `--clean` three times, and both resolvers. They now live next
+to the scanner, so a parser fix lands everywhere at once and CRLF files,
+marker entries and hashed entries behave identically in every command.
+
+| Function | Purpose |
+|---|---|
+| `__kh_parse_known_line LINE` | Splits a line into `__kh_line_marker`, `__kh_line_hosts`, `__kh_line_keytype`, `__kh_line_key` and `__kh_line_hashed`. Strips `\r`. Returns `1` for comments, blank lines and lines without a host field, so callers can `|| continue` |
+| `__kh_split_host_port TOKEN` | Unwraps `[host]:port` into `__kh_host` and `__kh_port`; a bare token yields port `22` |
+| `__kh_ssh_config_dump CONFIG TARGET [QUIET]` | Runs `ssh -G -T` into `REPLY`, adding `-F` only for a non-default config path. `QUIET=1` discards stderr for callers that treat a failure as "skip" |
+| `__kh_ssh_config_field DUMP FIELD` | Reads one keyword out of such a dump into `REPLY` |
+| `__kh_lookup_key HOSTNAME HOSTKEYALIAS PORT` | Derives the `known_hosts` lookup name into `REPLY`: `HostKeyAlias` unless unset or `none`, wrapped as `[key]:port` for a non-default port |
+
 ## The grouping model — `lib/known-hosts.sh`
 
 `known-hosts` and `ssh-nr` share one model so their numbering can never
@@ -224,6 +246,34 @@ Validation uses only Bash builtins (`$(< file)`, `compgen -G`), so pressing
 `TAB` does not fork processes just to decide whether the cache is still good.
 `known-hosts --refresh` clears the first four at once.
 
+## The shared resolver table — `lib/ssh-resolve.sh`
+
+`ssh-resolve-ips` and `ssh-resolve-hosts` differ in exactly three things:
+which tokens count as a key, which direction they ask DNS, and what the two
+leading columns are called. Everything else — option handling, the config
+scan, the `known_hosts` scan, deduplication, the filter, the column widths and
+the output — is `__ssh_resolve_table`.
+
+A command configures it by setting locals before the call; Bash's dynamic
+scoping makes them visible inside:
+
+| Local | Meaning |
+|---|---|
+| `resolve_command` | User-visible name, used in usage and error messages |
+| `resolve_extract` | Function: token → key on stdout, `1` to skip the token |
+| `resolve_lookup` | Function: key, timeout → `0` plus the variable named by `resolve_result` |
+| `resolve_result` | Name of that variable |
+| `resolve_invalidate` | Function clearing the DNS cache, for `--refresh` |
+| `resolve_timeout_var` | Name of the timeout environment variable, for `--help` |
+| `resolve_help` | Array of description lines for `--help` |
+| `resolve_key_header`, `resolve_value_header` | Headers of the first two columns; their length is also the minimum width |
+| `resolve_noun` | Plural used in the "nothing found" messages |
+| `resolve_scan_host_tokens` | `1` to also read keys out of `Host` tokens. `ssh-resolve-ips` wants IP literals used as patterns; for `ssh-resolve-hosts` a `Host` token is an alias, whose effective `HostName` the `ssh -G` pass already covers |
+
+The accumulators `__ssh_resolve_add_key`, `__ssh_resolve_add_config_ref` and
+`__ssh_resolve_add_known_line` work on the caller's maps the same way. Both
+commands guard at source time that `lib/ssh-resolve.sh` was loaded first.
+
 ## Testing
 
 ```bash
@@ -233,15 +283,15 @@ bash tests/history.sh       # a single script
 
 `tests/run-all.sh` executes every `*.sh` in `tests/` except itself and
 `lib.sh`, prints one `PASS` line per script with its check count, and returns
-`1` if any script failed. Current state: 16 scripts, 401 checks, all passing.
+`1` if any script failed. Current state: 17 scripts, 448 checks, all passing.
 The same suite runs in CI on every push, together with the `bash -n` gate over
 the whole tree and `bash-commands --check`; see `.github/workflows/ci.yml`.
 
 | Script | Checks | Covers |
 |---|---|---|
 | `tests/commands.sh` | 26 | `bash-commands`: listing, `--details`, the `--check` self-test including a deliberately stale row, filter, rejected combinations |
-| `tests/completion.sh` | 27 | The shared host cache, its invalidation after a config edit, `ssh`/`sshp` destinations including `user@`, and every per-command completion |
-| `tests/history.sh` | 18 | `history_dedupe` on timestamped, multi-line and timestamp-less files, the shipped `HISTORY_DEDUPE_LIVE=0` default, and the live rewrite end to end in an interactive shell |
+| `tests/completion.sh` | 30 | The shared host cache, its invalidation after a config edit, `ssh`/`sshp` destinations including `user@`, every per-command completion, and that both resolvers share one registration |
+| `tests/history.sh` | 20 | `history_dedupe` on timestamped, multi-line and timestamp-less files, the shipped `HISTORY_DEDUPE_LIVE=0` default, the live rewrite end to end, and the `prompt-core.sh` guard |
 | `tests/install.sh` | 21 | The generated loader, the backup, `printf %q` quoting of a path with spaces, the `bash -n` gate, and that `bashrc.sh` stays inert in a non-interactive shell |
 | `tests/known-hosts-clean.sh` | 39 | `known-hosts --clean`: dry run, `--apply` with backups, rejected combinations, the removed `known-hosts-clean` alias, and the completion |
 | `tests/known-hosts.sh` | 13 | The `known_hosts` parser, the filter, hashed and marker entries, rejected option combinations, and how many processes the rendering spawns |
@@ -252,9 +302,10 @@ the whole tree and `bash-commands --check`; see `.github/workflows/ci.yml`.
 | `tests/prompt-selection.sh` | 9 | The `local.sh` backend selector: Starship, `bash-git-prompt`, Gruvbox, and the fallback warnings |
 | `tests/ssh-by-number.sh` | 19 | `ssh-nr`: help, `--list`, invalid and out-of-range numbers, alias versus raw target, `[host]:port`, markers, `-F` pass-through, both `sshp` call branches |
 | `tests/ssh-config.sh` | 22 | Alias collection, skipped wildcards, quotes, `Include` with glob and `~/`, direct versus inherited users |
-| `tests/ssh-resolve.sh` | 38 | The IPv4/IPv6 predicates, help, argument and timeout validation, and the load-order dependency between the two resolvers |
+| `tests/ssh-resolve-table.sh` | 27 | `__ssh_resolve_table` against a stubbed `ssh -G` and pre-seeded DNS caches: columns, merged references, bracketed IPv6, skipped hashed entries, filter, empty results, cache invalidation |
+| `tests/ssh-resolve.sh` | 40 | The IPv4/IPv6 predicates, help, argument and timeout validation, and the source-time guard both resolvers carry |
 | `tests/sshp.sh` | 34 | The `sshp` argument parser, `--force`, `--`, the remote-command rejection, and the check for missing sync files |
-| `tests/starship-config.sh` | 10 | `starship.toml`: the removed helper script, the constant bg1 field on line one, the optional context groups and the rounded caps on line two |
+| `tests/starship-config.sh` | 23 | `starship.toml`: the removed helper script, the constant bg1 field on line one, the rounded caps on line two, and the palette matching `prompt-gruvbox.sh` |
 
 `tests/lib.sh` holds the shared parts: `assert`, `assert_equal`,
 `assert_contains`, `assert_not_contains`, `assert_status`, `assert_file`, and
@@ -411,15 +462,29 @@ free of local paths, Windows assumptions and `bash-git-prompt` dependencies.
 
 **Adding an SSH helper** — put the function in `bashrc.d/lib/`, its completion
 in `bashrc.d/completions/`, then add the `source` lines, the alias and the
-`complete -F` registration in `bashrc.d/ssh-tools.sh`. Reuse `__kh_scan_configs`
-for config parsing and `__ssh_completion_cache_ensure` for host lists rather
-than re-implementing either. Finally add a row to the `rows` table in
-`bashrc.d/commands.sh` and the name to `bashrc.d/completions/commands.bash`,
-then confirm with `bash-commands --check`.
+`complete -F` registration in `bashrc.d/ssh-tools.sh`. Open the file with a
+`declare -F <dependency> >/dev/null || return 1` guard naming the library it
+needs, the way every other module does. Do not re-implement what already
+exists:
+
+| Need | Use |
+|---|---|
+| Parse the SSH config | `__kh_scan_configs` / `__kh_scan_file` |
+| Read a `known_hosts` line | `__kh_parse_known_line` |
+| Unwrap `[host]:port` | `__kh_split_host_port` |
+| Ask `ssh -G` about a target | `__kh_ssh_config_dump`, `__kh_ssh_config_field` |
+| Derive a `known_hosts` lookup name | `__kh_lookup_key` |
+| Host lists for completion | `__ssh_completion_cache_ensure` |
+| A key/value table over config and `known_hosts` | `__ssh_resolve_table` |
+
+Finally add a row to the `rows` table in `bashrc.d/commands.sh` and the name to
+`bashrc.d/completions/commands.bash`, then confirm with `bash-commands --check`.
 
 **Changing the prompt** — the powerline prompt lives in `prompt-gruvbox.sh` and
 is shared by local and remote shells; `bash-git-prompt` theming lives in
 `.git-prompt-colors.sh` and `prompt-local.sh`; the remote wiring, the welcome
 banner and the pre-4.2 fallback live in `prompt.sh`. Keep the timer variable
 names (`__cmd_last_exit`, `__cmd_duration`, `__cmd_elapsed_us`) intact, since
-both prompts read them.
+both prompts read them. The Gruvbox palette exists twice, as RGB triples in
+`prompt-gruvbox.sh` and as hex in `starship.toml`; `tests/starship-config.sh`
+compares them, so change both.

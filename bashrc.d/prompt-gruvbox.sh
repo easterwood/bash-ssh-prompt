@@ -25,6 +25,16 @@
 # carries no guard of its own - the same arrangement prompt-local.sh uses. That
 # also keeps it sourceable from tests/prompt-gruvbox.sh.
 
+# prompt-core.sh provides the command timer (__cmd_last_exit, __cmd_duration,
+# __cmd_elapsed_us) and the shared text helpers this prompt reads. bashrc.sh
+# and prompt.sh both source it first; make the requirement explicit rather
+# than failing per prompt with "command not found".
+declare -F __prompt_command_is_array >/dev/null || {
+    printf '%s: bashrc.d/prompt-core.sh has to be sourced first.\n' \
+        "${BASH_SOURCE[0]##*/}" >&2
+    return 1
+}
+
 # --- knobs ------------------------------------------------------------------
 
 # Show the duration from this many microseconds on. The default matches the

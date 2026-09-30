@@ -136,3 +136,131 @@ __kh_scan_configs() {
     __kh_scan_file "$config" "$HOME/.ssh" "$track_includes" 1
     __kh_scan_file /etc/ssh/ssh_config /etc/ssh "$track_includes" 0
 }
+
+# ---------------------------------------------------------------------------
+# Shared known_hosts and "ssh -G" primitives
+#
+# These used to be copy-pasted into every command that reads known_hosts or
+# evaluates the SSH configuration: known-hosts, its --clean pass, the grouping
+# model and both resolvers. One implementation means one place to fix a parser
+# bug, and CRLF configs, marker entries and hashed entries behave identically
+# everywhere.
+# ---------------------------------------------------------------------------
+
+# __kh_parse_known_line LINE
+#
+# Splits one known_hosts line into its fields. Returns 1 for comments, blank
+# lines and lines without a host field, so callers can "|| continue".
+#
+#   __kh_line_marker    @cert-authority / @revoked, empty when absent
+#   __kh_line_hosts     the comma-separated host field, verbatim
+#   __kh_line_keytype   ssh-ed25519, ecdsa-sha2-nistp256, ...
+#   __kh_line_key       the key material
+#   __kh_line_hashed    1 for a |1|... entry, whose hostname cannot be recovered
+__kh_line_marker=''
+__kh_line_hosts=''
+__kh_line_keytype=''
+__kh_line_key=''
+__kh_line_hashed=0
+
+__kh_parse_known_line() {
+    local line=${1%$'\r'} first second third fourth
+
+    __kh_line_marker=''
+    __kh_line_hosts=''
+    __kh_line_keytype=''
+    __kh_line_key=''
+    __kh_line_hashed=0
+
+    [[ $line =~ ^[[:space:]]*(#|$) ]] && return 1
+
+    read -r first second third fourth _ <<< "$line"
+
+    if [[ $first == @* ]]; then
+        __kh_line_marker=$first
+        __kh_line_hosts=$second
+        __kh_line_keytype=$third
+        __kh_line_key=$fourth
+    else
+        __kh_line_hosts=$first
+        __kh_line_keytype=$second
+        __kh_line_key=$third
+    fi
+
+    [[ -n $__kh_line_hosts ]] || return 1
+    [[ $__kh_line_hosts != '|1|'* ]] || __kh_line_hashed=1
+    return 0
+}
+
+# __kh_split_host_port TOKEN
+#
+# Unwraps the [host]:port form used by known_hosts and by HostKeyAlias
+# lookups. A bare token yields the token itself and port 22.
+#
+#   __kh_host   the host part
+#   __kh_port   the port, 22 when the token carries none
+__kh_host=''
+__kh_port=22
+
+__kh_split_host_port() {
+    if [[ $1 =~ ^\[([^]]+)\]:([0-9]+)$ ]]; then
+        __kh_host=${BASH_REMATCH[1]}
+        __kh_port=${BASH_REMATCH[2]}
+    else
+        __kh_host=$1
+        __kh_port=22
+    fi
+}
+
+# __kh_ssh_config_dump CONFIG TARGET [QUIET]
+#
+# Runs "ssh -G" for one target and leaves the output in REPLY. -G opens no
+# connection, but it does evaluate Match exec rules from the configuration.
+# The default config path is passed without -F so ssh applies its own
+# precedence; any other path is passed explicitly.
+#
+# QUIET=1 discards ssh's stderr, for callers that treat a failure as "skip".
+# The exit status is ssh's own.
+__kh_ssh_config_dump() {
+    local config=$1 target=$2 quiet=${3:-0}
+    local -a command=(command ssh -G -T)
+
+    [[ $config == "$HOME/.ssh/config" ]] || command+=(-F "$config")
+    command+=("$target")
+
+    if (( quiet )); then
+        REPLY=$("${command[@]}" 2>/dev/null)
+    else
+        REPLY=$("${command[@]}")
+    fi
+}
+
+# __kh_ssh_config_field DUMP FIELD
+#
+# Reads one keyword out of an "ssh -G" dump into REPLY. Returns 1 when the
+# keyword is absent.
+__kh_ssh_config_field() {
+    local dump=$1 wanted=$2 field value
+
+    while read -r field value; do
+        [[ $field == "$wanted" ]] || continue
+        REPLY=$value
+        return 0
+    done <<< "$dump"
+
+    REPLY=''
+    return 1
+}
+
+# __kh_lookup_key HOSTNAME HOSTKEYALIAS PORT
+#
+# Derives the name a known_hosts entry is stored under, into REPLY:
+# HostKeyAlias wins over HostName unless it is unset or "none", and a
+# non-default port wraps the result as [key]:port.
+__kh_lookup_key() {
+    local host=$1 keyalias=$2 port=$3
+
+    REPLY=$host
+    [[ -z $keyalias || $keyalias == none ]] || REPLY=$keyalias
+    [[ $port == 22 ]] || REPLY="[$REPLY]:$port"
+}

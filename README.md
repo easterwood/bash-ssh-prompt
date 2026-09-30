@@ -146,12 +146,15 @@ bashrc.d/
   ssh-tools.sh             Loader for the SSH helpers, aliases, completion
   commands.sh              bash-commands: overview of all provided commands
   lib/
-    ssh-config.sh          Shared ~/.ssh/config scanner (incl. Include)
-    known-hosts.sh         known-hosts: overview, grouping model, --clean
+    ssh-config.sh          Config scanner plus the shared known_hosts/ssh -G primitives
+    known-hosts.sh         known-hosts: cache, grouping model, display
+    known-hosts-clean.sh   known-hosts --clean
     ssh-by-number.sh       ssh-nr
-    ssh-resolve-ips.sh     ssh-resolve-ips
-    ssh-resolve-hosts.sh   ssh-resolve-hosts (reuses helpers from the above)
+    ssh-resolve.sh         Shared table behind both resolvers
+    ssh-resolve-ips.sh     ssh-resolve-ips: reverse direction only
+    ssh-resolve-hosts.sh   ssh-resolve-hosts: forward direction only
   completions/             Bash completion for all of the above
+                           (ssh-resolve.bash serves both resolvers)
 
 tests/
   run-all.sh               Runs every test script, one summary line each
@@ -167,11 +170,12 @@ tests/
   known-hosts.sh           known-hosts parser and process count
   known-hosts-clean.sh     known-hosts --clean, dry run and --apply
   ssh-by-number.sh         ssh-nr target resolution
-  ssh-resolve.sh           IP predicates and resolver options
+  ssh-resolve.sh           IP predicates, resolver options, load-order guards
+  ssh-resolve-table.sh     The shared resolver table end to end
   sshp.sh                  sshp argument parser and guards
   commands.sh              bash-commands listing and self-check
   completion.sh            Host cache and all completion functions
-  starship-config.sh       starship.toml layout regression test
+  starship-config.sh       starship.toml layout and palette regression test
   known_hosts.fixture      Synthetic parser data (no real keys)
 ```
 
@@ -198,7 +202,7 @@ bash tests/history.sh       # or a single script
 bash-commands --check       # every documented command is really defined
 ```
 
-Currently 16 scripts with 401 checks, all passing. The same three commands run
+Currently 17 scripts with 448 checks, all passing. The same three commands run
 in CI on every push, together with a `bash -n` gate over the whole tree
 (`.github/workflows/ci.yml`).
 

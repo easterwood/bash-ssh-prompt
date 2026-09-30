@@ -162,10 +162,19 @@ assert_equal 'no second number is offered' '  ' "$reply"
 
 # --- the resolvers ---------------------------------------------------------
 
-reply=$(complete_with _ssh_resolve_ips_completion ssh-resolve-ips --)
+# Both resolvers share one completion function, registered under both names.
+reply=$(complete_with _ssh_resolve_completion ssh-resolve-ips --)
 assert_contains 'ssh-resolve-ips offers --refresh' "$reply" '--refresh'
 
-reply=$(complete_with _ssh_resolve_hosts_completion ssh-resolve-hosts --)
+reply=$(complete_with _ssh_resolve_completion ssh-resolve-hosts --)
 assert_contains 'ssh-resolve-hosts offers --refresh' "$reply" '--refresh'
+
+reply=$(complete_with _ssh_resolve_completion ssh-resolve-ips --help '')
+assert_equal 'no second argument is offered' '  ' "$reply"
+
+assert_equal 'ssh-resolve-ips is registered' '_ssh_resolve_completion' \
+    "$(complete -p ssh-resolve-ips | awk '{print $3}')"
+assert_equal 'ssh-resolve-hosts shares the registration' '_ssh_resolve_completion' \
+    "$(complete -p ssh-resolve-hosts | awk '{print $3}')"
 
 pass 'host cache, invalidation on edit, ssh/sshp destinations, per-command options'

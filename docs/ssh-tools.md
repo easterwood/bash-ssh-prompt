@@ -476,10 +476,12 @@ The filter is a single case-insensitive substring matched against name,
 addresses, config references and line numbers. More than one argument returns
 exit code `2`.
 
-> This file reuses the IP predicates, the timeout wrapper and the path shortener
-> from `lib/ssh-resolve-ips.sh` instead of duplicating them, so `ssh-tools.sh`
-> must source it after that file. The function checks the dependency at runtime
-> and reports it rather than failing obscurely.
+> Both resolvers are thin wrappers around `lib/ssh-resolve.sh`, which holds the
+> IP predicates, the timeout wrapper, the path shortener and the whole table:
+> the config scan, the `known_hosts` scan, deduplication, the filter and the
+> output. Each command only supplies its extractor, its lookup and its column
+> headers. `ssh-tools.sh` sources the shared file first, and both wrappers
+> check that at source time rather than failing obscurely.
 
 ---
 

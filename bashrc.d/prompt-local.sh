@@ -1,5 +1,15 @@
 #!/usr/bin/env bash
 
+# prompt-core.sh provides the command timer (__cmd_last_exit, __cmd_duration,
+# __cmd_elapsed_us) and the shared text helpers this prompt reads. bashrc.sh
+# and prompt.sh both source it first; make the requirement explicit rather
+# than failing per prompt with "command not found".
+declare -F __prompt_command_is_array >/dev/null || {
+    printf '%s: bashrc.d/prompt-core.sh has to be sourced first.\n' \
+        "${BASH_SOURCE[0]##*/}" >&2
+    return 1
+}
+
 # Repeat the command that produced the current prompt, like the gruvbox and the
 # remote prompt do. Text and truncation come from prompt-core.sh, so all three
 # prompts show the same thing.

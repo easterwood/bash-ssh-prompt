@@ -82,10 +82,17 @@ assert_equal 'no temporary files left behind' '' "$(compgen -G "$TEST_TMP/histor
 # the prompt path, so the file is only cleaned at shell start.
 assert_equal 'the live rewrite is off by default' '0' "$HISTORY_DEDUPE_LIVE"
 
+# history.sh refuses to load without prompt-core.sh instead of failing halfway
+# through with "command not found".
+guard=$(bash -c 'source bashrc.d/history.sh; printf "rc=%d\n" "$?"' 2>&1)
+assert_contains 'history.sh names its missing dependency' "$guard" 'prompt-core.sh'
+assert_contains 'and refuses to load' "$guard" 'rc=1'
+
 # The checks below exercise the live rewrite itself and therefore switch it on
 # explicitly instead of relying on the default.
 rcfile="$TEST_TMP/rcfile"
-printf 'HISTORY_DEDUPE_LIVE=1\nsource %q/bashrc.d/history.sh\n' "$config_root" > "$rcfile"
+printf 'HISTORY_DEDUPE_LIVE=1\nsource %q/bashrc.d/prompt-core.sh\nsource %q/bashrc.d/history.sh\n' \
+    "$config_root" "$config_root" > "$rcfile"
 
 # run_shell HOME-DIRECTORY COMMANDS...
 # Feeds the commands to an interactive shell and returns its output.
@@ -136,7 +143,8 @@ echo a' "$commands"
 # With the live rewrite switched off, the file is only cleaned at shell start.
 off_home="$TEST_TMP/off"
 mkdir -p "$off_home"
-printf 'HISTORY_DEDUPE_LIVE=0\nsource %q/bashrc.d/history.sh\n' "$config_root" > "$TEST_TMP/rcfile-off"
+printf 'HISTORY_DEDUPE_LIVE=0\nsource %q/bashrc.d/prompt-core.sh\nsource %q/bashrc.d/history.sh\n' \
+    "$config_root" "$config_root" > "$TEST_TMP/rcfile-off"
 printf '%s\n' 'll' 'git push' 'll' |
     env HOME="$off_home" bash --rcfile "$TEST_TMP/rcfile-off" -i >/dev/null 2>&1
 commands=$(grep -v '^#' "$off_home/.bash_history")

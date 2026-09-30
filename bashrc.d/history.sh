@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 
+# prompt-core.sh provides __prompt_command_is_array, which this file uses when
+# hooking into PROMPT_COMMAND. bashrc.sh sources it first; say so out loud
+# rather than failing with "command not found" halfway through.
+declare -F __prompt_command_is_array >/dev/null || {
+    printf 'history.sh: bashrc.d/prompt-core.sh has to be sourced first.\n' >&2
+    return 1
+}
+
 HISTFILE="$HOME/.bash_history"
 HISTSIZE=1000000
 HISTFILESIZE=200000
