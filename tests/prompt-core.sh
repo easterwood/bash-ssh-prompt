@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
+# Test scripts: the sandbox variables (TEST_TMP, TEST_HOME, TEST_STUB_DIR) come
+# from tests/lib.sh, the single-quoted strings holding $ are rcfile and bash -c
+# payloads that must not expand here, and several helpers are reached only
+# through the configuration under test.
+# shellcheck disable=SC2154,SC2034,SC2016,SC2317,SC2218,SC2031,SC2088
+
 # Regression test for bashrc.d/prompt-core.sh: duration formatting, exit-code
 # capture and the window title escaping. The clock is replaced so the results
 # are deterministic.

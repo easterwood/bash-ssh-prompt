@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+# shellcheck source-path=SCRIPTDIR
 # Entry point for the SSH helpers. Source this file from ~/.bashrc.
 
 __ssh_tools_dir=${BASH_SOURCE[0]%/*}

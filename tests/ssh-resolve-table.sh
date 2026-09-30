@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
+# Test scripts: the sandbox variables (TEST_TMP, TEST_HOME, TEST_STUB_DIR) come
+# from tests/lib.sh, the single-quoted strings holding $ are rcfile and bash -c
+# payloads that must not expand here, and several helpers are reached only
+# through the configuration under test.
+# shellcheck disable=SC2154,SC2034,SC2016,SC2317,SC2218,SC2031,SC2088
+
 # Regression test for __ssh_resolve_table in bashrc.d/lib/ssh-resolve.sh, the
 # shared body behind ssh-resolve-ips and ssh-resolve-hosts.
 #
@@ -55,6 +61,13 @@ source bashrc.d/ssh-tools.sh
 
 # Pre-seed both caches so no resolver backend is ever called. \x1e is the
 # sentinel the lookups store for a failed answer.
+#
+# Both are already associative, declared in the resolver files sourced above.
+# Restating that here changes nothing at runtime and tells ShellCheck the
+# subscripts are strings, not arithmetic.
+declare -A __ssh_resolve_ips_dns_cache
+declare -A __ssh_resolve_hosts_dns_cache
+
 __ssh_resolve_ips_dns_cache[10.0.0.1]='ptr-one.example.com'
 __ssh_resolve_ips_dns_cache[192.168.5.5]=$'\x1e'
 __ssh_resolve_hosts_dns_cache[legacy.example.com]='198.51.100.4'

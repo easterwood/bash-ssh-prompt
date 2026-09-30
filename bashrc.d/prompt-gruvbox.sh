@@ -542,6 +542,9 @@ __gb_build() {
 
 # Same ordering contract as prompt-local.sh: the timer stops first so the exit
 # code and the duration are already known, the DEBUG trap is armed last.
+# PROMPT_COMMAND is an array from Bash 5.1 on and a string before that.
+# Both forms are handled deliberately.
+# shellcheck disable=SC2178,SC2179
 if __prompt_command_is_array; then
     PROMPT_COMMAND=(__cmd_timer_stop __gb_build __cmd_timer_arm)
 else

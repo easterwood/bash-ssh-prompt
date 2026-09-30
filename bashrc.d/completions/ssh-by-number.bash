@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+# The __kh_* globals read here are defined in lib/ssh-config.sh and filled by
+# its scanner and parser; bashrc.d/ssh-tools.sh guarantees the load order and
+# every file checks it at source time. ShellCheck sees one file at a time.
+# shellcheck disable=SC2154
+
 _ssh_by_number_completion() {
     local known_hosts_file=${SSH_KNOWN_HOSTS_FILE:-$HOME/.ssh/known_hosts}
     local config=${SSH_CONFIG_FILE:-$HOME/.ssh/config}

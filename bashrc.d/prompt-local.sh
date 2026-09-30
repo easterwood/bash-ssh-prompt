@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+# The GIT_PROMPT_* settings in this file are read by gitprompt.sh, which is
+# sourced at the end of it, not by anything in this repository.
+# shellcheck disable=SC2034
+
 # prompt-core.sh provides the command timer (__cmd_last_exit, __cmd_duration,
 # __cmd_elapsed_us) and the shared text helpers this prompt reads. bashrc.sh
 # and prompt.sh both source it first; make the requirement explicit rather
@@ -17,6 +21,9 @@ declare -F __prompt_command_is_array >/dev/null || {
 : "${PROMPT_LOCAL_COMMAND_MAX_LEN:=60}"
 
 # Same order as the gruvbox prompt: duration, last command, exit code.
+# GIT_PROMPT_* are read by bash-git-prompt, and the variables prompt_callback
+# reads are set by it before the call. Neither direction is visible here.
+# shellcheck disable=SC2034,SC2154
 prompt_callback() {
     local rc=${__cmd_last_exit:-0}
     local duration=${__cmd_duration:-}
@@ -39,6 +46,9 @@ prompt_callback() {
 }
 
 # The timer has to run before bash-git-prompt.
+# PROMPT_COMMAND is an array from Bash 5.1 on and a string before that.
+# Both forms are handled deliberately, here and at the end of the file.
+# shellcheck disable=SC2178,SC2179,SC2128
 if __prompt_command_is_array; then
     PROMPT_COMMAND=(__cmd_timer_stop "${PROMPT_COMMAND[@]}")
 else
@@ -79,11 +89,15 @@ GIT_PROMPT_WITH_VIRTUAL_ENV=0
 # No counting of changed files.
 GIT_PROMPT_SHOW_CHANGED_FILES_COUNT=1
 
+# bash-git-prompt is a third-party checkout in $HOME, not part of this repo.
+# shellcheck disable=SC1091
 if [[ -r "$HOME/.bash-git-prompt/gitprompt.sh" ]]; then
     source "$HOME/.bash-git-prompt/gitprompt.sh"
 fi
 
 # Arm the DEBUG hook as the last prompt action.
+# Same string/array duality as above.
+# shellcheck disable=SC2178,SC2179,SC2128
 if __prompt_command_is_array; then
     PROMPT_COMMAND+=(__cmd_timer_arm)
 else

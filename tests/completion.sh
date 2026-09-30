@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
+# Test scripts: the sandbox variables (TEST_TMP, TEST_HOME, TEST_STUB_DIR) come
+# from tests/lib.sh, the single-quoted strings holding $ are rcfile and bash -c
+# payloads that must not expand here, and several helpers are reached only
+# through the configuration under test.
+# shellcheck disable=SC2154,SC2034,SC2016,SC2317,SC2218,SC2031,SC2088
+
 # Regression test for the completion layer: the shared host cache in
 # completions/ssh-hosts.bash and the ssh/sshp completion in completions/ssh.bash.
 #
@@ -159,6 +165,31 @@ assert_contains 'ssh-nr offers --help' "$reply" '--help'
 
 reply=$(complete_with _ssh_by_number_completion ssh-nr 1 '')
 assert_equal 'no second number is offered' '  ' "$reply"
+
+# --- the command-line tokeniser --------------------------------------------
+
+# __ssh_completion_parse_line splits COMP_LINE itself, because readline's own
+# word splitting does not honour SSH config quoting. The backslash branches
+# were unreachable until the case patterns were corrected: '\\' in a pattern
+# matches two backslashes, so a single one fell through to the default branch
+# and stayed in the token verbatim.
+tokens() {
+    COMP_LINE=$1
+    COMP_POINT=${#COMP_LINE}
+    __ssh_completion_parse_line
+    printf '[%s]' "${__ssh_completion_line_words[@]}"
+}
+
+assert_equal 'a backslash escapes a space' \
+    '[ssh][web server][x]' "$(tokens 'ssh web\ server x')"
+assert_equal 'a doubled backslash is one literal backslash' \
+    '[ssh][a\b][x]' "$(tokens 'ssh a\\b x')"
+assert_equal 'a backslash inside double quotes escapes too' \
+    '[ssh][a"b][x]' "$(tokens 'ssh "a\"b" x')"
+assert_equal 'single quotes keep a backslash literal' \
+    "[ssh][a\\b][x]" "$(tokens "ssh 'a\\b' x")"
+assert_equal 'plain words are unaffected' \
+    '[ssh][web01][x]' "$(tokens 'ssh web01 x')"
 
 # --- the resolvers ---------------------------------------------------------
 

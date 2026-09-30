@@ -2,6 +2,7 @@
 
 [[ $- == *i* ]] || return 0
 
+# shellcheck source-path=SCRIPTDIR
 BASH_CONFIG_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 export BASH_CONFIG_ROOT
 
@@ -16,6 +17,8 @@ source "$BASH_CONFIG_ROOT/ssh-prompt.sh"
 
 # Untracked, machine-specific overrides are optional. They are loaded before
 # the local prompt backend so local.sh can select and configure that backend.
+# local.sh is untracked and optional, so it is not there to be followed.
+# shellcheck disable=SC1091
 [[ ! -r "$BASH_CONFIG_ROOT/local.sh" ]] || source "$BASH_CONFIG_ROOT/local.sh"
 
 # Local prompt backend. Set BASH_PROMPT_BACKEND in local.sh to one of:

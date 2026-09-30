@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+# __kh_host and __kh_port are set by __kh_split_host_port in lib/ssh-config.sh,
+# which the source-time guard below requires.
+# shellcheck disable=SC2154
+
 # ssh-resolve-hosts: every hostname referenced by the SSH config or
 # known_hosts, together with the addresses it resolves to. Counterpart to
 # ssh-resolve-ips.
@@ -194,6 +198,9 @@ __ssh_resolve_hosts_lookup() {
 # Shows every hostname found once and merges the references from the SSH config
 # and known_hosts. DNS results are cached within the shell; --refresh forces
 # fresh lookups.
+# The resolve_* locals below are the spec __ssh_resolve_table reads back
+# through dynamic scoping, so they look unused from here.
+# shellcheck disable=SC2034
 ssh_resolve_hosts() {
     declare -F __ssh_resolve_table >/dev/null || {
         printf 'ssh-resolve-hosts: lib/ssh-resolve.sh has not been loaded.\n' >&2

@@ -48,6 +48,8 @@ shopt -s cmdhist
 # most recent use, with that use's timestamp.
 #
 # Multi-line entries and entries without a "#<epoch>" line are preserved.
+# Called without an argument on purpose: the default is $HISTFILE.
+# shellcheck disable=SC2119,SC2120
 history_dedupe() {
     local target=${1:-$HISTFILE} temporary
 
@@ -129,6 +131,9 @@ __history_append() {
 # prompt-core.sh is sourced before this file and provides
 # __prompt_command_is_array, which replaces the forking
 # $(declare -p PROMPT_COMMAND) test.
+# PROMPT_COMMAND is an array from Bash 5.1 on and a string before that.
+# Both forms are handled deliberately.
+# shellcheck disable=SC2178,SC2179
 if __prompt_command_is_array; then
     PROMPT_COMMAND+=(__history_append)
 else

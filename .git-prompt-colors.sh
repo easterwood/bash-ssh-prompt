@@ -1,3 +1,7 @@
+# Every GIT_PROMPT_* variable below is read by bash-git-prompt after it calls
+# this function, and every colour name is defined by the theme it loads before
+# calling it. Neither side is visible to ShellCheck.
+# shellcheck disable=SC2034,SC2154
 override_git_prompt_colors() {
     GIT_PROMPT_THEME_NAME="Custom"
     local host_prefix=""

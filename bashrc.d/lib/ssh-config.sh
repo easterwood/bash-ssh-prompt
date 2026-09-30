@@ -107,6 +107,9 @@ __kh_scan_file() {
                 include)
                     [[ $token != *['%$']* ]] || continue
 
+                    # '~/' is a literal prefix to match here, not a path to
+                    # expand; the branch does the expansion itself.
+                    # shellcheck disable=SC2088
                     case $token in
                         '~/'*) token="$HOME/${token:2}" ;;
                         /*) ;;

@@ -24,6 +24,9 @@ printf -v quoted_root '%q' "$config_root"
 {
     printf '%s\n' '# Generated loader for the versioned Bash configuration.'
     printf 'BASH_CONFIG_ROOT=%s\n' "$quoted_root"
+    # The single quotes are the point: $BASH_CONFIG_ROOT has to reach the
+    # generated ~/.bashrc unexpanded, so the loader works after a move.
+    # shellcheck disable=SC2016
     printf '%s\n' 'source "$BASH_CONFIG_ROOT/bashrc.sh"'
 } > "$bashrc"
 

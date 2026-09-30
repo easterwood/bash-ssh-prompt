@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+# The __kh_* globals read here are defined in lib/ssh-config.sh and filled by
+# its scanner and parser; bashrc.d/ssh-tools.sh guarantees the load order and
+# every file checks it at source time. ShellCheck sees one file at a time.
+# shellcheck disable=SC2154
+
 # Options whose next word is an argument. This is used only to determine
 # whether the current argument is the SSH destination.
 __ssh_completion_option_takes_arg() {
@@ -17,6 +22,10 @@ __ssh_completion_option_takes_arg() {
 declare -a __ssh_completion_line_words=()
 __ssh_completion_line_cword=0
 
+# The "'\\'" case patterns below match one literal backslash. Written as
+# "'\\\\'" they would match two and the escape states would be unreachable,
+# which is exactly the defect tests/completion.sh now pins down.
+# shellcheck disable=SC1003
 __ssh_completion_parse_line() {
     local input=${COMP_LINE:0:COMP_POINT}
     local token='' state=plain char
@@ -46,7 +55,7 @@ __ssh_completion_parse_line() {
                         state=double
                         have_token=1
                         ;;
-                    '\\')
+                    '\')
                         state=escape
                         have_token=1
                         ;;
@@ -66,7 +75,7 @@ __ssh_completion_parse_line() {
             double)
                 case $char in
                     '"') state=plain ;;
-                    '\\') state=double_escape ;;
+                    '\') state=double_escape ;;
                     *) token+=$char ;;
                 esac
                 ;;
@@ -137,7 +146,9 @@ __ssh_completion_file_argument() {
 
     case $prev in
         -F|-i|-E|-I|-S)
-            COMPREPLY=( $(compgen -f -- "$cur") )
+            # mapfile, not COMPREPLY=( $(...) ): a path containing spaces
+            # would otherwise be split into several completions.
+            mapfile -t COMPREPLY < <(compgen -f -- "$cur")
             return 0
             ;;
     esac

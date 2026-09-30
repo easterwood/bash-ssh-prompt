@@ -85,6 +85,9 @@ if ((BASH_VERSINFO[0] > 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 2)));
     source "$__remote_prompt_root/bashrc.d/prompt-gruvbox.sh"
 else
     # __prompt_command_is_array comes from prompt-core.sh, sourced above.
+# PROMPT_COMMAND is an array from Bash 5.1 on and a string before that.
+# Both forms are handled deliberately.
+# shellcheck disable=SC2178,SC2179
     if __prompt_command_is_array; then
         PROMPT_COMMAND=(__cmd_timer_stop __remote_prompt_build __cmd_timer_arm)
     else

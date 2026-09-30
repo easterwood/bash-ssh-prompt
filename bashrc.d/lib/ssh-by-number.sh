@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+# The __kh_* globals read here are defined in lib/ssh-config.sh and filled by
+# its scanner and parser; bashrc.d/ssh-tools.sh guarantees the load order and
+# every file checks it at source time. ShellCheck sees one file at a time.
+# shellcheck disable=SC2154
+
 # Log in via the unique NR column of known-hosts.
 # Once the target is resolved, sshp is used so that ssh-nr behaves exactly like
 # a direct sshp call.
@@ -15,7 +20,7 @@ __ssh_by_number_run_sshp() {
     local had_expand_aliases=0
 
     if alias sshp >/dev/null 2>&1; then
-        kind=alias
+        kind='alias'
     else
         kind=$(type -t sshp 2>/dev/null || true)
     fi

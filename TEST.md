@@ -5,7 +5,7 @@
 The modular Bash configuration was verified in an isolated Linux test
 environment. All automated checks passed.
 
-Reproducible part: `bash tests/run-all.sh` — 18 scripts, 476 checks, all passing.
+Reproducible part: `bash tests/run-all.sh` — 18 scripts, 481 checks, all passing.
 The same suite runs in CI on every push (`.github/workflows/ci.yml`), so the
 numbers above are checked rather than transcribed. The remaining sections
 describe one-off checks that are not scripted.
@@ -51,7 +51,7 @@ line per script, and returns `1` if any of them failed.
 | Script | Checks | Covers |
 |---|---|---|
 | `tests/commands.sh` | 26 | `bash-commands`: listing, `--details`, the `--check` self-test including a deliberately stale row, filter, rejected combinations |
-| `tests/completion.sh` | 30 | The shared host cache, its invalidation after a config edit, `ssh`/`sshp` destinations including `user@`, every per-command completion, and that both resolvers share one registration |
+| `tests/completion.sh` | 35 | The shared host cache, its invalidation after a config edit, `ssh`/`sshp` destinations including `user@`, every per-command completion, and that both resolvers share one registration |
 | `tests/history.sh` | 20 | `history_dedupe` on timestamped, multi-line and timestamp-less files, the shipped `HISTORY_DEDUPE_LIVE=0` default, the live rewrite end to end, and the `prompt-core.sh` guard |
 | `tests/install.sh` | 21 | The generated loader, the backup, `printf %q` quoting of a path with spaces, the `bash -n` gate, and that `bashrc.sh` stays inert in a non-interactive shell |
 | `tests/known-hosts-clean.sh` | 39 | `known-hosts --clean`: dry run, `--apply` with backups, rejected combinations, the removed `known-hosts-clean` alias, and the completion |

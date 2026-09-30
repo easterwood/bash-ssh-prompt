@@ -53,21 +53,21 @@ jobs:
           '
 
   shellcheck:
-    name: ShellCheck (advisory)
+    name: ShellCheck
     runs-on: ubuntu-latest
-    # The source files already carry "# shellcheck source=" directives, but the
-    # tree has never been run through the linter, so there is a backlog (the
-    # known ones are the unquoted COMPREPLY=( $(compgen ...) ) assignments).
-    # Keep this advisory until that backlog is cleared, then delete the line
-    # below so a regression actually fails the build.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
       - name: Install ShellCheck
         run: sudo apt-get update && sudo apt-get install -y shellcheck
 
+      # The tree is clean, so any finding is a regression and fails the build.
+      # Every suppression in the sources is a targeted "# shellcheck disable="
+      # with the reason written above it; there is no blanket exclusion here.
+      # --source-path=SCRIPTDIR lets the existing "# shellcheck source="
+      # directives resolve through the "$__ssh_tools_dir/..." style prefixes.
       - name: Lint
         run: |
           mapfile -t files < <(find . -type f \( -name '*.sh' -o -name '*.bash' \) | sort)
-          shellcheck --shell=bash --external-sources "${files[@]}"
+          printf 'linting %d files\n' "${#files[@]}"
+          shellcheck --shell=bash --external-sources --source-path=SCRIPTDIR "${files[@]}"

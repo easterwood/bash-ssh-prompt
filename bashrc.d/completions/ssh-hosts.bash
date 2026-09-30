@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+# The __kh_* globals read here are defined in lib/ssh-config.sh and filled by
+# its scanner and parser; bashrc.d/ssh-tools.sh guarantees the load order and
+# every file checks it at source time. ShellCheck sees one file at a time.
+# shellcheck disable=SC2154
+
 # Shared lazy host cache for all SSH completions.
 # The cache is built on the first TAB and refreshed when config/includes or
 # known_hosts change.

@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+# The __kh_* globals read here are defined in lib/ssh-config.sh and filled by
+# its scanner and parser; bashrc.d/ssh-tools.sh guarantees the load order and
+# every file checks it at source time. ShellCheck sees one file at a time.
+# shellcheck disable=SC2154
+
 # known-hosts: the shell-side cache over known_hosts, the grouping model that
 # gives every target its stable NR, and the display.
 #
@@ -171,12 +176,12 @@ __kh_groups_record() {
         gid=$__kh_group_count
         ((__kh_group_count+=1))
         group_id["$group_key"]=$gid
-        __kh_group_alias[$gid]=$alias
-        __kh_group_target[$gid]=$target
-        __kh_group_user[$gid]=$user
-        __kh_group_user_explicit[$gid]=${user_explicit:-0}
-        __kh_group_lines[$gid]=''
-        __kh_group_keys[$gid]=''
+        __kh_group_alias[gid]=$alias
+        __kh_group_target[gid]=$target
+        __kh_group_user[gid]=$user
+        __kh_group_user_explicit[gid]=${user_explicit:-0}
+        __kh_group_lines[gid]=''
+        __kh_group_keys[gid]=''
     else
         gid=${group_id["$group_key"]}
     fi
@@ -184,20 +189,20 @@ __kh_groups_record() {
     seen_token="$gid$sep$line_number"
     if [[ -z ${line_seen["$seen_token"]+x} ]]; then
         line_seen["$seen_token"]=1
-        if [[ -n ${__kh_group_lines[$gid]} ]]; then
-            __kh_group_lines[$gid]+=",$line_number"
+        if [[ -n ${__kh_group_lines[gid]} ]]; then
+            __kh_group_lines[gid]+=",$line_number"
         else
-            __kh_group_lines[$gid]=$line_number
+            __kh_group_lines[gid]=$line_number
         fi
     fi
 
     seen_token="$gid$sep$key_type"
     if [[ -z ${key_seen["$seen_token"]+x} ]]; then
         key_seen["$seen_token"]=1
-        if [[ -n ${__kh_group_keys[$gid]} ]]; then
-            __kh_group_keys[$gid]+=", $key_type"
+        if [[ -n ${__kh_group_keys[gid]} ]]; then
+            __kh_group_keys[gid]+=", $key_type"
         else
-            __kh_group_keys[$gid]=$key_type
+            __kh_group_keys[gid]=$key_type
         fi
     fi
 }

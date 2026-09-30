@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+# The __kh_* globals read here are defined in lib/ssh-config.sh and filled by
+# its scanner and parser; bashrc.d/ssh-tools.sh guarantees the load order and
+# every file checks it at source time. ShellCheck sees one file at a time.
+# shellcheck disable=SC2154
+
 # known-hosts --clean
 #
 # Split out of lib/known-hosts.sh, which had grown to four concerns in one
@@ -614,7 +619,11 @@ __kh_clean_run() (
 
         if (( known_changes > 0 )); then
             if ! command cat -- "$tmp_known" > "$known_hosts_file"; then
-                [[ -n $backup_known ]] && command cp -- "$backup_known" "$known_hosts_file" 2>/dev/null || true
+                # Best effort: if there is a backup, put it back. A failure
+                # here must not mask the write error being reported below.
+                if [[ -n $backup_known ]]; then
+                    command cp -- "$backup_known" "$known_hosts_file" 2>/dev/null || true
+                fi
                 printf 'known-hosts: could not write known_hosts; the backup was restored.\n' >&2
                 return 1
             fi
@@ -622,8 +631,13 @@ __kh_clean_run() (
 
         if (( config_changes > 0 )); then
             if ! command cat -- "$tmp_config" > "$config"; then
-                [[ -n $backup_known ]] && command cp -- "$backup_known" "$known_hosts_file" 2>/dev/null || true
-                [[ -n $backup_config ]] && command cp -- "$backup_config" "$config" 2>/dev/null || true
+                # Best effort, as above, for both files this time.
+                if [[ -n $backup_known ]]; then
+                    command cp -- "$backup_known" "$known_hosts_file" 2>/dev/null || true
+                fi
+                if [[ -n $backup_config ]]; then
+                    command cp -- "$backup_config" "$config" 2>/dev/null || true
+                fi
                 printf 'known-hosts: could not write the SSH configuration; the backups were restored.\n' >&2
                 return 1
             fi

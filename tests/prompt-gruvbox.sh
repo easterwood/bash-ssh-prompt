@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
+# Test scripts: the sandbox variables (TEST_TMP, TEST_HOME, TEST_STUB_DIR) come
+# from tests/lib.sh, the single-quoted strings holding $ are rcfile and bash -c
+# payloads that must not expand here, and several helpers are reached only
+# through the configuration under test.
+# shellcheck disable=SC2154,SC2034,SC2016,SC2317,SC2218,SC2031,SC2088
+
 # Regression test for bashrc.d/prompt-gruvbox.sh: segment assembly, the Git
 # status parser, the pom.xml reader, the Docker context reader and the PS1
 # quoting of untrusted text. The quoting helpers themselves live in

@@ -62,6 +62,9 @@ __ssh_resolve_run_with_timeout() {
     fi
 }
 
+# The tilde here is output, not a path to expand: "~/.ssh/config" is what the
+# CONFIG column should read.
+# shellcheck disable=SC2088
 __ssh_resolve_display_path() {
     local path=$1
 
@@ -128,6 +131,9 @@ __ssh_resolve_add_known_line() {
 #   resolve_noun              plural used in the "nothing found" messages
 #   resolve_scan_host_tokens  1 to also read keys out of "Host" tokens
 #   timeout_seconds           the effective timeout
+# Conversely, every resolve_* name read here is set by the calling command,
+# and the accumulators above work on that caller's maps.
+# shellcheck disable=SC2154
 __ssh_resolve_table() {
     local known=${SSH_KNOWN_HOSTS_FILE:-$HOME/.ssh/known_hosts}
     local config=${SSH_CONFIG_FILE:-$HOME/.ssh/config}

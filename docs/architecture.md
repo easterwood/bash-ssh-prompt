@@ -287,14 +287,17 @@ bash tests/history.sh       # a single script
 
 `tests/run-all.sh` executes every `*.sh` in `tests/` except itself and
 `lib.sh`, prints one `PASS` line per script with its check count, and returns
-`1` if any script failed. Current state: 18 scripts, 476 checks, all passing.
+`1` if any script failed. Current state: 18 scripts, 481 checks, all passing.
 The same suite runs in CI on every push, together with the `bash -n` gate over
-the whole tree and `bash-commands --check`; see `.github/workflows/ci.yml`.
+the whole tree, `bash-commands --check` and ShellCheck; see
+`.github/workflows/ci.yml`. ShellCheck is clean and blocking: every suppression
+in the sources is a targeted `# shellcheck disable=` with its reason written
+above it, so a new finding fails the build.
 
 | Script | Checks | Covers |
 |---|---|---|
 | `tests/commands.sh` | 26 | `bash-commands`: listing, `--details`, the `--check` self-test including a deliberately stale row, filter, rejected combinations |
-| `tests/completion.sh` | 30 | The shared host cache, its invalidation after a config edit, `ssh`/`sshp` destinations including `user@`, every per-command completion, and that both resolvers share one registration |
+| `tests/completion.sh` | 35 | The shared host cache, its invalidation after a config edit, `ssh`/`sshp` destinations including `user@`, every per-command completion, and that both resolvers share one registration |
 | `tests/history.sh` | 20 | `history_dedupe` on timestamped, multi-line and timestamp-less files, the shipped `HISTORY_DEDUPE_LIVE=0` default, the live rewrite end to end, and the `prompt-core.sh` guard |
 | `tests/install.sh` | 21 | The generated loader, the backup, `printf %q` quoting of a path with spaces, the `bash -n` gate, and that `bashrc.sh` stays inert in a non-interactive shell |
 | `tests/known-hosts-clean.sh` | 39 | `known-hosts --clean`: dry run, `--apply` with backups, rejected combinations, the removed `known-hosts-clean` alias, and the completion |
