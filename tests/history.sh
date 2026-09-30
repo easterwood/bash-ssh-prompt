@@ -19,11 +19,16 @@ config_root=$PWD
 
 # --- history_dedupe as a plain function ------------------------------------
 
+# bashrc.sh sources prompt-core.sh before history.sh, because history.sh uses
+# __prompt_command_is_array from it. The test mirrors that order.
+# shellcheck source=bashrc.d/prompt-core.sh
+source bashrc.d/prompt-core.sh
 # shellcheck source=bashrc.d/history.sh
 source bashrc.d/history.sh
 
 assert_equal 'HISTFILE points into the sandbox' "$HOME/.bash_history" "$HISTFILE"
-assert_equal 'erasedups is active' 'erasedups' "$HISTCONTROL"
+assert_equal 'erasedups and ignorespace are active' \
+    'erasedups:ignorespace' "$HISTCONTROL"
 assert_contains 'PROMPT_COMMAND writes the history' "${PROMPT_COMMAND[*]}" '__history_append'
 
 fixture="$TEST_TMP/history.fixture"
@@ -73,8 +78,14 @@ assert_equal 'no temporary files left behind' '' "$(compgen -G "$TEST_TMP/histor
 
 # --- end to end in an interactive shell ------------------------------------
 
+# The shipped default is 0: the live rewrite is the most expensive thing in
+# the prompt path, so the file is only cleaned at shell start.
+assert_equal 'the live rewrite is off by default' '0' "$HISTORY_DEDUPE_LIVE"
+
+# The checks below exercise the live rewrite itself and therefore switch it on
+# explicitly instead of relying on the default.
 rcfile="$TEST_TMP/rcfile"
-printf 'source %q/bashrc.d/history.sh\n' "$config_root" > "$rcfile"
+printf 'HISTORY_DEDUPE_LIVE=1\nsource %q/bashrc.d/history.sh\n' "$config_root" > "$rcfile"
 
 # run_shell HOME-DIRECTORY COMMANDS...
 # Feeds the commands to an interactive shell and returns its output.

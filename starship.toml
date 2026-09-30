@@ -7,12 +7,17 @@
 #
 # A Nerd Font is required for the Powerline separators and icons.
 #
-# Important:
-# The coloured transitions on line 1 are a fixed chain:
-# orange -> yellow -> aqua -> blue -> bg3.
-# This is visually seamless while the corresponding modules are present.
-# With pure Starship, a later optional segment cannot detect which differently
-# coloured optional segment was the previous visible one.
+# Colour model:
+# Line 1 opens with an opaque orange identity block and then runs on one
+# constant bg1 field. Every optional group brings its own accent-coloured
+# separator and accent-coloured text on that field, so a group can be absent
+# without leaving a seam behind. Pure Starship cannot tell which differently
+# coloured optional segment was the previous visible one, which is exactly why
+# the field colour stays put instead of forming a chain.
+#
+# bashrc.d/prompt-gruvbox.sh renders the same prompt in pure Bash. It tracks
+# the previous background itself and can therefore chain colours, so keep the
+# two palettes in sync rather than the segment backgrounds.
 
 "$schema" = 'https://starship.rs/config-schema.json'
 
@@ -25,18 +30,18 @@ format = """
 [](fg:orange)\
 $os\
 $username\
-[](fg:orange bg:yellow)\
+[](fg:orange bg:bg1)\
 $directory\
-([](fg:yellow bg:aqua)$git_branch$git_commit$git_status)\
-([](fg:aqua bg:blue)$java$package$nodejs$python)\
-([](fg:blue bg:bg3)$docker_context)\
-[](fg:bg3)\
+([](fg:aqua bg:bg1)$git_branch$git_commit$git_status)\
+([](fg:blue_bright bg:bg1)$java$package$nodejs$python)\
+([](fg:bg3 bg:bg1)$docker_context)\
+[](fg:bg1)\
 $line_break\
-[](fg:fg0)\
+[](fg:bg1)\
 $time\
 $cmd_duration\
 $status\
-[](fg:fg0)\
+[](fg:bg1)\
 $line_break\
 $character"""
 
@@ -69,7 +74,7 @@ show_always = true
 format = '[$user ](fg:fg0 bg:orange)'
 
 [directory]
-format = '[ $path ](fg:fg0 bg:yellow)'
+format = '[ $path ](fg:yellow bg:bg1)'
 home_symbol = '~'
 truncation_length = 3
 truncation_symbol = '.../'
@@ -81,16 +86,16 @@ read_only = ''
 [git_branch]
 only_attached = true
 symbol = ' '
-format = '[ $symbol$branch](fg:fg0 bg:aqua)'
+format = '[ $symbol$branch](fg:aqua bg:bg1)'
 
 [git_commit]
 only_detached = true
 commit_hash_length = 7
 tag_disabled = true
-format = '[  $hash](fg:fg0 bg:aqua)'
+format = '[  $hash](fg:aqua bg:bg1)'
 
 [git_status]
-format = '[$conflicted$staged$modified$renamed$deleted$typechanged$untracked$stashed$ahead_behind ](fg:fg0 bg:aqua)'
+format = '[$conflicted$staged$modified$renamed$deleted$typechanged$untracked$stashed$ahead_behind ](fg:aqua bg:bg1)'
 conflicted = ' =${count}'
 staged = ' +${count}'
 modified = ' !${count}'
@@ -110,22 +115,22 @@ ignore_submodules = false
 [java]
 symbol = ' '
 version_format = '${raw}'
-format = '[ $symbol$version ](fg:fg0 bg:blue)'
+format = '[ $symbol$version ](fg:blue_bright bg:bg1)'
 
 [package]
 symbol = ' '
 version_format = '${raw}'
-format = '[ $symbol$version ](fg:fg0 bg:blue)'
+format = '[ $symbol$version ](fg:blue_bright bg:bg1)'
 
 [nodejs]
 symbol = ' '
 version_format = '${raw}'
-format = '[ $symbol$version ](fg:fg0 bg:blue)'
+format = '[ $symbol$version ](fg:blue_bright bg:bg1)'
 
 [python]
 symbol = ' '
 version_format = '${raw}'
-format = '[ $symbol$version ](fg:fg0 bg:blue)'
+format = '[ $symbol$version ](fg:blue_bright bg:bg1)'
 detect_extensions = []
 detect_files = []
 detect_folders = []
@@ -134,7 +139,7 @@ detect_folders = []
 
 [docker_context]
 symbol = ' '
-format = '[ $symbol$context ](fg:blue_bright bg:bg3)'
+format = '[ $symbol$context ](fg:bg3 bg:bg1)'
 only_with_files = false
 
 # --- line 2: clock / duration / status ------------------------------------

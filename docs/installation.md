@@ -43,16 +43,11 @@ source "$BASH_CONFIG_ROOT/bashrc.sh"
 
 ## First-run configuration
 
-`bashrc.d/environment.sh` is shipped with hard-coded, machine-specific values:
+`bashrc.d/environment.sh` ships empty. It is the versioned hook for
+machine-specific exports and needs no editing before first use.
 
-- `JMETER_PATH` pointing into a Windows source tree
-- a JDK 21 `bin` directory prepended to `PATH`
-- `ANDROID_HOME` under a Windows user profile
-- `MAVEN_OPTS` with a keystore/truststore at `$HOME/.m2/cacerts` and the
-  password `changeit`
-
-Replace these with your own values, or empty the file out. Anything that must
-not be committed belongs in `local.sh` instead:
+Anything that must not be committed, plus the choice of prompt backend, belongs
+in the untracked `local.sh`:
 
 ```bash
 cp local.sh.example local.sh
@@ -211,7 +206,4 @@ source "$BASH_CONFIG_ROOT/bashrc.sh"
 `bashrc.sh` recomputes `BASH_CONFIG_ROOT` from its own location anyway, so the
 assignment above is only documentation.
 
-`bashrc.snippet.sh` in the repository root is an **older reference snippet** for
-a different layout (`~/.config/bash/ssh-prompt/`). It also mentions a
-`PROMPT_SYNC_FILE` variable that the current code does not implement. Treat it
-as historical; use `install.sh` or the two lines above.
+Nothing else needs to be added to `~/.bashrc`.

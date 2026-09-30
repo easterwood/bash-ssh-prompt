@@ -12,9 +12,8 @@
 | `HISTSIZE` | `bashrc.d/history.sh` | `1000000` |
 | `HISTFILESIZE` | `bashrc.d/history.sh` | `200000` |
 | `HISTTIMEFORMAT` | `bashrc.d/history.sh` | `'%F %T '` |
-| `HISTCONTROL` | `bashrc.d/history.sh` | `erasedups` — a repeated command keeps only its most recent occurrence. Append `:ignorespace` to also drop commands typed with a leading space |
+| `HISTCONTROL` | `bashrc.d/history.sh` | `erasedups:ignorespace` — a repeated command keeps only its most recent occurrence, and a command typed with a leading space is not recorded at all |
 | `SSHP_WELCOME_SHOWN` | `prompt.sh` | Exported guard so the remote welcome banner appears once per connection, not in nested shells |
-| `JMETER_PATH`, `PATH`, `ANDROID_HOME`, `MAVEN_OPTS` | `bashrc.d/environment.sh` | Machine-specific — see below |
 | `GIT_PROMPT_ONLY_IN_REPO`, `GIT_PROMPT_THEME`, `GIT_PROMPT_SHOW_UPSTREAM`, `GIT_PROMPT_THEME_FILE` | `bashrc.d/prompt-local.sh` | `bash-git-prompt` settings |
 
 ### Read by the configuration
@@ -31,7 +30,7 @@ Set these before sourcing, in `local.sh`, or per command.
 | `SSH_PROMPT_SHOW_COMMAND` | `1` | `prompt.sh` | `0` hides the repetition of the last command in the remote prompt (it seeds `PROMPT_GRUVBOX_SHOW_COMMAND`) |
 | `PROMPT_LOCAL_SHOW_COMMAND` | `1` | `bashrc.d/prompt-local.sh` | `0` drops the repetition of the last command from the `bash-git-prompt` status segment |
 | `PROMPT_LOCAL_COMMAND_MAX_LEN` | `60` | `bashrc.d/prompt-local.sh` | Truncation length for that repetition |
-| `HISTORY_DEDUPE_LIVE` | `1` | `bashrc.d/history.sh` | `0` rewrites the history file only at shell start instead of also right after a repeated command. Useful on very large history files |
+| `HISTORY_DEDUPE_LIVE` | `0` | `bashrc.d/history.sh` | `0` rewrites the history file only at shell start instead of also right after a repeated command. Useful on very large history files |
 | `BASH_PROMPT_BACKEND` | `auto` | `bashrc.sh` | Local prompt: `starship`, `bash-git-prompt`, `gruvbox`, or `auto`. Aliases: `prompt-local`, `git`, `prompt-gruvbox`, `prompt-gruvbox.sh` |
 | `STARSHIP_CONFIG` | `<checkout>/starship.toml` | `bashrc.sh` | Optional override for the Starship config path when the Starship backend is selected |
 
@@ -77,29 +76,25 @@ Not meant to be set by hand, but useful when debugging:
 
 ## `bashrc.d/environment.sh`
 
-**This file must be adapted before real use.** As shipped it contains one
-developer's Windows/Git-Bash environment:
+The file ships empty and contains nothing but a shebang. It exists so that
+machine-specific exports have a versioned place to go, and it is sourced first,
+before every other module.
+
+Earlier revisions of this repository shipped one developer's Git-Bash
+environment here: a JMeter path, a JDK `bin` directory prepended to `PATH`,
+`ANDROID_HOME`, and `MAVEN_OPTS` with a keystore under `$HOME/.m2/cacerts`.
+Those values are gone. If you put your own in, two things are worth knowing:
+
+- Anything that prepends to `PATH` runs again on every re-source, so
+  `source ~/.bashrc` in the same shell accumulates duplicate entries. Guard the
+  assignment if that bothers you.
+- Because the file is versioned, machine-specific values conflict on every
+  pull, and credentials would be committed. Both belong in the untracked
+  `local.sh`, which is listed in `.gitignore`:
 
 ```bash
-JMETER_PATH=/c/Users/<name>/sources/.../apache-jmeter-5.4.3/bin
-export PATH="/c/Program Files/Microsoft/jdk-21.0.5.11-hotspot/bin:$JMETER_PATH:$PATH"
-export ANDROID_HOME="/c/Users/<name>/.jdks/android-sdks"
-export MAVEN_OPTS="-Djavax.net.ssl.keyStore=$HOME/.m2/cacerts ... -Djavax.net.ssl.trustStorePassword=changeit"
+cp local.sh.example local.sh
 ```
-
-Points to be aware of:
-
-- The paths are Git-Bash style (`/c/...`) and will not exist on Linux.
-- `PATH` is **prepended** on every load, so re-sourcing `~/.bashrc` in the same
-  shell accumulates duplicate entries. Harmless but untidy; guard the assignment
-  if it bothers you.
-- `MAVEN_OPTS` hard-codes the keystore password `changeit`. That is the standard
-  Java default and not a secret, but real credentials should go into `local.sh`,
-  which is gitignored.
-
-Since this file is versioned, machine-specific values conflict on every pull. A
-common pattern is to reduce it to shared defaults and move everything personal
-into `local.sh`.
 
 ## `local.sh`
 

@@ -5,8 +5,10 @@
 The modular Bash configuration was verified in an isolated Linux test
 environment. All automated checks passed.
 
-Reproducible part: `bash tests/run-all.sh` — 12 scripts, 295 checks, all passing.
-The remaining sections describe one-off checks that are not scripted.
+Reproducible part: `bash tests/run-all.sh` — 16 scripts, 401 checks, all passing.
+The same suite runs in CI on every push (`.github/workflows/ci.yml`), so the
+numbers above are checked rather than transcribed. The remaining sections
+describe one-off checks that are not scripted.
 
 | Area | Result |
 |---|---|
@@ -48,26 +50,22 @@ line per script, and returns `1` if any of them failed.
 
 | Script | Checks | Covers |
 |---|---|---|
-| `tests/install.sh` | 21 | Generated loader, backup of an existing `~/.bashrc`, `printf %q` quoting of a path with spaces, the `bash -n` gate, and `bashrc.sh` staying inert non-interactively |
-| `tests/history.sh` | 17 | `history_dedupe` on timestamped, multi-line and timestamp-less files, the live rewrite, and `HISTORY_DEDUPE_LIVE=0` end to end |
-| `tests/listing.sh` | 17 | `ll`: header, dropped `ls` summary line, hidden files, names with spaces, option pass-through. Skipped without GNU `ls` |
-| `tests/prompt-core.sh` | 31 | Clock, duration formatting across all five ranges, exit-code capture, the shared `__prompt_quote`/`__prompt_last_command` helpers, control-character escaping in the window title |
+| `tests/commands.sh` | 26 | `bash-commands`: listing, `--details`, the `--check` self-test including a deliberately stale row, filter, rejected combinations |
+| `tests/completion.sh` | 27 | The shared host cache, its invalidation after a config edit, `ssh`/`sshp` destinations including `user@`, and every per-command completion |
+| `tests/history.sh` | 18 | `history_dedupe` on timestamped, multi-line and timestamp-less files, the shipped `HISTORY_DEDUPE_LIVE=0` default, and the live rewrite end to end in an interactive shell |
+| `tests/install.sh` | 21 | The generated loader, the backup, `printf %q` quoting of a path with spaces, the `bash -n` gate, and that `bashrc.sh` stays inert in a non-interactive shell |
+| `tests/known-hosts-clean.sh` | 39 | `known-hosts --clean`: dry run, `--apply` with backups, rejected combinations, the removed `known-hosts-clean` alias, and the completion |
+| `tests/known-hosts.sh` | 13 | The `known_hosts` parser, the filter, hashed and marker entries, rejected option combinations, and how many processes the rendering spawns |
+| `tests/listing.sh` | 17 | The `ll` header, the dropped `ls` summary line, hidden files, names with spaces, option pass-through |
+| `tests/prompt-core.sh` | 31 | The clock, duration formatting across all five ranges, exit-code capture, the shared `__prompt_quote`/`__prompt_last_command` helpers, control-character escaping in the window title |
+| `tests/prompt-gruvbox.sh` | 62 | The pure-Bash Gruvbox prompt: palette, segment engine, Git segment, toolchain detection and the second powerline line |
 | `tests/prompt-local.sh` | 15 | `prompt_callback`: order of duration, last command and exit code, quoting, and the two repetition knobs |
-| `tests/ssh-config.sh` | 22 | Alias collection, skipped wildcards, quotes, `Include` with glob and `~/`, direct versus inherited users |
-| `tests/known-hosts.sh` | 13 | Parser, filter, hashed and marker entries, rejected option combinations, and the number of processes the rendering spawns |
-| `tests/known-hosts-clean.sh` | 39 | `known-hosts --clean`: dry run, `--apply` with backups, rejected combinations, the removed `known-hosts-clean` alias, completion |
+| `tests/prompt-selection.sh` | 9 | The `local.sh` backend selector: Starship, `bash-git-prompt`, Gruvbox, and the fallback warnings |
 | `tests/ssh-by-number.sh` | 19 | `ssh-nr`: help, `--list`, invalid and out-of-range numbers, alias versus raw target, `[host]:port`, markers, `-F` pass-through, both `sshp` call branches |
-| `tests/ssh-resolve.sh` | 38 | IPv4/IPv6 predicates, help, argument and timeout validation, load-order dependency between the two resolvers |
-| `tests/sshp.sh` | 34 | `sshp` argument parser, `--force`, `--`, remote-command rejection, missing sync files |
-| `tests/commands.sh` | 26 | `bash-commands`: listing, `--details`, `--check` including a deliberately stale row, filter, rejected combinations |
-| `tests/completion.sh` | 27 | Shared host cache, invalidation after a config edit, `ssh`/`sshp` destinations including `user@`, every per-command completion |
-
-Every script calls `test_sandbox` from `tests/lib.sh` first, which creates a
-throwaway `HOME` and a stub directory at the front of `PATH` and removes both on
-exit. `ssh`, `ssh-keygen` and `ssh-keyscan` are replaced by stubs there, because
-the configuration calls them through `command`, where a shell function would be
-ignored. No test reads the real `~/.ssh` or `~/.bash_history`, and none opens a
-network connection.
+| `tests/ssh-config.sh` | 22 | Alias collection, skipped wildcards, quotes, `Include` with glob and `~/`, direct versus inherited users |
+| `tests/ssh-resolve.sh` | 38 | The IPv4/IPv6 predicates, help, argument and timeout validation, and the load-order dependency between the two resolvers |
+| `tests/sshp.sh` | 34 | The `sshp` argument parser, `--force`, `--`, the remote-command rejection, and the check for missing sync files |
+| `tests/starship-config.sh` | 10 | `starship.toml`: the removed helper script, the constant bg1 field on line one, the optional context groups and the rounded caps on line two |
 
 ## Checks performed
 
@@ -75,24 +73,23 @@ network connection.
 
 The following files were checked individually with `bash -n`:
 
-- `bashrc.sh`
-- `prompt.sh`
-- `ssh-prompt.sh`
-- `.git-prompt-colors.sh`
-- `install.sh`
-- `bashrc.d/environment.sh`
-- `bashrc.d/history.sh`
-- `bashrc.d/listing.sh`
-- `bashrc.d/ssh-tools.sh`
-- `bashrc.d/prompt-core.sh`
-- `bashrc.d/prompt-local.sh`
-- `bashrc.d/prompt-gruvbox.sh`
+The gate now covers every `*.sh` and `*.bash` in the tree, including
+`bashrc.d/lib/*.sh` and `bashrc.d/completions/*.bash`, which `install.sh` skips:
 
-Result: no syntax errors.
+```bash
+find . -name '*.sh' -o -name '*.bash' | xargs -n1 bash -n
+```
+
+Result: no syntax errors. The same command runs as the `syntax` job in
+`.github/workflows/ci.yml`.
 
 `bashrc.d/lib/ssh-command.sh` was removed. It had not been sourced by
 `ssh-tools.sh` for some time — `docs/architecture.md` already described it as
 gone — so it was dead code that `bash -n` kept validating.
+`bashrc.snippet.sh` was removed for the same reason: it documented a
+`~/.config/bash/ssh-prompt/` layout and a `PROMPT_SYNC_FILE` variable that no
+code reads. Its one genuinely useful part, the optional `ssh()` wrapper, now
+lives in `docs/ssh-sync.md`.
 
 ### 2. Removal of duplicates
 

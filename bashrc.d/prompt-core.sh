@@ -10,8 +10,13 @@
 #
 # PROMPT_COMMAND can only be an array from Bash 5.1 on, so on older shells the
 # answer is always "no" and the ${var@a} expansion is never reached.
+#
+# An unset PROMPT_COMMAND is not an array, and ${var@a} on an unset variable
+# aborts a shell running with "set -u". The +x test costs nothing and keeps
+# the function usable from such a shell.
 __prompt_command_is_array() {
     ((BASH_VERSINFO[0] > 5 || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] >= 1))) &&
+        [[ -n ${PROMPT_COMMAND+x} ]] &&
         [[ ${PROMPT_COMMAND@a} == *a* ]]
 }
 

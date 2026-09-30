@@ -89,9 +89,18 @@ Only `sshp` and the helper commands are added; `ssh` keeps host completion from
 
 > An earlier version shipped an `ssh()` wrapper here that forwarded plain
 > interactive logins to `sshp` and everything else to OpenSSH. It has been
-> removed. If you want that behaviour back for individual hosts, the commented
-> snippet in `bashrc.snippet.sh` shows a minimal variant for your own
-> `~/.bashrc`.
+> removed. If you want that behaviour back for individual hosts, put a minimal
+> variant into your own `local.sh`:
+>
+> ```bash
+> ssh() {
+>     if (( $# == 1 )) && [[ $1 == devbox || $1 == testbox ]]; then
+>         sshp "$1"
+>     else
+>         command ssh "$@"
+>     fi
+> }
+> ```
 
 ## `--help`
 

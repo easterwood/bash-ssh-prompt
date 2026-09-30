@@ -89,9 +89,10 @@ and `prompt-gruvbox.sh` are aliases for `gruvbox`. An explicitly selected
 backend that is not installed falls back to the pure-Bash Gruvbox prompt with a
 warning.
 
-**Before you use it for real**, edit `bashrc.d/environment.sh`. As shipped it
-contains one developer's hard-coded Windows paths for the JDK, JMeter, the
-Android SDK and Maven. See [docs/configuration.md](docs/configuration.md#bashrcdenvironmentsh).
+`bashrc.d/environment.sh` ships empty. It is the versioned place for
+machine-specific exports; anything that must not be committed goes into the
+untracked `local.sh` instead. See
+[docs/configuration.md](docs/configuration.md#bashrcdenvironmentsh).
 
 Details, uninstall instructions and the manual-setup alternative are in
 [docs/installation.md](docs/installation.md).
@@ -129,7 +130,6 @@ connections: one to sync, one to log in. Unchanged calls open just one.
 ```
 install.sh                 Installs the ~/.bashrc loader, with backup
 bashrc.sh                  Entry point: loads every module in order
-bashrc.snippet.sh          Reference snippet for manual setup (legacy)
 local.sh.example           Template for untracked settings and prompt selection
 starship.toml              Versioned Gruvbox Starship theme
 prompt.sh                  Remote wiring: welcome banner + gruvbox prompt (synced by sshp)
@@ -137,7 +137,7 @@ ssh-prompt.sh              sshp: prompt sync + login
 .git-prompt-colors.sh      Custom theme for bash-git-prompt
 
 bashrc.d/
-  environment.sh           JDK, JMeter, Android, Maven  (edit this!)
+  environment.sh           Empty hook for machine-specific exports
   history.sh               History sizes, timestamps, crash-safe writing, dedup
   listing.sh               Shared ll implementation
   prompt-core.sh           Command timer and window title (local + remote)
@@ -171,6 +171,7 @@ tests/
   sshp.sh                  sshp argument parser and guards
   commands.sh              bash-commands listing and self-check
   completion.sh            Host cache and all completion functions
+  starship-config.sh       starship.toml layout regression test
   known_hosts.fixture      Synthetic parser data (no real keys)
 ```
 
@@ -196,6 +197,10 @@ bash tests/run-all.sh       # the whole suite
 bash tests/history.sh       # or a single script
 bash-commands --check       # every documented command is really defined
 ```
+
+Currently 16 scripts with 401 checks, all passing. The same three commands run
+in CI on every push, together with a `bash -n` gate over the whole tree
+(`.github/workflows/ci.yml`).
 
 The tests run against throwaway home directories and stubbed `ssh`,
 `ssh-keygen` and `ssh-keyscan` binaries, so they touch neither your own

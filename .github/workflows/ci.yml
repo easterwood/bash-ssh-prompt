@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  syntax:
+    name: Syntax (bash -n)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # install.sh only checks a subset of the tree, so the gate here covers
+      # everything: bashrc.d/lib/*.sh and bashrc.d/completions/*.bash included.
+      - name: bash -n over every shell file
+        run: |
+          mapfile -t files < <(find . -type f \( -name '*.sh' -o -name '*.bash' \) | sort)
+          printf 'checking %d files\n' "${#files[@]}"
+          status=0
+          for file in "${files[@]}"; do
+            bash -n "$file" || status=1
+          done
+          exit "$status"
+
+  tests:
+    name: Test suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Record the environment the report refers to
+        run: |
+          bash --version | head -n 1
+          ls --version | head -n 1
+          awk -W version 2>&1 | head -n 1 || true
+
+      # The suite runs against throwaway home directories and stubbed ssh,
+      # ssh-keygen and ssh-keyscan binaries. It opens no network connection.
+      - name: tests/run-all.sh
+        run: bash tests/run-all.sh
+
+      # bash-commands is an alias, and aliases are expanded when the -c string
+      # is parsed, before bashrc.sh has defined it. The underlying function is
+      # called instead; --check resolves every documented command and exits 1
+      # if one of them is missing.
+      - name: bash-commands --check
+        run: |
+          bash -ic '
+            source bashrc.sh >/dev/null 2>&1
+            bash_config_commands --check
+          '
+
+  shellcheck:
+    name: ShellCheck (advisory)
+    runs-on: ubuntu-latest
+    # The source files already carry "# shellcheck source=" directives, but the
+    # tree has never been run through the linter, so there is a backlog (the
+    # known ones are the unquoted COMPREPLY=( $(compgen ...) ) assignments).
+    # Keep this advisory until that backlog is cleared, then delete the line
+    # below so a regression actually fails the build.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ShellCheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Lint
+        run: |
+          mapfile -t files < <(find . -type f \( -name '*.sh' -o -name '*.bash' \) | sort)
+          shellcheck --shell=bash --external-sources "${files[@]}"
