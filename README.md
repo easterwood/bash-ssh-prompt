@@ -122,6 +122,7 @@ sshp --force myserver   # force a prompt re-sync before logging in
 sshp --help             # own switches plus the real client's option list
 # SSHP_WARN_WEAK_CRYPTO=yes is the default; set it to no to suppress
 # OpenSSH's weak-crypto warning when the installed client supports the option.
+# SSHP_SYNC_STATUS=yes shows an interactive spinner while changed files sync.
 ssh myserver            # untouched OpenSSH: no sync, no prompt
 
 ssh-resolve-ips         # reverse-DNS: IPs   -> hostnames
@@ -216,7 +217,7 @@ bash tests/history.sh       # or a single script
 bash-commands --check       # every documented command is really defined
 ```
 
-Currently 19 scripts with 574 checks, all passing locally. CI runs the same
+Currently 19 scripts with 586 checks, all passing locally. CI runs the same
 suite on the current Ubuntu runner, on Git Bash under `windows-latest`, and in
 official Bash containers for 4.2.53, 4.4.23, 5.1.16 and 5.3.20. A separate
 Bash 3.2.57 job exercises only the supported pre-4.2 remote fallback. The

@@ -43,6 +43,32 @@ login, so `sshp host uname -a` would sync the prompt for nothing. Use
 The whole function body is a subshell (`sshp() ( … )`), so its `local`
 variables, `trap` and working state cannot leak into your interactive shell.
 
+
+## Sync status
+
+A cache miss can take a moment because `sshp` has to build the prompt archive,
+open a separate SSH connection, install and validate the files remotely, then
+write the local sync state. On an interactive terminal, `SSHP_SYNC_STATUS=yes`
+(the default) visualises those phases with a small ASCII spinner:
+
+```text
+[|] sshp: preparing prompt package...
+[/] sshp: uploading and installing prompt...
+[-] sshp: saving sync state...
+[ok] sshp: prompt synchronized
+```
+
+The spinner updates one terminal line rather than printing a new line for every
+frame. It is written only to `stderr`, is automatically disabled when stderr is
+not a TTY or when `TERM=dumb`, and never starts on a cache hit. This keeps
+redirected output, command substitutions and scripts unchanged. Set
+`SSHP_SYNC_STATUS=no` to disable it explicitly.
+
+On a sync failure the animation is cleared and ends with
+`[!!] sshp: prompt synchronization failed` before the existing error details.
+The local cleanup trap also stops the spinner on `HUP`, `INT` and `TERM`, so an
+interrupted sync cannot leave a background animation running.
+
 ## Option pass-through
 
 Options are collected into one array that is used for **both** the sync

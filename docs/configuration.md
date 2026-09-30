@@ -30,6 +30,7 @@ Set these before sourcing, in `local.sh`, or per command.
 | `SSH_KNOWN_HOSTS_CLEAN_TIMEOUT` | `3` | `known-hosts --clean` | `ssh-keyscan` timeout in seconds. Must be a positive integer |
 | `SSH_PROMPT_SHOW_COMMAND` | `1` | `prompt.sh` | `0` hides the repetition of the last command in the remote prompt (it seeds `PROMPT_GRUVBOX_SHOW_COMMAND`) |
 | `SSHP_WARN_WEAK_CRYPTO` | `yes` | `ssh-prompt.sh` / `sshp` | `yes` leaves OpenSSH's weak-crypto warnings enabled. `no` adds `-o WarnWeakCrypto=no` when the installed client supports that option; older clients keep their normal warning behaviour |
+| `SSHP_SYNC_STATUS` | `yes` | `ssh-prompt.sh` / `sshp` | `yes` shows sync phases with a spinner on interactive stderr. Redirected/non-TTY calls and `TERM=dumb` stay quiet; `no` disables the status display entirely |
 | `PROMPT_LOCAL_SHOW_COMMAND` | `1` | `bashrc.d/prompt-local.sh` | `0` drops the repetition of the last command from the `bash-git-prompt` status segment |
 | `PROMPT_LOCAL_COMMAND_MAX_LEN` | `60` | `bashrc.d/prompt-local.sh` | Truncation length for that repetition |
 | `HISTORY_DEDUPE_LIVE` | `0` | `bashrc.d/history.sh` | `0` rewrites the history file only at shell start instead of also right after a repeated command. Useful on very large history files |
@@ -123,6 +124,9 @@ BASH_PROMPT_BACKEND=starship
 
 # sshp defaults to yes. This checkout currently suppresses the warning.
 SSHP_WARN_WEAK_CRYPTO=no
+
+# Sync progress is shown by default on an interactive terminal.
+# SSHP_SYNC_STATUS=no
 ```
 
 Open a new shell after changing the value. `auto` keeps the previous behaviour:

@@ -5,7 +5,7 @@
 The modular Bash configuration was verified locally in an isolated Linux test
 environment. All locally executable automated checks passed.
 
-Reproducible part: `bash tests/run-all.sh` — 19 scripts, 574 checks, all passing.
+Reproducible part: `bash tests/run-all.sh` — 19 scripts, 586 checks, all passing.
 CI is configured to run the same suite on the current Ubuntu runner, Git Bash
 on Windows, and explicit Bash 4.2.53, 4.4.23, 5.1.16 and 5.3.20 runtimes. A
 dedicated Bash 3.2.57 job covers the supported legacy remote prompt. The
@@ -73,7 +73,7 @@ line per script, and returns `1` if any of them failed.
 | `tests/ssh-config.sh` | 37 | Scanner behaviour plus the shared config/known_hosts inventory, Include-glob invalidation, cached `ssh -G`, and removed legacy resolver completions |
 | `tests/ssh-resolve-table.sh` | 27 | `__ssh_resolve_table` against a stubbed `ssh -G` and pre-seeded DNS caches: columns, merged references, bracketed IPv6, skipped hashed entries, filter, empty results, cache invalidation |
 | `tests/ssh-resolve.sh` | 56 | Strict IPv4/IPv6 predicates including compression, scoped addresses and embedded IPv4, plus help, argument/timeout validation and resolver source-time guards |
-| `tests/sshp.sh` | 67 | The `sshp` argument parser, configurable/version-gated `WarnWeakCrypto`, effective `ssh -G` cache identity, per-port/config state separation, equivalent-alias cache sharing, staged remote publication/rollback safety, `--force`, `--`, remote-command rejection, and missing sync files |
+| `tests/sshp.sh` | 79 | The `sshp` argument parser, configurable/version-gated `WarnWeakCrypto`, `SSHP_SYNC_STATUS`, terminal-only spinner phases, silent cache hits, effective `ssh -G` cache identity, per-port/config state separation, equivalent-alias cache sharing, staged remote publication/rollback safety, `--force`, `--`, remote-command rejection, and missing sync files |
 | `tests/starship-config.sh` | 23 | `starship.toml`: the removed helper script, the constant bg1 field on line one, the rounded caps on line two, and the palette matching `prompt-gruvbox.sh` |
 
 The network-free suite is complemented in CI by three integration checks:
@@ -385,7 +385,7 @@ assignment was replaced by the loop form used elsewhere in the tree.
   hex in `starship.toml`. `tests/starship-config.sh` now converts and compares
   them, so drift fails the build.
 
-Result: passed. 19 scripts, 574 checks.
+Result: passed. 19 scripts, 586 checks.
 
 ## Still to be checked manually
 

@@ -44,6 +44,9 @@ template_policy=$(bash -c 'source "$1"; printf "%s" "$SSHP_WARN_WEAK_CRYPTO"' \
     _ "$config_root/local.sh.example")
 assert_equal 'the current local configuration template suppresses the warning' \
     'no' "$template_policy"
+template_sync_status=$(bash -c 'source "$1"; printf "%s" "${SSHP_SYNC_STATUS:-yes}"' \
+    _ "$config_root/local.sh.example")
+assert_equal 'the sync status defaults to enabled' 'yes' "$template_sync_status"
 
 # Keep the remaining policy tests deterministic: they are about sshp's policy,
 # not the OpenSSH version installed on the CI runner.
@@ -70,6 +73,58 @@ SSHP_WARN_WEAK_CRYPTO=maybe
 assert_status 'an invalid weak-crypto policy is rejected' 2 __sshp_parse_args user@host
 unset SSHP_WARN_WEAK_CRYPTO
 __sshp_warn_weak_crypto_supported() { return 0; }
+
+unset SSHP_SYNC_STATUS
+assert 'the default sync-status policy parses' __sshp_parse_args user@host
+SSHP_SYNC_STATUS=no
+assert 'sync-status output can be disabled' __sshp_parse_args user@host
+SSHP_SYNC_STATUS=maybe
+assert_status 'an invalid sync-status policy is rejected' 2 __sshp_parse_args user@host
+unset SSHP_SYNC_STATUS
+
+# The animation is terminal-only. In a redirected test process there must be
+# no output at all; forcing the terminal predicate lets us exercise the phase
+# transitions and final markers without depending on a real PTY in CI.
+status_nontty_output=$(bash -c '
+    source "$1"
+    SSHP_SYNC_STATUS=yes
+    __sshp_status_start "sshp: hidden phase..."
+    __sshp_status_finish 0 "sshp: hidden result"
+' _ "$config_root/ssh-prompt.sh" 2>&1)
+assert_equal 'redirected stderr suppresses sync status output' '' "$status_nontty_output"
+
+status_output=$(bash -c '
+    source "$1"
+    __sshp_status_terminal() { return 0; }
+    SSHP_SYNC_STATUS=yes
+    __sshp_status_start "sshp: phase one..."
+    sleep 0.2
+    __sshp_status_start "sshp: phase two..."
+    sleep 0.2
+    __sshp_status_finish 0 "sshp: finished"
+' _ "$config_root/ssh-prompt.sh" 2>&1)
+assert_contains 'the spinner renders the first phase' "$status_output" 'sshp: phase one...'
+assert_contains 'the spinner renders phase changes' "$status_output" 'sshp: phase two...'
+assert_contains 'successful sync status gets a final marker' "$status_output" '[ok] sshp: finished'
+
+status_failure_output=$(bash -c '
+    source "$1"
+    __sshp_status_terminal() { return 0; }
+    SSHP_SYNC_STATUS=yes
+    __sshp_status_start "sshp: failing..."
+    sleep 0.1
+    __sshp_status_finish 1 "sshp: failed"
+' _ "$config_root/ssh-prompt.sh" 2>&1)
+assert_contains 'failed sync status gets a final marker' "$status_failure_output" '[!!] sshp: failed'
+
+status_disabled_output=$(bash -c '
+    source "$1"
+    __sshp_status_terminal() { return 0; }
+    SSHP_SYNC_STATUS=no
+    __sshp_status_start "sshp: disabled..."
+    __sshp_status_finish 0 "sshp: disabled result"
+' _ "$config_root/ssh-prompt.sh" 2>&1)
+assert_equal 'SSHP_SYNC_STATUS=no suppresses even terminal output' '' "$status_disabled_output"
 
 # --- destination and options ----------------------------------------------
 
@@ -250,6 +305,19 @@ alias_state_count=$(find "$HOME/.cache/sshp" -type f -name 'connection-v1_*.stat
 assert 'the equivalent alias uses the same state' sshp alias-b
 state_count=$(find "$HOME/.cache/sshp" -type f -name 'connection-v1_*.state' | wc -l | tr -d ' ')
 assert_equal 'equivalent aliases do not duplicate state' "$alias_state_count" "$state_count"
+
+# A real sync shows a final status marker when stderr is a terminal, while a
+# cache hit remains completely quiet and proceeds directly to the login call.
+status_terminal_definition=$(declare -f __sshp_status_terminal)
+__sshp_status_terminal() { return 0; }
+SSHP_SYNC_STATUS=yes
+status_first_sync=$(sshp -p 2299 status-host 2>&1)
+status_cached_sync=$(sshp -p 2299 status-host 2>&1)
+eval "$status_terminal_definition"
+unset SSHP_SYNC_STATUS
+assert_contains 'a cache miss reports a successful synchronization' \
+    "$status_first_sync" '[ok] sshp: prompt synchronized'
+assert_equal 'a cache hit emits no synchronization status' '' "$status_cached_sync"
 
 # --- staged remote publication --------------------------------------------
 

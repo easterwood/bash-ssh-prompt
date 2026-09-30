@@ -63,6 +63,80 @@ __sshp_add_warn_weak_crypto_option() {
     esac
 }
 
+# Interactive progress for the comparatively slow sync connection. Status is
+# deliberately written only to a real terminal on stderr so sshp stays quiet
+# in scripts, command substitutions and redirected output.
+__sshp_status_pid=''
+__sshp_status_active=0
+
+__sshp_validate_sync_status() {
+    case ${SSHP_SYNC_STATUS:-yes} in
+        yes|no)
+            return 0
+            ;;
+        *)
+            printf 'sshp: SSHP_SYNC_STATUS must be yes or no.\n' >&2
+            return 2
+            ;;
+    esac
+}
+
+__sshp_status_terminal() {
+    [[ -t 2 && ${TERM-} != dumb ]]
+}
+
+__sshp_status_enabled() {
+    [[ ${SSHP_SYNC_STATUS:-yes} == yes ]] && __sshp_status_terminal
+}
+
+__sshp_status_stop() {
+    if [[ -n ${__sshp_status_pid-} ]]; then
+        kill "$__sshp_status_pid" 2>/dev/null || true
+        wait "$__sshp_status_pid" 2>/dev/null || true
+        __sshp_status_pid=''
+    fi
+
+    if (( ${__sshp_status_active:-0} )); then
+        printf '\r\033[K' >&2
+        __sshp_status_active=0
+    fi
+}
+
+__sshp_status_start() {
+    local message=$1
+
+    __sshp_status_stop
+    __sshp_status_enabled || return 0
+
+    (
+        local -a frames=('|' '/' '-' '\')
+        local index=0
+        trap 'exit 0' HUP INT TERM
+
+        while :; do
+            printf '\r[%s] %s' "${frames[index]}" "$message" >&2
+            index=$(( (index + 1) % ${#frames[@]} ))
+            sleep 0.1
+        done
+    ) &
+    __sshp_status_pid=$!
+    __sshp_status_active=1
+}
+
+__sshp_status_finish() {
+    local status=$1 message=$2
+    local was_active=${__sshp_status_active:-0}
+
+    __sshp_status_stop
+    (( was_active )) || return 0
+
+    if (( status == 0 )); then
+        printf '[ok] %s\n' "$message" >&2
+    else
+        printf '[!!] %s\n' "$message" >&2
+    fi
+}
+
 __sshp_parse_args() {
     local arg option expect_arg=0
 
@@ -75,6 +149,7 @@ __sshp_parse_args() {
     __sshp_force=0
     __sshp_help_requested=0
     __sshp_add_warn_weak_crypto_option || return $?
+    __sshp_validate_sync_status || return $?
 
     while (( $# )); do
         arg=$1
@@ -290,9 +365,26 @@ EOF
         return
     fi
 
-    archive=$(mktemp -t sshp-prompt.XXXXXX.tgz) || return 1
-    trap 'rm -f -- "$archive"' EXIT
-    tar -czf "$archive" -C "$config_root" "${sync_files[@]}" || return 1
+    __sshp_status_start 'sshp: preparing prompt package...'
+
+    archive=$(mktemp -t sshp-prompt.XXXXXX.tgz) || {
+        __sshp_status_finish 1 'sshp: prompt synchronization failed'
+        return 1
+    }
+
+    __sshp_sync_cleanup() {
+        __sshp_status_stop
+        [[ -z ${archive-} ]] || rm -f -- "$archive"
+    }
+    trap '__sshp_sync_cleanup' EXIT
+    trap '__sshp_sync_cleanup; exit 129' HUP
+    trap '__sshp_sync_cleanup; exit 130' INT
+    trap '__sshp_sync_cleanup; exit 143' TERM
+
+    tar -czf "$archive" -C "$config_root" "${sync_files[@]}" || {
+        __sshp_status_finish 1 'sshp: prompt synchronization failed'
+        return 1
+    }
 
     read -r -d '' remote_script <<'REMOTE' || true
 set -eu
@@ -382,15 +474,31 @@ LOADER
 fi
 REMOTE
 
+    __sshp_status_start 'sshp: uploading and installing prompt...'
     if ! command ssh -T -o RemoteCommand=none "${ssh_options[@]}" \
         "$target" "$remote_script" < "$archive"; then
+        __sshp_status_finish 1 'sshp: prompt synchronization failed'
         printf 'sshp: sync or .bashrc update failed.\n' >&2
         return 1
     fi
 
-    mkdir -p "$state_dir" || return 1
-    temporary_state=$(mktemp "$state_dir/.state.XXXXXX") || return 1
-    printf '%s\n' "$signature" > "$temporary_state" || return 1
-    mv -f "$temporary_state" "$state_file" || return 1
+    __sshp_status_start 'sshp: saving sync state...'
+    mkdir -p "$state_dir" || {
+        __sshp_status_finish 1 'sshp: prompt synchronization failed'
+        return 1
+    }
+    temporary_state=$(mktemp "$state_dir/.state.XXXXXX") || {
+        __sshp_status_finish 1 'sshp: prompt synchronization failed'
+        return 1
+    }
+    printf '%s\n' "$signature" > "$temporary_state" || {
+        __sshp_status_finish 1 'sshp: prompt synchronization failed'
+        return 1
+    }
+    mv -f "$temporary_state" "$state_file" || {
+        __sshp_status_finish 1 'sshp: prompt synchronization failed'
+        return 1
+    }
+    __sshp_status_finish 0 'sshp: prompt synchronized'
     command ssh "${ssh_options[@]}" "$target"
 )
