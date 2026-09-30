@@ -57,7 +57,7 @@ Not meant to be set by hand, but useful when debugging:
 |---|---|---|
 | `~/.bashrc` | `install.sh` | Three-line loader for the checkout |
 | `~/.bashrc.before-modular-config.<timestamp>` | `install.sh` | Backup of the previous `~/.bashrc` |
-| `~/.cache/sshp/<crc>_<size>.state` | `sshp` | Sync signature, keyed by the destination string (options are not part of the key) |
+| `~/.cache/sshp/connection-v1_<crc>_<size>.state` | `sshp` | Sync signature, keyed by the effective SSH connection resolved with `ssh -G` |
 | `<checkout>/local.sh` | you | Untracked machine-local settings, loaded after the common modules and immediately before the local prompt backend is selected |
 | `~/.ssh/known_hosts.bak.<timestamp>` | `known-hosts --clean --apply` | Backup, only when the file actually changes |
 | `~/.ssh/config.bak.<timestamp>` | `known-hosts --clean --apply` | Backup, only when the file actually changes |

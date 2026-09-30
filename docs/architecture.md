@@ -287,7 +287,7 @@ bash tests/history.sh       # a single script
 
 `tests/run-all.sh` executes every `*.sh` in `tests/` except itself and
 `lib.sh`, prints one `PASS` line per script with its check count, and returns
-`1` if any script failed. Current state: 19 scripts, 501 checks, all passing.
+`1` if any script failed. Current state: 19 scripts, 517 checks, all passing.
 The same suite runs in CI on every push, together with the `bash -n` gate over
 the whole tree, `bash-commands --check` and ShellCheck; see
 `.github/workflows/ci.yml`. ShellCheck is clean and blocking: every suppression
@@ -313,7 +313,7 @@ above it, so a new finding fails the build.
 | `tests/ssh-config.sh` | 22 | Alias collection, skipped wildcards, quotes, `Include` with glob and `~/`, direct versus inherited users |
 | `tests/ssh-resolve-table.sh` | 27 | `__ssh_resolve_table` against a stubbed `ssh -G` and pre-seeded DNS caches: columns, merged references, bracketed IPv6, skipped hashed entries, filter, empty results, cache invalidation |
 | `tests/ssh-resolve.sh` | 40 | The IPv4/IPv6 predicates, help, argument and timeout validation, and the source-time guard both resolvers carry |
-| `tests/sshp.sh` | 45 | The `sshp` argument parser, configurable/version-gated `WarnWeakCrypto`, `--force`, `--`, the remote-command rejection, and the check for missing sync files |
+| `tests/sshp.sh` | 61 | The `sshp` argument parser, configurable/version-gated `WarnWeakCrypto`, effective `ssh -G` cache identity, per-port/config state separation, equivalent-alias cache sharing, `--force`, `--`, remote-command rejection, and missing sync files |
 | `tests/starship-config.sh` | 23 | `starship.toml`: the removed helper script, the constant bg1 field on line one, the rounded caps on line two, and the palette matching `prompt-gruvbox.sh` |
 
 `tests/integration/bash-git-prompt.sh` is separate from `run-all.sh`: CI checks out the pinned upstream `bash-git-prompt` 2.7.1 tree, sources the real `gitprompt.sh`, verifies the performance switches survive initialization, and renders one prompt in a temporary Git repository.
@@ -351,7 +351,7 @@ find . -name '*.sh' -o -name '*.bash' | xargs -n1 bash -n
 
 `TEST.md` in the repository root lists what the automated suite covers and
 reports the manual test run covering the installer, the local and remote prompts, the
-`ll` layout, multi-file sync with a stubbed `ssh` client, per-target change
+`ll` layout, multi-file sync with a stubbed `ssh` client, per-connection change
 detection, and the `known-hosts` overview. It also lists what could not be
 tested automatically: Git Bash on Windows, a real `bash-git-prompt` install,
 real target servers, terminal colour and Unicode rendering, password-based
@@ -368,9 +368,10 @@ not wrapped, so anything that is not an interactive login simply goes to
 OpenSSH directly. The flip side is that a plain `ssh host` no longer syncs the
 prompt either; call `sshp host` when you want it.
 
-The sync state is keyed by the destination string alone. `sshp web01` and
-`sshp -F other-config web01` share one state entry, so if two configs map the
-same alias to different machines, use `--force`.
+The sync state is keyed by an effective connection identity derived from
+`ssh -G`: hostname, user, port, address family, proxy route and host-key alias.
+Different ports or configs that map one alias to different endpoints therefore
+do not share state; aliases resolving to the same effective endpoint can.
 
 > An earlier `ssh()` wrapper in `ssh-prompt.sh` is gone as well. It routed
 > plain logins to `sshp` and everything else to native OpenSSH. `ssh` is now

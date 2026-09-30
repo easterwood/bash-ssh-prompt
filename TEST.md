@@ -5,7 +5,7 @@
 The modular Bash configuration was verified in an isolated Linux test
 environment. All automated checks passed.
 
-Reproducible part: `bash tests/run-all.sh` — 19 scripts, 501 checks, all passing.
+Reproducible part: `bash tests/run-all.sh` — 19 scripts, 517 checks, all passing.
 The same suite runs in CI on every push (`.github/workflows/ci.yml`), so the
 numbers above are checked rather than transcribed. The remaining sections
 describe one-off checks that are not scripted.
@@ -19,7 +19,7 @@ describe one-off checks that are not scripted.
 | Remote prompt and `ll` | Passed |
 | Installation and backup of `.bashrc` | Passed |
 | Multi-file sync | Passed (SSH simulated) |
-| Per-target change detection | Passed |
+| Per-connection change detection | Passed |
 | `known-hosts` overview and filter | Passed |
 | `known-hosts --clean` after the merge | Passed |
 | History writing and deduplication | Passed |
@@ -67,7 +67,7 @@ line per script, and returns `1` if any of them failed.
 | `tests/ssh-config.sh` | 22 | Alias collection, skipped wildcards, quotes, `Include` with glob and `~/`, direct versus inherited users |
 | `tests/ssh-resolve-table.sh` | 27 | `__ssh_resolve_table` against a stubbed `ssh -G` and pre-seeded DNS caches: columns, merged references, bracketed IPv6, skipped hashed entries, filter, empty results, cache invalidation |
 | `tests/ssh-resolve.sh` | 40 | The IPv4/IPv6 predicates, help, argument and timeout validation, and the source-time guard both resolvers carry |
-| `tests/sshp.sh` | 45 | The `sshp` argument parser, configurable/version-gated `WarnWeakCrypto`, `--force`, `--`, the remote-command rejection, and the check for missing sync files |
+| `tests/sshp.sh` | 61 | The `sshp` argument parser, configurable/version-gated `WarnWeakCrypto`, effective `ssh -G` cache identity, per-port/config state separation, equivalent-alias cache sharing, `--force`, `--`, remote-command rejection, and missing sync files |
 | `tests/starship-config.sh` | 23 | `starship.toml`: the removed helper script, the constant bg1 field on line one, the rounded caps on line two, and the palette matching `prompt-gruvbox.sh` |
 
 The network-free suite is complemented in CI by `tests/integration/bash-git-prompt.sh`, which runs against the pinned upstream 2.7.1 checkout and performs a real prompt render in a temporary Git repository.
@@ -177,6 +177,10 @@ Checked:
 
 - the first call creates one sync and one login connection;
 - without a local change, the second call creates only the login connection;
+- cache identity follows effective SSH host/user/port and proxy settings rather
+  than the literal destination string;
+- different ports and configs resolving one alias to different hosts create
+  independent state, while equivalent aliases can share state;
 - `prompt.sh`, `listing.sh`, `prompt-core.sh` and `prompt-gruvbox.sh` are
   transferred;
 - the loader is written to the remote `.bashrc` exactly once;

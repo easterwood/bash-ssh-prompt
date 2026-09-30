@@ -108,6 +108,149 @@ assert_status 'no arguments at all' 2 __sshp_parse_args
 assert_status 'only an option' 2 __sshp_parse_args -v
 assert_status 'a missing option argument' 2 __sshp_parse_args -p
 
+# --- effective connection identity -----------------------------------------
+
+export SSHP_TEST_LOG="$TEST_TMP/ssh.log"
+test_stub ssh <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$SSHP_TEST_LOG"
+
+if [[ ${1-} == -G ]]; then
+    shift
+    port=22
+    user=tester
+    config=default
+    proxyjump=none
+    proxycommand=none
+    hostkeyalias=none
+    addressfamily=any
+    host=''
+
+    while (( $# )); do
+        case $1 in
+            -p)
+                port=$2
+                shift 2
+                ;;
+            -p*)
+                port=${1#-p}
+                shift
+                ;;
+            -l)
+                user=$2
+                shift 2
+                ;;
+            -l*)
+                user=${1#-l}
+                shift
+                ;;
+            -F)
+                config=$2
+                shift 2
+                ;;
+            -F*)
+                config=${1#-F}
+                shift
+                ;;
+            -J)
+                proxyjump=$2
+                shift 2
+                ;;
+            -J*)
+                proxyjump=${1#-J}
+                shift
+                ;;
+            -* )
+                shift
+                ;;
+            *)
+                host=$1
+                shift
+                ;;
+        esac
+    done
+
+    case $config in
+        *config-a) hostname=alpha.internal ;;
+        *config-b) hostname=beta.internal ;;
+        *)
+            case $host in
+                alias-a|alias-b) hostname=same.internal ;;
+                *) hostname=$host ;;
+            esac
+            ;;
+    esac
+
+    printf '%s\n' \
+        "host $host" \
+        "hostname $hostname" \
+        "user $user" \
+        "port $port" \
+        "addressfamily $addressfamily" \
+        "proxyjump $proxyjump" \
+        "proxycommand $proxycommand" \
+        "hostkeyalias $hostkeyalias" \
+        'serveraliveinterval 0'
+    exit 0
+fi
+
+# Sync and login calls succeed without touching the network. The sync call may
+# receive a tar archive on stdin; exiting is enough for this cache-level test.
+exit 0
+STUB
+
+identity_alias_a=$(__sshp_connection_identity alias-a)
+identity_alias_b=$(__sshp_connection_identity alias-b)
+assert_equal 'aliases resolving to the same endpoint share an identity' \
+    "$identity_alias_a" "$identity_alias_b"
+
+identity_port_1=$(__sshp_connection_identity host -p 2201)
+identity_port_2=$(__sshp_connection_identity host -p 2202)
+assert_status 'different effective ports produce different identities' 1 \
+    test "$identity_port_1" = "$identity_port_2"
+
+: > "$TEST_TMP/config-a"
+: > "$TEST_TMP/config-b"
+identity_config_a=$(__sshp_connection_identity host -F "$TEST_TMP/config-a")
+identity_config_b=$(__sshp_connection_identity host -F "$TEST_TMP/config-b")
+assert_status 'different effective HostName values produce different identities' 1 \
+    test "$identity_config_a" = "$identity_config_b"
+
+identity_jump_a=$(__sshp_connection_identity host -J jump-a)
+identity_jump_b=$(__sshp_connection_identity host -J jump-b)
+assert_status 'different ProxyJump routes produce different identities' 1 \
+    test "$identity_jump_a" = "$identity_jump_b"
+
+# Exercise the complete state-file path, not just the helper. A repeated
+# connection must reuse one state entry; a different effective port must not.
+rm -f "$SSHP_TEST_LOG"
+assert 'first connection syncs successfully' sshp -p 2201 cache-host
+state_count=$(find "$HOME/.cache/sshp" -type f -name 'connection-v1_*.state' | wc -l | tr -d ' ')
+assert_equal 'the first endpoint creates one connection-aware state file' 1 "$state_count"
+
+assert 'the same effective connection reuses its cache state' sshp -p 2201 cache-host
+state_count=$(find "$HOME/.cache/sshp" -type f -name 'connection-v1_*.state' | wc -l | tr -d ' ')
+assert_equal 'a cache hit does not create another state file' 1 "$state_count"
+
+assert 'a second port syncs independently' sshp -p 2202 cache-host
+state_count=$(find "$HOME/.cache/sshp" -type f -name 'connection-v1_*.state' | wc -l | tr -d ' ')
+assert_equal 'different effective ports keep separate cache state' 2 "$state_count"
+
+assert 'config-a gets its own cache state' sshp -F "$TEST_TMP/config-a" cache-host
+config_state_count=$(find "$HOME/.cache/sshp" -type f -name 'connection-v1_*.state' | wc -l | tr -d ' ')
+assert 'config-b syncs independently' sshp -F "$TEST_TMP/config-b" cache-host
+state_count=$(find "$HOME/.cache/sshp" -type f -name 'connection-v1_*.state' | wc -l | tr -d ' ')
+assert_equal 'configs resolving the same alias differently keep separate state' \
+    $((config_state_count + 1)) "$state_count"
+
+# Two destination strings that ssh -G resolves identically intentionally share
+# state: the cache follows the effective endpoint rather than the spelling.
+assert 'the first alias syncs' sshp alias-a
+alias_state_count=$(find "$HOME/.cache/sshp" -type f -name 'connection-v1_*.state' | wc -l | tr -d ' ')
+assert 'the equivalent alias uses the same state' sshp alias-b
+state_count=$(find "$HOME/.cache/sshp" -type f -name 'connection-v1_*.state' | wc -l | tr -d ' ')
+assert_equal 'equivalent aliases do not duplicate state' "$alias_state_count" "$state_count"
+
 # --- the function itself ---------------------------------------------------
 
 assert_status 'sshp without a destination' 2 sshp

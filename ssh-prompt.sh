@@ -167,6 +167,58 @@ __sshp_show_help() {
     __sshp_ssh_usage
 }
 
+# Print a stable description of the effective SSH endpoint used for sync-state
+# identity. ssh -G resolves Host aliases and command-line overrides without
+# opening a network connection. Only fields that can change the destination or
+# its routing are retained so unrelated SSH settings do not force a re-sync.
+__sshp_connection_identity() {
+    local target=$1 line key value config
+    local hostname='' user='' port='' addressfamily=''
+    local proxyjump='' proxycommand='' hostkeyalias=''
+    shift
+
+    config=$(command ssh -G "$@" "$target" 2>/dev/null) || {
+        printf 'sshp: could not resolve effective SSH configuration for %s.\n' \
+            "$target" >&2
+        return 1
+    }
+
+    while IFS= read -r line; do
+        key=${line%% *}
+        if [[ $line == *' '* ]]; then
+            value=${line#* }
+        else
+            value=''
+        fi
+
+        case $key in
+            hostname)      hostname=$value ;;
+            user)          user=$value ;;
+            port)          port=$value ;;
+            addressfamily) addressfamily=$value ;;
+            proxyjump)     proxyjump=$value ;;
+            proxycommand)  proxycommand=$value ;;
+            hostkeyalias)  hostkeyalias=$value ;;
+        esac
+    done <<< "$config"
+
+    if [[ -z $hostname || -z $user || -z $port ]]; then
+        printf 'sshp: incomplete effective SSH configuration for %s.\n' \
+            "$target" >&2
+        return 1
+    fi
+
+    printf '%s\n' \
+        'sshp-connection-identity=1' \
+        "hostname=$hostname" \
+        "user=$user" \
+        "port=$port" \
+        "addressfamily=$addressfamily" \
+        "proxyjump=$proxyjump" \
+        "proxycommand=$proxycommand" \
+        "hostkeyalias=$hostkeyalias"
+}
+
 sshp() (
     __sshp_parse_args "$@" || {
         __sshp_usage >&2
@@ -192,8 +244,8 @@ sshp() (
 
     local config_root=${BASH_CONFIG_ROOT:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)}
     local state_dir="$HOME/.cache/sshp"
-    local archive remote_script signature saved_signature
-    local target_crc target_size state_file temporary_state file
+    local archive remote_script signature saved_signature connection_identity
+    local connection_crc connection_size state_file temporary_state file
     local -a sync_files=(
         prompt.sh
         bashrc.d/listing.sh
@@ -224,10 +276,13 @@ sshp() (
         } | cksum
     ) || return 1
 
-    read -r target_crc target_size <<EOF
-$(printf '%s' "$target" | cksum)
+    connection_identity=$(__sshp_connection_identity "$target" "${ssh_options[@]}") || return 1
+    read -r connection_crc connection_size <<EOF
+$(printf '%s' "$connection_identity" | cksum)
 EOF
-    state_file="$state_dir/${target_crc}_${target_size}.state"
+    # Prefix the new key format so legacy target-only cache entries can never
+    # be mistaken for connection-aware state after an upgrade.
+    state_file="$state_dir/connection-v1_${connection_crc}_${connection_size}.state"
     [[ ! -r $state_file ]] || IFS= read -r saved_signature < "$state_file"
 
     if (( ! force )) && [[ ${saved_signature-} == "$signature" ]]; then

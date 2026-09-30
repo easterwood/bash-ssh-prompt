@@ -80,10 +80,10 @@ word (`-B -b -c -D -E -e -F -I -i -J -L -l -m -O -o -P -p -Q -R -S -W -w`), so
 both `-p 2222` and the attached form `-p2222` are parsed correctly and the
 destination is never mistaken for an option argument.
 
-> The stored sync state is keyed by the **destination string only**, not by the
-> options. `sshp web01` and `sshp -F other-config web01` therefore share one
-> state entry. If two configs map the same alias to different machines, force a
-> re-sync with `--force`.
+> Before checking the sync cache, `sshp` runs `ssh -G` locally and derives a
+> connection identity from the effective `hostname`, `user`, `port`, address
+> family, proxy route and host-key alias. Different ports or SSH configs that
+> resolve the same alias to different endpoints therefore use different state.
 
 ## Plain `ssh` is not touched
 
@@ -164,18 +164,25 @@ to a server.
    `sshp-sync-format=5`, then for each file its relative path and its `cksum`
    output, all piped through `cksum` again. Bumping the format tag in a future
    version therefore invalidates every stored state at once.
-2. The destination string is hashed with `cksum` to derive a state filename:
-   `~/.cache/sshp/<crc>_<size>.state`.
-3. If that file's contents match the current signature and `--force` was not
+2. `ssh -G` resolves the destination plus forwarded SSH options without opening
+   a connection. `sshp` retains the effective `hostname`, `user`, `port`,
+   `addressfamily`, `proxyjump`, `proxycommand` and `hostkeyalias` fields as the
+   **connection identity**.
+3. That identity is hashed with `cksum` to derive a versioned state filename:
+   `~/.cache/sshp/connection-v1_<crc>_<size>.state`. The prefix deliberately
+   prevents an old destination-only cache entry from being reused after an
+   upgrade.
+4. If that file's contents match the current signature and `--force` was not
    given, `sshp` runs the login connection and returns.
-4. Otherwise it syncs, and only **after** a successful sync writes the new
+5. Otherwise it syncs, and only **after** a successful sync writes the new
    signature — atomically, via `mktemp` in the same directory followed by
    `mv -f`. A failed sync leaves the old state intact and will be retried next
    time.
 
-Because the state is keyed by the destination string, `sshp web01` and
-`sshp user@web01.example.com` are tracked as two separate targets even if they
-resolve to the same machine.
+Two different destination strings may therefore share state when `ssh -G`
+resolves them to the same effective connection. Conversely, `sshp -p 2222
+web01` and `sshp -p 22 web01`, or two `-F` configurations that resolve `web01`
+to different endpoints, are tracked independently.
 
 ## The transfer
 
@@ -231,7 +238,7 @@ files under `~/.cache/ssh-prompt` and never append the block twice.
 
 | Side | Requirement |
 |---|---|
-| Local | `cksum`, `tar`, `gzip`, `mktemp`, OpenSSH client |
+| Local | `cksum`, `tar`, `gzip`, `mktemp`, OpenSSH client with `ssh -G` configuration expansion |
 | Remote | `bash`, `tar`, `grep`, `mktemp`, `touch`; GNU `ls` for correct `ll` output |
 | Remote | A writable `$HOME`, and a `~/.bashrc` that is actually read on login |
 
