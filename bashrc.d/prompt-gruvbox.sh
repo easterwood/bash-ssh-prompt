@@ -541,14 +541,20 @@ __gb_build() {
 # --- wiring -----------------------------------------------------------------
 
 # Same ordering contract as prompt-local.sh: the timer stops first so the exit
-# code and the duration are already known, the DEBUG trap is armed last.
+# code and the duration are already known, existing prompt hooks run next, the
+# prompt is built afterwards, and the DEBUG trap is armed last. In particular,
+# history.sh has already installed __history_append here; replacing
+# PROMPT_COMMAND would silently disable per-command history persistence.
+#
 # PROMPT_COMMAND is an array from Bash 5.1 on and a string before that.
 # Both forms are handled deliberately.
-# shellcheck disable=SC2178,SC2179
+# shellcheck disable=SC2178,SC2179,SC2128
 if __prompt_command_is_array; then
-    PROMPT_COMMAND=(__cmd_timer_stop __gb_build __cmd_timer_arm)
+    PROMPT_COMMAND=(__cmd_timer_stop "${PROMPT_COMMAND[@]}" __gb_build __cmd_timer_arm)
 else
-    PROMPT_COMMAND='__cmd_timer_stop;__gb_build;__cmd_timer_arm'
+    PROMPT_COMMAND=${PROMPT_COMMAND-}
+    PROMPT_COMMAND=${PROMPT_COMMAND%;}
+    PROMPT_COMMAND="__cmd_timer_stop${PROMPT_COMMAND:+;$PROMPT_COMMAND};__gb_build;__cmd_timer_arm"
 fi
 
 __gb_build
