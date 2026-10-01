@@ -5,7 +5,7 @@
 The modular Bash configuration was verified locally in an isolated Linux test
 environment. All locally executable automated checks passed.
 
-Reproducible part: `bash tests/run-all.sh` — 20 scripts, 689 checks, all passing.
+Reproducible part: `bash tests/run-all.sh` — 20 scripts, 710 checks, all passing.
 CI is configured to run the same suite on the current Ubuntu runner, Git Bash
 on Windows, and explicit Bash 4.2.53, 4.4.23, 5.1.16 and 5.3.20 runtimes. A
 dedicated Bash 3.2.57 job covers the supported legacy remote prompt. The
@@ -60,7 +60,7 @@ line per script, and returns `1` if any of them failed.
 | `tests/commands.sh` | 26 | `bash-commands`: listing, `--details`, the `--check` self-test including a deliberately stale row, filter, rejected combinations |
 | `tests/completion.sh` | 35 | Completion lists derived from the shared SSH inventory, invalidation after a config edit, `ssh`/`sshp` destinations including `user@`, every per-command completion, and the shared resolver registration |
 | `tests/history.sh` | 26 | `history_dedupe`, serialized concurrent writers, stale-lock recovery, timestamped/multi-line/timestamp-less files, the shipped `HISTORY_DEDUPE_LIVE=0` default, live rewrite, and the `prompt-core.sh` guard |
-| `tests/install.sh` | 21 | The generated loader, the backup, `printf %q` quoting of a path with spaces, the `bash -n` gate, and that `bashrc.sh` stays inert in a non-interactive shell |
+| `tests/install.sh` | 30 | The generated loader, the backup, `printf %q` quoting of a path with spaces, the whole-tree `bash -n` gate including `lib/`, `completions/` and `local.sh`, and that `bashrc.sh` stays inert in a non-interactive shell |
 | `tests/known-hosts-clean.sh` | 39 | `known-hosts --clean`: dry run, `--apply` with backups, rejected combinations, the removed `known-hosts-clean` alias, and the completion |
 | `tests/known-hosts.sh` | 15 | The `known_hosts` parser, filter/process behaviour, and automatic invalidation after an SSH config edit |
 | `tests/listing.sh` | 18 | The `ll` header, the dropped `ls` summary line, hidden files, names with spaces, option pass-through, and propagation of the underlying `ls` exit status |
@@ -74,7 +74,7 @@ line per script, and returns `1` if any of them failed.
 | `tests/ssh-resolve-backends.sh` | 69 | Every DNS backend of both resolvers against stubbed `getent`, `dig`, `host`, `nslookup` and `powershell.exe`: each tool's output format, the fallback order, the timeout wrapper, positive and negative caching, and the two token extractors |
 | `tests/ssh-resolve-table.sh` | 34 | `__ssh_resolve_table` against a stubbed `ssh -G` and pre-seeded DNS caches: columns, merged references, bracketed IPv6, skipped hashed entries, filter, empty results, cache invalidation, and the full config line syntax reaching the CONFIG column |
 | `tests/ssh-resolve.sh` | 56 | Strict IPv4/IPv6 predicates including compression, scoped addresses and embedded IPv4, plus help, argument/timeout validation and resolver source-time guards |
-| `tests/sshp.sh` | 79 | The `sshp` argument parser, configurable/version-gated `WarnWeakCrypto`, `SSHP_SYNC_STATUS`, terminal-only spinner phases, silent cache hits, effective `ssh -G` cache identity, per-port/config state separation, equivalent-alias cache sharing, staged remote publication/rollback safety, `--force`, `--`, remote-command rejection, and missing sync files |
+| `tests/sshp.sh` | 98 | The `sshp` argument parser, configurable/version-gated `WarnWeakCrypto`, `SSHP_SYNC_STATUS`, terminal-only spinner phases, silent cache hits, effective `ssh -G` cache identity, per-port/config state separation, equivalent-alias cache sharing, staged remote publication/rollback safety, the remote syntax gate over every synced file, `--force`, `--`, remote-command rejection, and missing sync files |
 | `tests/starship-config.sh` | 23 | `starship.toml`: the removed helper script, the constant bg1 field on line one, the rounded caps on line two, and the palette matching `prompt-gruvbox.sh` |
 
 The network-free suite is complemented in CI by three integration checks:
@@ -456,7 +456,47 @@ through it: dropping the `\r` strip, dropping the unquoting, and dropping the
 `=` normalisation each fail `tests/ssh-config.sh` **and**
 `tests/ssh-resolve-table.sh`.
 
-Result: passed. 20 scripts, 689 checks.
+Result: passed.
+
+### 17. One definition per list
+
+Two lists were maintained by hand in more than one place.
+
+**`sync_files`.** The set of files `sshp` pushes was declared as an array in
+`ssh-prompt.sh` and then repeated as four hard-coded `bash -n` lines inside the
+remote heredoc. Adding a file meant editing both, and forgetting the second
+edit meant the new file reached the destination without ever being
+syntax-checked there — silently, because nothing fails when a check is simply
+absent. The local side now prepends `sync_files='…'` to the remote script and
+the remote pass loops over it. The names are validated against
+`[[:alnum:]./_-]` before they are embedded, so the single-quoted assignment is
+safe by construction rather than by convention. `sshp-sync-format` is
+deliberately **not** bumped: neither the payload nor the remote layout changed,
+so no host needs to re-sync.
+
+**The installer's syntax gate.** `install.sh` ran `bash -n` over a
+hand-maintained list of twelve files that covered neither `bashrc.d/lib/*.sh`
+nor `bashrc.d/completions/*.bash` — about half the tree, and the half most
+likely to be edited. This was limitation 3 in `docs/architecture.md`; it is now
+gone from that list. The installer runs the same `find` expression the CI
+syntax job uses, reports every offender in one run instead of stopping at the
+first, and aborts with an explicit message before touching `~/.bashrc`. An
+untracked `local.sh` is included on purpose: `bashrc.sh` sources it, so a
+syntax error there breaks the shell just as surely.
+
+Coverage: `tests/install.sh` grew from 21 to 30 checks — a broken
+`bashrc.d/lib/known-hosts.sh`, `bashrc.d/completions/ssh.bash` and `local.sh`
+each abort the installation, two broken files are both named in one run, the
+abort message is asserted, and a clean checkout still passes the wider gate.
+`tests/sshp.sh` grew from 86 to 98: each of the four synced files, rejected in
+turn by the fake remote `bash`, has to abort the sync, which proves the remote
+loop really covers all of them and not just the first.
+
+Four mutations confirm it: reducing the remote loop to `prompt.sh`, dropping
+the prepended list, restoring a subset-only installer gate, and making the
+installer stop at the first error — each fails the matching test script.
+
+Result: passed. 20 scripts, 710 checks.
 
 ## Still to be checked manually
 

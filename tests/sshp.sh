@@ -399,6 +399,38 @@ assert_file 'a failed staged sync preserves the live prompt tree' \
 assert_equal 'failed staging is cleaned up' '' \
     "$(compgen -G "$remote_home/.cache/.ssh-prompt.new.*" || true)"
 
+# The remote side used to repeat the file list as four hard-coded "bash -n"
+# lines, so a file added to sync_files silently went unchecked there. It now
+# loops over the list the local side passes in. Prove that by rejecting each
+# synced file in turn: every one of them has to abort the sync.
+for guarded in prompt.sh listing.sh prompt-core.sh prompt-gruvbox.sh; do
+    cat > "$remote_bin/bash" <<STUB
+#!/bin/sh
+if [ "\${1-}" = -n ]; then
+    case \${2-} in
+        */$guarded) exit 42 ;;
+    esac
+fi
+exec "\$SSHP_REAL_BASH" "\$@"
+STUB
+    chmod +x "$remote_bin/bash"
+    assert_status "the remote gate rejects a broken $guarded" 1 \
+        sshp --force atomic-host
+    assert_file "a rejected $guarded preserves the live prompt tree" \
+        "$remote_home/.cache/ssh-prompt/prompt.sh" 'old prompt'
+done
+
+# The same invariant at the source level: no per-file check may come back.
+sshp_source=$(< "$config_root/ssh-prompt.sh")
+assert_contains 'the sync list is handed to the remote script' \
+    "$sshp_source" "sync_files='\${sync_files[*]}'"
+assert_contains 'the remote script loops over that list' \
+    "$sshp_source" 'for sync_file in $sync_files'
+assert_not_contains 'no hard-coded remote check for prompt-core.sh' \
+    "$sshp_source" 'bash -n "$staging/bashrc.d/prompt-core.sh"'
+assert_not_contains 'no hard-coded remote check for prompt-gruvbox.sh' \
+    "$sshp_source" 'bash -n "$staging/bashrc.d/prompt-gruvbox.sh"'
+
 rm -f "$remote_bin/bash"
 assert 'a valid staged remote tree is published successfully' sshp --force atomic-host
 assert 'the remote sync still creates .hushlogin' test -f "$remote_home/.hushlogin"

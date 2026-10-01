@@ -6,14 +6,24 @@ bashrc="$HOME/.bashrc"
 timestamp=$(date +%Y%m%d-%H%M%S)
 backup="$HOME/.bashrc.before-modular-config.$timestamp"
 
-for file in \
-    bashrc.sh prompt.sh ssh-prompt.sh .git-prompt-colors.sh \
-    bashrc.d/environment.sh bashrc.d/history.sh bashrc.d/listing.sh \
-    bashrc.d/ssh-tools.sh bashrc.d/commands.sh \
-    bashrc.d/prompt-core.sh bashrc.d/prompt-local.sh \
-    bashrc.d/prompt-gruvbox.sh; do
-    bash -n "$config_root/$file"
-done
+# Syntax-check every shell file in the checkout rather than a hand-maintained
+# list. The list used to miss bashrc.d/lib/*.sh and bashrc.d/completions/*.bash
+# entirely, so an error there surfaced only when the next shell started -- and
+# it needed editing whenever a module was added. This is the same expression
+# the CI syntax job runs, so local and CI now check the same set. The untracked
+# local.sh is included on purpose: bashrc.sh sources it, so a syntax error
+# there breaks the shell just as surely.
+syntax_errors=0
+while IFS= read -r file; do
+    bash -n "$file" || syntax_errors=1
+done < <(find "$config_root" \
+    \( -name .git -o -name node_modules \) -prune -o \
+    -type f \( -name '*.sh' -o -name '*.bash' \) -print | sort)
+
+if ((syntax_errors)); then
+    printf 'Aborted: the checkout contains syntax errors; nothing was changed.\n' >&2
+    exit 1
+fi
 
 if [[ -e $bashrc ]]; then
     cp -p "$bashrc" "$backup"

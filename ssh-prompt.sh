@@ -329,6 +329,14 @@ sshp() (
     )
 
     for file in "${sync_files[@]}"; do
+        # The list is handed to the remote script as one space-separated,
+        # single-quoted string, so the names have to stay boring. Checking it
+        # here keeps that embedding provably safe instead of merely true by
+        # convention.
+        [[ $file != *[^[:alnum:]./_-]* ]] || {
+            printf 'sshp: %s is not a usable sync file name.\n' "$file" >&2
+            return 1
+        }
         [[ -r "$config_root/$file" ]] || {
             printf 'sshp: %s is missing or not readable.\n' "$config_root/$file" >&2
             return 1
@@ -386,6 +394,11 @@ EOF
         return 1
     }
 
+    # The heredoc below is deliberately quoted, so nothing in it expands
+    # locally. The one value the remote side needs from here is the list of
+    # synced files, which is prepended as a plain assignment: sync_files stays
+    # defined in exactly one place, and adding a file to the sync is a one-line
+    # change plus the format bump.
     read -r -d '' remote_script <<'REMOTE' || true
 set -eu
 for command_name in tar bash grep mktemp touch rm; do
@@ -423,10 +436,11 @@ touch "$HOME/.hushlogin"
 mkdir -p "$cache_dir"
 staging=$(mktemp -d "$cache_dir/.ssh-prompt.new.XXXXXX")
 tar --no-same-owner -xzf - -C "$staging"
-bash -n "$staging/prompt.sh"
-bash -n "$staging/bashrc.d/listing.sh"
-bash -n "$staging/bashrc.d/prompt-core.sh"
-bash -n "$staging/bashrc.d/prompt-gruvbox.sh"
+# sync_files is prepended to this script by the local side, so the list exists
+# once. Word splitting is the point here; the local side validates the names.
+for sync_file in $sync_files; do
+    bash -n "$staging/$sync_file"
+done
 
 # Only publish a fully extracted and syntax-checked tree. The old prompt stays
 # live until this point; if activation fails, the EXIT trap restores it.
@@ -473,6 +487,8 @@ LOADER
     trap - EXIT HUP INT TERM
 fi
 REMOTE
+    remote_script="sync_files='${sync_files[*]}'
+$remote_script"
 
     __sshp_status_start 'sshp: uploading and installing prompt...'
     # sshd may send a pre-authentication SSH_MSG_USERAUTH_BANNER before the

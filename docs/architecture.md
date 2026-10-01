@@ -319,7 +319,7 @@ bash tests/history.sh       # a single script
 
 `tests/run-all.sh` executes every `*.sh` in `tests/` except itself and
 `lib.sh`, prints one `PASS` line per script with its check count, and returns
-`1` if any script failed. Current state: 20 scripts, 689 checks, all passing.
+`1` if any script failed. Current state: 20 scripts, 710 checks, all passing.
 The same suite runs in CI on every push, together with the `bash -n` gate over
 the whole tree, `bash-commands --check` and ShellCheck; see
 `.github/workflows/ci.yml`. ShellCheck is clean and blocking: every suppression
@@ -332,7 +332,7 @@ above it, so a new finding fails the build.
 | `tests/commands.sh` | 26 | `bash-commands`: listing, `--details`, the `--check` self-test including a deliberately stale row, filter, rejected combinations |
 | `tests/completion.sh` | 35 | Completion lists derived from the shared SSH inventory, invalidation after a config edit, `ssh`/`sshp` destinations including `user@`, every per-command completion, and the shared resolver registration |
 | `tests/history.sh` | 26 | `history_dedupe`, serialized writers, stale-lock recovery, timestamped/multi-line/timestamp-less files, the shipped `HISTORY_DEDUPE_LIVE=0` default, live rewrite, and the `prompt-core.sh` guard |
-| `tests/install.sh` | 21 | The generated loader, the backup, `printf %q` quoting of a path with spaces, the `bash -n` gate, and that `bashrc.sh` stays inert in a non-interactive shell |
+| `tests/install.sh` | 30 | The generated loader, the backup, `printf %q` quoting of a path with spaces, the whole-tree `bash -n` gate including `lib/`, `completions/` and `local.sh`, and that `bashrc.sh` stays inert in a non-interactive shell |
 | `tests/known-hosts-clean.sh` | 39 | `known-hosts --clean`: dry run, `--apply` with backups, rejected combinations, the removed `known-hosts-clean` alias, and the completion |
 | `tests/known-hosts.sh` | 15 | The `known_hosts` parser, filter/process behaviour, and automatic invalidation after an SSH config edit |
 | `tests/listing.sh` | 18 | The `ll` header, dropped summary line, hidden files, names with spaces, option pass-through and `ls` exit-status propagation |
@@ -346,7 +346,7 @@ above it, so a new finding fails the build.
 | `tests/ssh-resolve-backends.sh` | 69 | Every DNS backend of both resolvers against stubbed `getent`, `dig`, `host`, `nslookup` and `powershell.exe`: each tool's output format, the fallback order, the timeout wrapper, positive and negative caching, and the two token extractors |
 | `tests/ssh-resolve-table.sh` | 34 | `__ssh_resolve_table` against a stubbed `ssh -G` and pre-seeded DNS caches: columns, merged references, bracketed IPv6, skipped hashed entries, filter, empty results, cache invalidation, and the full config line syntax reaching the CONFIG column |
 | `tests/ssh-resolve.sh` | 56 | Strict IPv4/IPv6 predicates, compression/scoped/embedded-IPv4 cases, help, argument/timeout validation, and resolver source-time guards |
-| `tests/sshp.sh` | 86 | The `sshp` parser, weak-crypto and sync-status policies, TTY-only spinner phases, silent cache hits, connection-aware cache identity, staged remote publication, preservation on validation failure, `--force`, `--`, remote-command rejection and missing sync files |
+| `tests/sshp.sh` | 98 | The `sshp` parser, weak-crypto and sync-status policies, TTY-only spinner phases, silent cache hits, connection-aware cache identity, staged remote publication, preservation on validation failure, the remote syntax gate over every synced file, `--force`, `--`, remote-command rejection and missing sync files |
 | `tests/starship-config.sh` | 23 | `starship.toml`: the removed helper script, the constant bg1 field on line one, the rounded caps on line two, and the palette matching `prompt-gruvbox.sh` |
 
 The integration scripts stay separate from `run-all.sh` because they depend on
@@ -393,7 +393,9 @@ parser and behaviour regression tests, not crypto tests and not benchmarks.
 listed in `bashrc.d/commands.sh` and returns exit code `1` if one is missing, so
 a renamed alias does not silently invalidate the overview.
 
-To syntax-check everything, including the files `install.sh` skips:
+`install.sh` runs the same whole-tree `bash -n` gate before it touches
+anything, so a local install and the CI syntax job check the same set of files.
+To run it on its own:
 
 ```bash
 find . -name '*.sh' -o -name '*.bash' | xargs -n1 bash -n
@@ -437,16 +439,7 @@ Put your own values here or, better, in the untracked `local.sh`. Note that
 anything prepending to `PATH` here runs again on every re-source and will
 accumulate duplicate entries unless you guard it.
 
-### 3. `install.sh` checks only part of the tree
-
-`bash -n` is run against `bashrc.sh`, `prompt.sh`, `ssh-prompt.sh`,
-`.git-prompt-colors.sh` and the seven `bashrc.d/*.sh` modules, but not
-`bashrc.d/lib/*.sh` or `bashrc.d/completions/*.bash`. A syntax error there is
-only noticed when a new shell starts. The CI workflow
-(`.github/workflows/ci.yml`) closes the gap for anything that is pushed; run
-the `find | xargs bash -n` command above before committing locally.
-
-### 4. English UI and documentation
+### 3. English UI and documentation
 
 All user-visible strings, column headers (`TARGET`, `USER`, `KEYS`, `PERMS`,
 `MODIFIED`), usage texts and the remote prompt's `last:` label are English. The
@@ -454,14 +447,14 @@ project used to ship a German UI; if you rely on the former German option
 synonym `--zeilen` for `known-hosts`, note that it has been removed in favour of
 `--lines`.
 
-### 5. GNU tooling assumptions
+### 4. GNU tooling assumptions
 
 `ll` parses GNU `ls` output positionally and uses `-o`,
 `--group-directories-first` and `--time-style`; BusyBox and BSD `ls` will
 produce misaligned output. `--group-directories-first` in particular is
 GNU-only.
 
-### 6. `ssh -G` and `Match exec`
+### 5. `ssh -G` and `Match exec`
 
 `known-hosts` (including `--clean`), `ssh-resolve-ips` and `ssh-resolve-hosts`
 call `ssh -G` per alias. That opens no network connection, but it does evaluate `Match exec`
@@ -469,33 +462,33 @@ rules in your config — so those commands can trigger arbitrary local commands
 you configured yourself. It is also the main cost driver: a config with many
 aliases means many `ssh -G` invocations on the first (uncached) call.
 
-### 7. `known-hosts --clean` cannot distinguish down from gone
+### 6. `known-hosts --clean` cannot distinguish down from gone
 
 An unreachable host is treated as stale. Running `--apply` off the VPN or during
 maintenance will remove valid entries. Always read the dry run, and raise
 `SSH_KNOWN_HOSTS_CLEAN_TIMEOUT` on slow links.
 
-### 8. Hashed `known_hosts` entries are opaque
+### 7. Hashed `known_hosts` entries are opaque
 
 With `HashKnownHosts` enabled the hostname cannot be recovered. Such entries are
 shown as `[hashed hostname]`, cannot be filtered by name, cannot be reached
 via `ssh-nr`, and are skipped by `--clean`, `ssh-resolve-ips` and
 `ssh-resolve-hosts`.
 
-### 9. `NR` is only stable per file state
+### 8. `NR` is only stable per file state
 
 Target numbers come from the position in the grouping model. Adding or removing
 `known_hosts` lines or config aliases renumbers targets. Re-run `known-hosts`
 before using `ssh-nr` if the files may have changed.
 
-### 10. `sshp` modifies the remote home directory
+### 9. `sshp` modifies the remote home directory
 
 It appends a block to the remote `~/.bashrc` and creates `~/.hushlogin`. Both
 are guarded and reversible, but on shared or managed accounts you may not want
 this. Undo instructions are in
 [installation.md](installation.md#what-sshp-changes-on-a-remote-host).
 
-### 11. History deduplication is file-wide
+### 10. History deduplication is file-wide
 
 `history_dedupe` still reads and rewrites the whole history file, so its cost
 scales with `HISTFILESIZE`. The rewrite and every `history -a` writer now share
@@ -521,8 +514,11 @@ line to `bashrc.sh`. Files sourced by both local and remote shells must stay
 free of local paths, Windows assumptions and `bash-git-prompt` dependencies.
 
 **Adding a file to the remote sync** — extend the `sync_files` array in
-`ssh-prompt.sh`, add a `bash -n` check for it in the remote heredoc, and bump
-`sshp-sync-format=5` so every stored state invalidates and all hosts re-sync.
+`ssh-prompt.sh` and bump `sshp-sync-format=5` so every stored state invalidates
+and all hosts re-sync. The remote heredoc needs no edit: the local side
+prepends `sync_files='…'` to it and the remote `bash -n` pass loops over that
+list, so the sync set is defined once. File names are validated against
+`[[:alnum:]./_-]` before they are embedded.
 
 **Adding an SSH helper** — put the function in `bashrc.d/lib/`, its completion
 in `bashrc.d/completions/`, then add the `source` lines, the alias and the

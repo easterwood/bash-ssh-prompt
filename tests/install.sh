@@ -66,10 +66,43 @@ cp -r "$config_root/." "$broken_root/"
 printf 'if [ then\n' >> "$broken_root/bashrc.d/history.sh"
 cp "$bashrc" "$TEST_TMP/bashrc.before-broken"
 
-# install.sh runs under "set -e", so it exits with the status of bash -n (2).
-assert_status 'a syntax error aborts the installation' 2 bash -c \
+assert_status 'a syntax error aborts the installation' 1 bash -c \
     "cd '$broken_root' && bash install.sh"
 assert_file 'a failed installation changes nothing' "$bashrc" "$(< "$TEST_TMP/bashrc.before-broken")"
+
+broken_output=$(cd "$broken_root" && bash install.sh 2>&1 || true)
+assert_contains 'the abort is explained' "$broken_output" 'syntax errors'
+assert_contains 'the abort says nothing was changed' "$broken_output" 'nothing was changed'
+assert_not_contains 'a failed run does not announce an installation' \
+    "$broken_output" 'Installed.'
+
+# The gate used to run over a hand-maintained list that covered neither
+# bashrc.d/lib/*.sh nor bashrc.d/completions/*.bash, so an error there was
+# found only when the next shell started.
+for unlisted in bashrc.d/lib/known-hosts.sh bashrc.d/completions/ssh.bash local.sh; do
+    unlisted_root="$TEST_TMP/unlisted"
+    rm -rf "$unlisted_root"
+    mkdir -p "$unlisted_root"
+    cp -r "$config_root/." "$unlisted_root/"
+    printf 'if [ then\n' >> "$unlisted_root/$unlisted"
+    assert_status "a syntax error in $unlisted aborts the installation" 1 bash -c \
+        "cd '$unlisted_root' && bash install.sh"
+done
+
+# Every offender is named in one run, instead of stopping at the first.
+multi_root="$TEST_TMP/multi"
+mkdir -p "$multi_root"
+cp -r "$config_root/." "$multi_root/"
+printf 'if [ then\n' >> "$multi_root/bashrc.d/lib/ssh-config.sh"
+printf 'case\n' >> "$multi_root/bashrc.d/completions/ssh.bash"
+multi_output=$(cd "$multi_root" && bash install.sh 2>&1 || true)
+assert_contains 'the first broken file is reported' "$multi_output" 'ssh-config.sh'
+assert_contains 'the second broken file is reported too' "$multi_output" 'ssh.bash'
+
+# A clean checkout must still pass the wider gate, tests and completions
+# included.
+assert_status 'a clean checkout passes the whole-tree gate' 0 bash -c \
+    "cd '$config_root' && bash install.sh"
 
 # --- the loader in a real shell -------------------------------------------
 

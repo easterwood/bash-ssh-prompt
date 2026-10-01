@@ -66,7 +66,8 @@ bash install.sh
 source ~/.bashrc
 ```
 
-`install.sh` syntax-checks the core files, backs up any existing `~/.bashrc` to
+`install.sh` syntax-checks every shell file in the checkout, backs up any
+existing `~/.bashrc` to
 `~/.bashrc.before-modular-config.<timestamp>`, and replaces it with a loader
 pointing at your checkout:
 
@@ -218,7 +219,7 @@ bash tests/history.sh       # or a single script
 bash-commands --check       # every documented command is really defined
 ```
 
-Currently 20 scripts with 689 checks, all passing locally. CI runs the same
+Currently 20 scripts with 710 checks, all passing locally. CI runs the same
 suite on the current Ubuntu runner, on Git Bash under `windows-latest`, and in
 official Bash containers for 4.2.53, 4.4.23, 5.1.16 and 5.3.20. A separate
 Bash 3.2.57 job exercises only the supported pre-4.2 remote fallback. The

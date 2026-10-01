@@ -14,9 +14,10 @@ source ~/.bashrc
 
 1. Determines the checkout root from its own location (`pwd -P`, so symlinks are
    resolved).
-2. Syntax-checks a fixed list of files with `bash -n`:
-   `bashrc.sh`, `prompt.sh`, `ssh-prompt.sh`, `.git-prompt-colors.sh`, and the
-   seven modules in `bashrc.d/`. If any of them fails, nothing is changed.
+2. Syntax-checks every `*.sh` and `*.bash` file in the checkout with `bash -n`
+   — `bashrc.d/lib/`, `bashrc.d/completions/`, `tests/` and an untracked
+   `local.sh` included. Every offender is reported, and if there is one,
+   nothing is changed.
 3. If `~/.bashrc` exists, copies it (preserving attributes) to
    `~/.bashrc.before-modular-config.<YYYYmmdd-HHMMSS>` and prints the path.
 4. Overwrites `~/.bashrc` with a three-line loader. The checkout path is written
@@ -35,11 +36,6 @@ The generated loader:
 BASH_CONFIG_ROOT=/home/you/src/bash-ssh-prompt
 source "$BASH_CONFIG_ROOT/bashrc.sh"
 ```
-
-> `install.sh` does **not** syntax-check `bashrc.d/lib/*.sh` or
-> `bashrc.d/completions/*.bash`. A syntax error in one of those files will only
-> surface when you open a new shell. See
-> [architecture.md#known-limitations](architecture.md#known-limitations).
 
 ## First-run configuration
 

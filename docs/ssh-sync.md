@@ -187,6 +187,12 @@ bashrc.d/prompt-core.sh
 bashrc.d/prompt-gruvbox.sh
 ```
 
+The list lives in the `sync_files` array in `ssh-prompt.sh` and nowhere else.
+The local side prepends it to the remote script as a `sync_files='…'`
+assignment, so the remote syntax pass loops over the same list instead of
+repeating it; adding a file is one line here plus a format bump. Names are
+validated against `[[:alnum:]./_-]` before they are embedded.
+
 Before anything is transferred, each file must exist, be readable, and pass
 `bash -n`. A syntax error aborts the whole call — you never push a broken prompt
 to a server.
@@ -248,7 +254,7 @@ Read from the heredoc `REMOTE` in `ssh-prompt.sh`, it runs under `set -eu` and:
 3. Creates `~/.hushlogin` to suppress post-authentication MOTD/last-login output on subsequent connections. This file does not suppress an sshd pre-authentication `Banner`.
 4. Extracts the archive into a temporary sibling under `~/.cache`, never into
    the active `~/.cache/ssh-prompt` tree.
-5. Syntax-checks all four files in that staging tree.
+5. Syntax-checks every file of `sync_files` in that staging tree.
 6. Publishes the validated tree by renaming the old prompt directory aside and
    moving the staged directory into place. An `EXIT`/signal cleanup restores
    the old tree if activation fails and removes staging/backup leftovers.
