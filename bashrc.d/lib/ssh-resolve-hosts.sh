@@ -41,97 +41,76 @@ __ssh_resolve_hosts_extract_name() {
     return 0
 }
 
-# Forward resolution with portable backends. The output may contain raw lines;
-# the caller filters for valid IPs. On Git Bash/Windows, PowerShell is the most
-# reliable fallback.
+# Forward resolution with portable backends, one function per tool. The chain
+# that tries them in order lives in lib/ssh-resolve.sh, and the order is the
+# same as in ssh-resolve-ips.sh.
+#
+# A backend may print anything; __ssh_resolve_hosts_lookup below keeps only
+# what parses as an IP literal, so a parser that lets a stray line through
+# cannot put junk in the column.
+
+# getent ahosts repeats an address once per socket type.
+__ssh_resolve_hosts_via_getent() {
+    __ssh_resolve_run_with_timeout "$2" getent ahosts "$1" |
+        awk 'NF { print $1 }'
+}
+
+# dig answers one record type per call, so this is the one backend that asks
+# twice.
+__ssh_resolve_hosts_via_dig() {
+    {
+        __ssh_resolve_run_with_timeout "$2" dig +short "$1" A
+        __ssh_resolve_run_with_timeout "$2" dig +short "$1" AAAA
+    } | awk 'NF { print }'
+}
+
+__ssh_resolve_hosts_via_host() {
+    __ssh_resolve_run_with_timeout "$2" host "$1" |
+        awk '/has (IPv6 )?address/ { print $NF }'
+}
+
+__ssh_resolve_hosts_via_powershell() {
+    local script
+
+    printf -v script \
+        "try { [System.Net.Dns]::GetHostAddresses('%s') | ForEach-Object { [Console]::Out.WriteLine(\$_.IPAddressToString) } } catch { exit 1 }" \
+        "$1"
+
+    __ssh_resolve_run_with_timeout "$2" \
+        powershell.exe -NoProfile -NonInteractive -Command "$script" |
+        tr -d '\r' |
+        awk 'NF { print }'
+}
+
+# The addresses printed before the answer section belong to the resolver
+# itself, so only what follows "Name:" counts.
+__ssh_resolve_hosts_via_nslookup() {
+    __ssh_resolve_run_with_timeout "$2" nslookup "$1" |
+        awk '
+            /^Name:/ { in_answer=1; next }
+            in_answer && /^Address(es)?:/ {
+                value=$0
+                sub(/^Address(es)?:[[:space:]]*/, "", value)
+                print value
+                next
+            }
+            in_answer && /^[[:space:]]+/ {
+                value=$0
+                gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+                if (value != "") print value
+            }
+        '
+}
+
 __ssh_resolve_hosts_lookup_uncached() {
-    local name=$1 timeout_seconds=$2 output='' ps_script=''
+    __ssh_resolve_backend_chain "$2" "$1" \
+        getent=__ssh_resolve_hosts_via_getent \
+        dig=__ssh_resolve_hosts_via_dig \
+        host=__ssh_resolve_hosts_via_host \
+        powershell.exe=__ssh_resolve_hosts_via_powershell \
+        nslookup=__ssh_resolve_hosts_via_nslookup || return 1
 
-    if command -v getent >/dev/null 2>&1; then
-        # getent ahosts returns several lines per address family.
-        output=$(
-            __ssh_resolve_run_with_timeout "$timeout_seconds" \
-                getent ahosts "$name" 2>/dev/null |
-            awk 'NF { print $1 }'
-        )
-        [[ -z $output ]] || {
-            printf '%s\n' "$output"
-            return 0
-        }
-    fi
-
-    if command -v dig >/dev/null 2>&1; then
-        output=$(
-            {
-                __ssh_resolve_run_with_timeout "$timeout_seconds" \
-                    dig +short "$name" A 2>/dev/null
-                __ssh_resolve_run_with_timeout "$timeout_seconds" \
-                    dig +short "$name" AAAA 2>/dev/null
-            } |
-            awk 'NF { print }'
-        )
-        [[ -z $output ]] || {
-            printf '%s\n' "$output"
-            return 0
-        }
-    fi
-
-    if command -v host >/dev/null 2>&1; then
-        output=$(
-            __ssh_resolve_run_with_timeout "$timeout_seconds" \
-                host "$name" 2>/dev/null |
-            awk '/has (IPv6 )?address/ { print $NF }'
-        )
-        [[ -z $output ]] || {
-            printf '%s\n' "$output"
-            return 0
-        }
-    fi
-
-    if command -v powershell.exe >/dev/null 2>&1; then
-        printf -v ps_script \
-            "try { [System.Net.Dns]::GetHostAddresses('%s') | ForEach-Object { [Console]::Out.WriteLine(\$_.IPAddressToString) } } catch { exit 1 }" \
-            "$name"
-        output=$(
-            __ssh_resolve_run_with_timeout "$timeout_seconds" \
-                powershell.exe -NoProfile -NonInteractive -Command "$ps_script" \
-                2>/dev/null |
-            tr -d '\r' |
-            awk 'NF { print }'
-        )
-        [[ -z $output ]] || {
-            printf '%s\n' "$output"
-            return 0
-        }
-    fi
-
-    if command -v nslookup >/dev/null 2>&1; then
-        # The first address belongs to the resolver itself and is skipped.
-        output=$(
-            __ssh_resolve_run_with_timeout "$timeout_seconds" \
-                nslookup "$name" 2>/dev/null |
-            awk '
-                /^Name:/ { in_answer=1; next }
-                in_answer && /^Address(es)?:/ {
-                    value=$0
-                    sub(/^Address(es)?:[[:space:]]*/, "", value)
-                    print value
-                    next
-                }
-                in_answer && /^[[:space:]]+/ {
-                    value=$0
-                    gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
-                    if (value != "") print value
-                }
-            '
-        )
-        [[ -z $output ]] || {
-            printf '%s\n' "$output"
-            return 0
-        }
-    fi
-
-    return 1
+    printf '%s\n' "$__ssh_resolve_backend_output"
 }
 
 __ssh_resolve_hosts_lookup_result=''

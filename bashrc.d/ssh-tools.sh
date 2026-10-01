@@ -7,6 +7,9 @@ __ssh_tools_dir=${BASH_SOURCE[0]%/*}
 [[ $__ssh_tools_dir != "${BASH_SOURCE[0]}" ]] || __ssh_tools_dir=.
 __ssh_tools_dir=$(cd -- "$__ssh_tools_dir" && pwd) || return 1
 
+# Shared option-parsing conventions; no dependencies of its own.
+# shellcheck source=lib/options.sh
+source "$__ssh_tools_dir/lib/options.sh"
 # shellcheck source=lib/ssh-config.sh
 source "$__ssh_tools_dir/lib/ssh-config.sh"
 # shellcheck source=lib/known-hosts.sh

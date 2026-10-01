@@ -96,6 +96,40 @@ backend_call_count() {
     printf '%s\n' "$count"
 }
 
+# --- the chain driver ------------------------------------------------------
+
+# Both directions share __ssh_resolve_backend_chain: skip what is not
+# installed, take the first non-empty answer, treat a backend's own failure as
+# "nothing to say". Checked once here rather than inferred from both chains.
+backends_reset
+
+__test_backend_silent() { :; }
+__test_backend_failing() { printf 'noise\n' >&2; return 3; }
+__test_backend_answering() { printf 'answer-for-%s-in-%s\n' "$1" "$2"; }
+__test_backend_unreached() { printf 'unreached\n'; }
+
+assert_status 'a chain with no usable backend fails' 1 \
+    __ssh_resolve_backend_chain 3 key \
+    getent=__test_backend_silent dig=__test_backend_failing
+assert_equal 'a failed chain leaves no output behind' '' \
+    "$__ssh_resolve_backend_output"
+
+assert 'the first answering backend wins' \
+    __ssh_resolve_backend_chain 7 somekey \
+    getent=__test_backend_silent \
+    dig=__test_backend_failing \
+    host=__test_backend_answering \
+    nslookup=__test_backend_unreached
+assert_equal 'the backend receives the key and the timeout' \
+    'answer-for-somekey-in-7' "$__ssh_resolve_backend_output"
+
+assert_status 'a tool that is not installed is skipped' 0 \
+    __ssh_resolve_backend_chain 3 key \
+    no-such-tool-here=__test_backend_unreached \
+    getent=__test_backend_answering
+assert_equal 'the uninstalled backend did not run' 'answer-for-key-in-3' \
+    "$__ssh_resolve_backend_output"
+
 # --- reverse direction: the backend chain ----------------------------------
 
 # getent is tried first. Its hosts output carries the address in field one and

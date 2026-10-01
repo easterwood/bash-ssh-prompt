@@ -39,90 +39,73 @@ __ssh_resolve_ips_extract_ip() {
     return 1
 }
 
-# Reverse resolution with portable backends. On Git Bash/Windows, PowerShell is
-# the most reliable fallback because it prints the hostname only.
+# Reverse resolution with portable backends, one function per tool. The chain
+# that tries them in order lives in lib/ssh-resolve.sh; what is left here is
+# each tool's own command line and the parser for its output format.
+#
+# Order matters: getent first because it honours nsswitch, PowerShell before
+# nslookup because on Git Bash it is the one that prints the hostname alone.
+
+__ssh_resolve_ips_via_getent() {
+    __ssh_resolve_run_with_timeout "$2" getent hosts "$1" |
+        awk 'NF >= 2 { print $2; exit }'
+}
+
+__ssh_resolve_ips_via_dig() {
+    __ssh_resolve_run_with_timeout "$2" dig +short -x "$1" |
+        awk 'NF { print; exit }'
+}
+
+__ssh_resolve_ips_via_host() {
+    __ssh_resolve_run_with_timeout "$2" host "$1" |
+        awk '/[[:space:]]pointer[[:space:]]/ { print $NF; exit }'
+}
+
+# PowerShell is the Git Bash fallback: GetHostEntry returns the name alone, and
+# the CR of its CRLF output has to go before anything else looks at it.
+__ssh_resolve_ips_via_powershell() {
+    local script
+
+    printf -v script \
+        "try { [Console]::Out.WriteLine([System.Net.Dns]::GetHostEntry('%s').HostName) } catch { exit 1 }" \
+        "$1"
+
+    __ssh_resolve_run_with_timeout "$2" \
+        powershell.exe -NoProfile -NonInteractive -Command "$script" |
+        tr -d '\r' |
+        awk 'NF { print; exit }'
+}
+
+# nslookup spells the answer either "name = host" or "Name: host", depending on
+# the implementation.
+__ssh_resolve_ips_via_nslookup() {
+    __ssh_resolve_run_with_timeout "$2" nslookup "$1" |
+        awk '
+            /[[:space:]]name[[:space:]]*=/ {
+                value=$0
+                sub(/^.*[[:space:]]name[[:space:]]*=[[:space:]]*/, "", value)
+                print value
+                exit
+            }
+            /^[[:space:]]*Name:[[:space:]]*/ {
+                value=$0
+                sub(/^[[:space:]]*Name:[[:space:]]*/, "", value)
+                print value
+                exit
+            }
+        '
+}
+
+# The trailing dot belongs to the wire format, not to the column.
 __ssh_resolve_ips_lookup_uncached() {
-    local ip=$1 timeout_seconds=$2 output='' ps_script=''
+    __ssh_resolve_backend_chain "$2" "$1" \
+        getent=__ssh_resolve_ips_via_getent \
+        dig=__ssh_resolve_ips_via_dig \
+        host=__ssh_resolve_ips_via_host \
+        powershell.exe=__ssh_resolve_ips_via_powershell \
+        nslookup=__ssh_resolve_ips_via_nslookup || return 1
 
-    if command -v getent >/dev/null 2>&1; then
-        output=$(
-            __ssh_resolve_run_with_timeout "$timeout_seconds" \
-                getent hosts "$ip" 2>/dev/null |
-            awk 'NF >= 2 { print $2; exit }'
-        )
-        [[ -z $output ]] || {
-            printf '%s\n' "${output%.}"
-            return 0
-        }
-    fi
-
-    if command -v dig >/dev/null 2>&1; then
-        output=$(
-            __ssh_resolve_run_with_timeout "$timeout_seconds" \
-                dig +short -x "$ip" 2>/dev/null |
-            awk 'NF { print; exit }'
-        )
-        [[ -z $output ]] || {
-            printf '%s\n' "${output%.}"
-            return 0
-        }
-    fi
-
-    if command -v host >/dev/null 2>&1; then
-        output=$(
-            __ssh_resolve_run_with_timeout "$timeout_seconds" \
-                host "$ip" 2>/dev/null |
-            awk '/[[:space:]]pointer[[:space:]]/ { print $NF; exit }'
-        )
-        [[ -z $output ]] || {
-            printf '%s\n' "${output%.}"
-            return 0
-        }
-    fi
-
-    if command -v powershell.exe >/dev/null 2>&1; then
-        printf -v ps_script \
-            "try { [Console]::Out.WriteLine([System.Net.Dns]::GetHostEntry('%s').HostName) } catch { exit 1 }" \
-            "$ip"
-        output=$(
-            __ssh_resolve_run_with_timeout "$timeout_seconds" \
-                powershell.exe -NoProfile -NonInteractive -Command "$ps_script" \
-                2>/dev/null |
-            tr -d '\r' |
-            awk 'NF { print; exit }'
-        )
-        [[ -z $output ]] || {
-            printf '%s\n' "${output%.}"
-            return 0
-        }
-    fi
-
-    if command -v nslookup >/dev/null 2>&1; then
-        output=$(
-            __ssh_resolve_run_with_timeout "$timeout_seconds" \
-                nslookup "$ip" 2>/dev/null |
-            awk '
-                /[[:space:]]name[[:space:]]*=/ {
-                    value=$0
-                    sub(/^.*[[:space:]]name[[:space:]]*=[[:space:]]*/, "", value)
-                    print value
-                    exit
-                }
-                /^[[:space:]]*Name:[[:space:]]*/ {
-                    value=$0
-                    sub(/^[[:space:]]*Name:[[:space:]]*/, "", value)
-                    print value
-                    exit
-                }
-            '
-        )
-        [[ -z $output ]] || {
-            printf '%s\n' "${output%.}"
-            return 0
-        }
-    fi
-
-    return 1
+    printf '%s\n' "${__ssh_resolve_backend_output%.}"
 }
 
 __ssh_resolve_ips_lookup_result=''

@@ -89,6 +89,34 @@ assert_status 'two filters' 2 bash_config_commands one two
 assert_status 'an unknown option' 2 bash_config_commands --nope
 assert_status '--help succeeds' 0 bash_config_commands --help
 
+# --- the shared FILTER handling --------------------------------------------
+
+# known-hosts and bash-commands used to carry this twice, down to the wording
+# of the error. lib/options.sh owns it now, so both are checked here against
+# the same expectations.
+
+assert_status 'two positional filters are refused' 2 bash_config_commands a b
+assert_status 'two filters are refused after --' 2 bash_config_commands -- a b
+assert_status 'a filter before and after -- is refused' 2 bash_config_commands a -- b
+assert_status 'one filter after -- is accepted' 0 bash_config_commands -- ll
+assert_status 'a bare -- is accepted' 0 bash_config_commands --
+
+two_filters=$(bash_config_commands a b 2>&1 >/dev/null)
+assert_contains 'the error names the command' "$two_filters" 'bash-commands:'
+assert_contains 'the error says what the rule is' "$two_filters" 'only one FILTER is allowed'
+
+# A filter taken after -- really is the filter, not a swallowed word.
+dashed=$(bash_config_commands -- known-hosts)
+assert_contains 'the filter after -- is applied' "$dashed" 'known-hosts'
+assert_not_contains 'the filter after -- excludes the rest' "$dashed" 'Directory listing'
+
+# The helper works on the caller's own `filter` local, so a second caller has
+# to behave identically and say its own name.
+assert_status 'known-hosts refuses two filters as well' 2 ssh_known_hosts a b
+assert_status 'known-hosts refuses two filters after --' 2 ssh_known_hosts -- a b
+kh_error=$(ssh_known_hosts a b 2>&1 >/dev/null)
+assert_contains 'the shared error carries the other command name' "$kh_error" 'known-hosts:'
+
 # --- completion ------------------------------------------------------------
 
 COMP_WORDS=(bash-commands kno)

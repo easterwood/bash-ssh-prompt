@@ -5,7 +5,7 @@
 The modular Bash configuration was verified locally in an isolated Linux test
 environment. All locally executable automated checks passed.
 
-Reproducible part: `bash tests/run-all.sh` — 20 scripts, 727 checks, all passing.
+Reproducible part: `bash tests/run-all.sh` — 20 scripts, 745 checks, all passing.
 CI is configured to run the same suite on the current Ubuntu runner, Git Bash
 on Windows, and explicit Bash 4.2.53, 4.4.23, 5.1.16 and 5.3.20 runtimes. A
 dedicated Bash 3.2.57 job covers the supported legacy remote prompt. The
@@ -57,7 +57,7 @@ line per script, and returns `1` if any of them failed.
 | Script | Checks | Covers |
 |---|---|---|
 | `tests/bashrc-integration.sh` | 4 | Full `bashrc.sh` composition: prompt hooks survive all backends and source-time settings load before `history.sh` |
-| `tests/commands.sh` | 26 | `bash-commands`: listing, `--details`, the `--check` self-test including a deliberately stale row, filter, rejected combinations |
+| `tests/commands.sh` | 38 | `bash-commands`: listing, `--details`, the `--check` self-test including a deliberately stale row, filter, rejected combinations |
 | `tests/completion.sh` | 35 | Completion lists derived from the shared SSH inventory, invalidation after a config edit, `ssh`/`sshp` destinations including `user@`, every per-command completion, and the shared resolver registration |
 | `tests/history.sh` | 26 | `history_dedupe`, serialized concurrent writers, stale-lock recovery, timestamped/multi-line/timestamp-less files, the shipped `HISTORY_DEDUPE_LIVE=0` default, live rewrite, and the `prompt-core.sh` guard |
 | `tests/install.sh` | 30 | The generated loader, the backup, `printf %q` quoting of a path with spaces, the whole-tree `bash -n` gate including `lib/`, `completions/` and `local.sh`, and that `bashrc.sh` stays inert in a non-interactive shell |
@@ -71,7 +71,7 @@ line per script, and returns `1` if any of them failed.
 | `tests/prompt-selection.sh` | 9 | The `local.sh` backend selector: Starship, `bash-git-prompt`, Gruvbox, and the fallback warnings |
 | `tests/ssh-by-number.sh` | 19 | `ssh-nr`: help, `--list`, invalid and out-of-range numbers, alias versus raw target, `[host]:port`, markers, `-F` pass-through, both `sshp` call branches |
 | `tests/ssh-config.sh` | 64 | The cache invalidation registry, the shared `ssh_config` line tokenizer, scanner behaviour, the shared config/known_hosts inventory, Include-glob invalidation, cached `ssh -G`, and removed legacy resolver completions |
-| `tests/ssh-resolve-backends.sh` | 69 | Every DNS backend of both resolvers against stubbed `getent`, `dig`, `host`, `nslookup` and `powershell.exe`: each tool's output format, the fallback order, the timeout wrapper, positive and negative caching, and the two token extractors |
+| `tests/ssh-resolve-backends.sh` | 75 | Every DNS backend of both resolvers against stubbed `getent`, `dig`, `host`, `nslookup` and `powershell.exe`: each tool's output format, the fallback order, the timeout wrapper, positive and negative caching, and the two token extractors |
 | `tests/ssh-resolve-table.sh` | 34 | `__ssh_resolve_table` against a stubbed `ssh -G` and pre-seeded DNS caches: columns, merged references, bracketed IPv6, skipped hashed entries, filter, empty results, cache invalidation, and the full config line syntax reaching the CONFIG column |
 | `tests/ssh-resolve.sh` | 56 | Strict IPv4/IPv6 predicates including compression, scoped addresses and embedded IPv4, plus help, argument/timeout validation and resolver source-time guards |
 | `tests/sshp.sh` | 98 | The `sshp` argument parser, configurable/version-gated `WarnWeakCrypto`, `SSHP_SYNC_STATUS`, terminal-only spinner phases, silent cache hits, effective `ssh -G` cache identity, per-port/config state separation, equivalent-alias cache sharing, staged remote publication/rollback safety, the remote syntax gate over every synced file, `--force`, `--`, remote-command rejection, and missing sync files |
@@ -553,7 +553,80 @@ Four mutations confirm it: removing one module's registration, stopping the
 sweep after the first entry, removing the `--apply` sweep (the old drift), and
 removing the duplicate guard — each fails the matching test script.
 
-Result: passed. 20 scripts, 727 checks.
+Result: passed.
+
+### 19. Backend chain, FILTER helper — and one refactor not done
+
+**The DNS backend chain.** Each resolver asked five external tools with the
+same skeleton: skip what is not installed, run the next one under the timeout,
+take the first non-empty answer. That skeleton was written out ten times, five
+per direction, differing only in the tool name. It is now
+`__ssh_resolve_backend_chain TIMEOUT KEY TOOL=FUNCTION ...` in
+`lib/ssh-resolve.sh`, and what is left in each resolver is one small function
+per tool, holding that tool's command line and the `awk` program for its output
+format.
+
+| File | Before | After |
+|---|---|---|
+| `lib/ssh-resolve.sh` | 261 | 268 |
+| `lib/ssh-resolve-ips.sh` | 132 | 104 |
+| `lib/ssh-resolve-hosts.sh` | 170 | 140 |
+
+Code lines, comments excluded: 563 to 512. This one does pay for itself in
+volume, unlike section 16, because the removed skeleton was pure repetition
+with nothing per-call to carry.
+
+This refactor was only safe to attempt because section 15 had put the backends
+under test first. All 69 checks there passed unchanged throughout.
+
+**The FILTER handling.** `known-hosts` and `bash-commands` both take
+`[OPTIONS] [FILTER]` with at most one positional filter and an optional `--`
+before it. Each carried that in three places, down to the wording of the error,
+so the message `only one FILTER is allowed` existed six times. `lib/options.sh`
+owns it now: `__opt_filter_set` and `__opt_filter_separator` assign the
+caller's `filter` local through dynamic scoping, and the caller passes its own
+user-visible name so the error still says `known-hosts:` or `bash-commands:`.
+Each of the two parsers lost about 21 lines and gained 5.
+
+**The table renderer was not extracted, deliberately.** The analysis listed
+`ssh_known_hosts`, `__ssh_resolve_table` and `bash_config_commands` as three
+hand-written copies of the same column renderer. Reading them side by side,
+that was overstated:
+
+- `bash_config_commands` is not a column table at all. It is a grouped listing
+  with section headings, an optional per-command detail block and a footer, and
+  no header row. It shares nothing with the other two beyond padding a name.
+- The remaining two differ in linked widths (`TARGET` and `ALIAS` share one
+  width), an optional column (`LINE`), and a per-row conditional colour on
+  `USER`. A renderer serving both would need a column-spec mini-language for
+  two callers.
+- `known-hosts` colours `TARGET` and `ALIAS` with one SGR span that covers the
+  gutter between them. A per-cell renderer would emit reset-space-space-colour
+  instead. Visually identical, byte-different — and byte-identical output is
+  the standard this report held the resolver merge to in section 13.
+
+What is shared there is an idiom, not code. Extracting it would trade two
+readable printf blocks for one configurable one, against the project's own
+rule that a helper has to earn its indirection. Left alone.
+
+**Verification.** Output was compared byte for byte against the previous tree
+across twelve invocations — `known-hosts` plain, `--lines`, filtered,
+unmatched and `--help`; both resolvers plain and `--help`; `bash-commands`
+plain, `--details`, `-- FILTER` and `--help` — against a stubbed `ssh`,
+`ssh-keygen` and pre-seeded DNS caches. **Identical, 132 lines.**
+
+Coverage: `tests/ssh-resolve-backends.sh` 69 -> 75 for the chain driver itself
+(no usable backend, the first answering one winning, key and timeout reaching
+the backend, an uninstalled tool being skipped). `tests/commands.sh` 26 -> 38
+for the shared FILTER handling, checked from both commands so the second one's
+error really carries its own name.
+
+Five mutations confirm it: the chain returning after the first backend, the
+chain no longer skipping uninstalled tools, the reverse direction losing its
+trailing-dot strip, `__opt_filter_set` accepting a second filter, and the `--`
+branch no longer consuming its word.
+
+Result: passed. 20 scripts, 745 checks.
 
 ## Still to be checked manually
 

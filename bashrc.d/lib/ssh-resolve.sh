@@ -114,6 +114,42 @@ __ssh_resolve_run_with_timeout() {
     fi
 }
 
+# __ssh_resolve_backend_chain TIMEOUT KEY TOOL=FUNCTION ...
+#
+# Both resolvers ask the same five external tools in the same way: skip the
+# ones that are not installed, run the next one under the timeout, take the
+# first non-empty answer. Only the per-tool command and its output parser
+# differ, and those are the FUNCTION, called as FUNCTION KEY TIMEOUT.
+#
+# That skeleton used to be written out five times per direction, ten blocks of
+# "command -v, capture, test for empty, return" that differed only in the tool
+# name. The result lands in __ssh_resolve_backend_output; the return value is
+# 1 when no backend answered.
+#
+# A backend's own failure is not fatal: an installed tool that errors out is
+# treated like one that said nothing, and the chain moves on.
+__ssh_resolve_backend_output=''
+
+__ssh_resolve_backend_chain() {
+    local timeout_seconds=$1 key=$2 entry tool backend
+    shift 2
+
+    __ssh_resolve_backend_output=''
+
+    for entry in "$@"; do
+        tool=${entry%%=*}
+        backend=${entry#*=}
+
+        command -v "$tool" >/dev/null 2>&1 || continue
+
+        __ssh_resolve_backend_output=$("$backend" "$key" "$timeout_seconds" 2>/dev/null) ||
+            __ssh_resolve_backend_output=''
+        [[ -z $__ssh_resolve_backend_output ]] || return 0
+    done
+
+    return 1
+}
+
 # The tilde here is output, not a path to expand: "~/.ssh/config" is what the
 # CONFIG column should read.
 # shellcheck disable=SC2088

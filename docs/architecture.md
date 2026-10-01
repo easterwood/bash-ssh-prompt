@@ -12,6 +12,7 @@
        ├─ bashrc.d/history.sh        history sizes, timestamps, dedup, history -a
        ├─ bashrc.d/listing.sh        ll, TIME_STYLE
        ├─ bashrc.d/ssh-tools.sh      ┐
+       │    ├─ lib/options.sh        │ shared FILTER/option conventions
        │    ├─ lib/ssh-config.sh     │ scanner + shared SSH inventory/cache
        │    ├─ lib/known-hosts.sh    │ cache, grouping model, display
        │    ├─ lib/known-hosts-clean.sh│ --clean
@@ -160,7 +161,8 @@ that globally would change trap propagation and prompt overhead.
 | `__ssh_inventory_*` | Shared config/known_hosts snapshots, invalidation generation and cached `ssh -G` results |
 | `__ssh_cache_*` | The invalidation registry every cache-owning module registers with |
 | `__ssh_completion_*` | Completion-specific host/user lists derived from the shared inventory |
-| `__ssh_resolve_*` | Shared resolver machinery: IP predicates, accumulators, `__ssh_resolve_table` |
+| `__opt_*` | Shared option-parsing conventions in `lib/options.sh` |
+| `__ssh_resolve_*` | Shared resolver machinery: IP predicates, accumulators, the backend chain, `__ssh_resolve_table` |
 | `__ssh_resolve_ips_*` | `ssh-resolve-ips` only: PTR cache, extractor, lookup |
 | `__ssh_resolve_hosts_*` | `ssh-resolve-hosts` only: forward-DNS cache, extractor, lookup |
 | `resolve_*` (locals) | The spec a resolver hands to `__ssh_resolve_table` |
@@ -330,6 +332,36 @@ The accumulators `__ssh_resolve_add_key`, `__ssh_resolve_add_config_ref` and
 `__ssh_resolve_add_known_line` work on the caller's maps the same way. Both
 commands guard at source time that `lib/ssh-resolve.sh` was loaded first.
 
+### The DNS backend chain
+
+Each resolver asks up to five external tools — `getent`, `dig`, `host`,
+`powershell.exe`, `nslookup`, in that order — skipping the ones that are not
+installed and taking the first non-empty answer. That skeleton is
+`__ssh_resolve_backend_chain TIMEOUT KEY TOOL=FUNCTION ...`; the result lands
+in `__ssh_resolve_backend_output`.
+
+What is left in each resolver is one small function per tool, holding that
+tool's command line and the `awk` program for its output format. A backend's
+own failure is not fatal: an installed tool that errors out is treated like one
+that said nothing. Before, the skeleton was written out five times per
+direction, ten blocks differing only in the tool name.
+
+PowerShell sits before `nslookup` because on Git Bash it is the one backend
+that returns the hostname alone, and its CRLF output is stripped inside its own
+function.
+
+## Option conventions — `lib/options.sh`
+
+`known-hosts` and `bash-commands` both take `[OPTIONS] [FILTER]` with at most
+one positional filter and an optional `--` before it. `__opt_filter_set` and
+`__opt_filter_separator` own that, including the wording of the error, and
+assign the caller's `filter` local through dynamic scoping — the same
+arrangement `__ssh_resolve_table` uses for its spec. `__opt_filter_separator`
+reports in `__opt_filter_consumed` whether it took the word after `--`, so the
+caller knows whether to shift.
+
+The file has no dependencies and `ssh-tools.sh` sources it first.
+
 ## Testing
 
 ```bash
@@ -339,7 +371,7 @@ bash tests/history.sh       # a single script
 
 `tests/run-all.sh` executes every `*.sh` in `tests/` except itself and
 `lib.sh`, prints one `PASS` line per script with its check count, and returns
-`1` if any script failed. Current state: 20 scripts, 727 checks, all passing.
+`1` if any script failed. Current state: 20 scripts, 745 checks, all passing.
 The same suite runs in CI on every push, together with the `bash -n` gate over
 the whole tree, `bash-commands --check` and ShellCheck; see
 `.github/workflows/ci.yml`. ShellCheck is clean and blocking: every suppression
@@ -349,7 +381,7 @@ above it, so a new finding fails the build.
 | Script | Checks | Covers |
 |---|---|---|
 | `tests/bashrc-integration.sh` | 4 | Full `bashrc.sh` composition: history survives all prompt backends and source-time settings are loaded before `history.sh` |
-| `tests/commands.sh` | 26 | `bash-commands`: listing, `--details`, the `--check` self-test including a deliberately stale row, filter, rejected combinations |
+| `tests/commands.sh` | 38 | `bash-commands`: listing, `--details`, the `--check` self-test including a deliberately stale row, filter, rejected combinations |
 | `tests/completion.sh` | 35 | Completion lists derived from the shared SSH inventory, invalidation after a config edit, `ssh`/`sshp` destinations including `user@`, every per-command completion, and the shared resolver registration |
 | `tests/history.sh` | 26 | `history_dedupe`, serialized writers, stale-lock recovery, timestamped/multi-line/timestamp-less files, the shipped `HISTORY_DEDUPE_LIVE=0` default, live rewrite, and the `prompt-core.sh` guard |
 | `tests/install.sh` | 30 | The generated loader, the backup, `printf %q` quoting of a path with spaces, the whole-tree `bash -n` gate including `lib/`, `completions/` and `local.sh`, and that `bashrc.sh` stays inert in a non-interactive shell |
@@ -363,7 +395,7 @@ above it, so a new finding fails the build.
 | `tests/prompt-selection.sh` | 9 | The `local.sh` backend selector: Starship, `bash-git-prompt`, Gruvbox, and the fallback warnings |
 | `tests/ssh-by-number.sh` | 19 | `ssh-nr`: help, `--list`, invalid and out-of-range numbers, alias versus raw target, `[host]:port`, markers, `-F` pass-through, both `sshp` call branches |
 | `tests/ssh-config.sh` | 64 | The cache invalidation registry, the shared `ssh_config` line tokenizer, scanner behaviour, the shared config/known_hosts inventory, generation invalidation, Include-glob changes, cached `ssh -G`, and removed legacy completion files |
-| `tests/ssh-resolve-backends.sh` | 69 | Every DNS backend of both resolvers against stubbed `getent`, `dig`, `host`, `nslookup` and `powershell.exe`: each tool's output format, the fallback order, the timeout wrapper, positive and negative caching, and the two token extractors |
+| `tests/ssh-resolve-backends.sh` | 75 | Every DNS backend of both resolvers against stubbed `getent`, `dig`, `host`, `nslookup` and `powershell.exe`: each tool's output format, the fallback order, the timeout wrapper, positive and negative caching, and the two token extractors |
 | `tests/ssh-resolve-table.sh` | 34 | `__ssh_resolve_table` against a stubbed `ssh -G` and pre-seeded DNS caches: columns, merged references, bracketed IPv6, skipped hashed entries, filter, empty results, cache invalidation, and the full config line syntax reaching the CONFIG column |
 | `tests/ssh-resolve.sh` | 56 | Strict IPv4/IPv6 predicates, compression/scoped/embedded-IPv4 cases, help, argument/timeout validation, and resolver source-time guards |
 | `tests/sshp.sh` | 98 | The `sshp` parser, weak-crypto and sync-status policies, TTY-only spinner phases, silent cache hits, connection-aware cache identity, staged remote publication, preservation on validation failure, the remote syntax gate over every synced file, `--force`, `--`, remote-command rejection and missing sync files |
@@ -558,6 +590,8 @@ exists:
 | Host lists for completion | `__ssh_completion_cache_ensure` |
 | Have a cache dropped by `--refresh`/`--apply` | `__ssh_cache_register_invalidator` |
 | A key/value table over config and `known_hosts` | `__ssh_resolve_table` |
+| Ask a chain of external tools for an answer | `__ssh_resolve_backend_chain` |
+| Accept one positional `FILTER` | `__opt_filter_set` / `__opt_filter_separator` |
 
 Finally add a row to the `rows` table in `bashrc.d/commands.sh` and the name to
 `bashrc.d/completions/commands.bash`, then confirm with `bash-commands --check`.

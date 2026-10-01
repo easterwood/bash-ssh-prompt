@@ -7,6 +7,11 @@
 # unnoticed, "--check" verifies that every listed command really is defined in
 # the running shell.
 
+declare -F __opt_filter_set >/dev/null || {
+    printf 'commands.sh: lib/options.sh has to be sourced first.\n' >&2
+    return 1
+}
+
 # Kind of a command in the running shell. Returns 1 if it is missing.
 __bash_commands_kind() {
     local name=$1 kind
@@ -71,18 +76,12 @@ bash_config_commands() {
                 return 0
                 ;;
             --)
-                if (( $# > 1 )); then
-                    printf 'bash-commands: only one FILTER is allowed.\n' >&2
-                    return 2
-                fi
-                if (( $# == 1 )); then
-                    [[ -z $filter ]] || {
-                        printf 'bash-commands: only one FILTER is allowed.\n' >&2
-                        return 2
-                    }
-                    filter=$1
-                    shift
-                fi
+                __opt_filter_separator 'bash-commands' "$@" || return 2
+                # __opt_filter_consumed is set by that helper in lib/options.sh,
+                # which the source-time guard above requires. ShellCheck sees
+                # one file at a time.
+                # shellcheck disable=SC2154
+                ((! __opt_filter_consumed)) || shift
                 ;;
             -*)
                 printf 'bash-commands: unknown option: %s\n' "$arg" >&2
@@ -90,11 +89,7 @@ bash_config_commands() {
                 return 2
                 ;;
             *)
-                if [[ -n $filter ]]; then
-                    printf 'bash-commands: only one FILTER is allowed.\n' >&2
-                    return 2
-                fi
-                filter=$arg
+                __opt_filter_set 'bash-commands' "$arg" || return 2
                 ;;
         esac
     done

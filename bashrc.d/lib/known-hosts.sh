@@ -18,6 +18,11 @@ declare -F __kh_parse_known_line >/dev/null || {
     return 1
 }
 
+declare -F __opt_filter_set >/dev/null || {
+    printf 'known-hosts.sh: lib/options.sh has to be sourced first.\n' >&2
+    return 1
+}
+
 # Host mapping cache for this shell.
 declare -A __kh_rows=()
 # Effective user for direct known_hosts targets without an assigned alias.
@@ -338,18 +343,8 @@ ssh_known_hosts() {
                 return 0
                 ;;
             --)
-                if (( $# > 1 )); then
-                    printf 'known-hosts: only one FILTER is allowed.\n' >&2
-                    return 2
-                fi
-                if (( $# == 1 )); then
-                    [[ -z $filter ]] || {
-                        printf 'known-hosts: only one FILTER is allowed.\n' >&2
-                        return 2
-                    }
-                    filter=$1
-                    shift
-                fi
+                __opt_filter_separator 'known-hosts' "$@" || return 2
+                ((! __opt_filter_consumed)) || shift
                 ;;
             -*)
                 printf 'known-hosts: unknown option: %s\n' "$arg" >&2
@@ -357,11 +352,7 @@ ssh_known_hosts() {
                 return 2
                 ;;
             *)
-                if [[ -n $filter ]]; then
-                    printf 'known-hosts: only one FILTER is allowed.\n' >&2
-                    return 2
-                fi
-                filter=$arg
+                __opt_filter_set 'known-hosts' "$arg" || return 2
                 ;;
         esac
     done
