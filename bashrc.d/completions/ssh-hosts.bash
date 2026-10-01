@@ -32,6 +32,7 @@ __ssh_completion_cache_invalidate() {
     __ssh_completion_target_seen=()
     __ssh_completion_user_host=()
 }
+__ssh_cache_register_invalidator __ssh_completion_cache_invalidate
 
 __ssh_completion_add_filter_host() {
     local host=$1

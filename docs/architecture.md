@@ -158,6 +158,7 @@ that globally would change trap propagation and prompt overhead.
 | `__kh_group_*` | The shared grouping model behind `known-hosts` and `ssh-nr` |
 | `__kh_clean_*` | `known-hosts --clean` state |
 | `__ssh_inventory_*` | Shared config/known_hosts snapshots, invalidation generation and cached `ssh -G` results |
+| `__ssh_cache_*` | The invalidation registry every cache-owning module registers with |
 | `__ssh_completion_*` | Completion-specific host/user lists derived from the shared inventory |
 | `__ssh_resolve_*` | Shared resolver machinery: IP predicates, accumulators, `__ssh_resolve_table` |
 | `__ssh_resolve_ips_*` | `ssh-resolve-ips` only: PTR cache, extractor, lookup |
@@ -270,14 +271,33 @@ config aliases.
 | Shared SSH inventory (`__ssh_inventory_*`) | `known_hosts`, the user config, `/etc/ssh/ssh_config`, any included file, or any Include glob's match list changes; also explicit `known-hosts --refresh` |
 | `known-hosts` rows/groups | The shared inventory generation changes |
 | Completion host/user lists (`__ssh_completion_*`) | The shared inventory generation changes |
-| PTR DNS (`__ssh_resolve_ips_dns_cache`) | Only on `--refresh` or `known-hosts --refresh`; negative results are cached with a `\x1e` sentinel |
+| PTR DNS (`__ssh_resolve_ips_dns_cache`) | Only on `ssh-resolve-ips --refresh` or the sweep below; negative results are cached with a `\x1e` sentinel |
 | Forward DNS (`__ssh_resolve_hosts_dns_cache`) | Same, for `ssh-resolve-hosts` |
 | Endpoint reachability (`__kh_clean_endpoint_*`) | Per `known-hosts --clean` invocation |
 
 Validation uses only Bash builtins (`$(< file)`, `compgen -G`), so pressing
 `TAB` does not fork processes just to decide whether the inventory is still
-current. `known-hosts --refresh` drops the shared inventory, both derived views
-and both DNS caches.
+current.
+
+#### The invalidation registry
+
+`known-hosts --refresh` and a successful `known-hosts --clean --apply` drop
+every cache above. They do not name them: a module registers its own
+invalidator with `__ssh_cache_register_invalidator` next to the function, and
+both call sites run `__ssh_cache_invalidate_all`.
+
+The registry lives in `lib/ssh-config.sh` and keeps insertion order, which
+`ssh-tools.sh`'s source order makes meaningful — the inventory is registered
+first and therefore dropped before the caches derived from it. Registering a
+name twice is a no-op, so re-sourcing a module is harmless, and a registered
+function that is not defined is skipped rather than fatal, so a test that
+sources a single library still works.
+
+This replaces two hand-maintained lists inside `ssh_known_hosts` that had
+drifted apart: `--refresh` dropped the DNS caches, `--apply` did not, and one
+guarded `__ssh_completion_cache_invalidate` while the other called it bare. A
+new cache now needs one registration line in the module that owns it and no
+edit to `known-hosts` at all.
 
 ## The shared resolver table — `lib/ssh-resolve.sh`
 
@@ -319,7 +339,7 @@ bash tests/history.sh       # a single script
 
 `tests/run-all.sh` executes every `*.sh` in `tests/` except itself and
 `lib.sh`, prints one `PASS` line per script with its check count, and returns
-`1` if any script failed. Current state: 20 scripts, 710 checks, all passing.
+`1` if any script failed. Current state: 20 scripts, 727 checks, all passing.
 The same suite runs in CI on every push, together with the `bash -n` gate over
 the whole tree, `bash-commands --check` and ShellCheck; see
 `.github/workflows/ci.yml`. ShellCheck is clean and blocking: every suppression
@@ -333,7 +353,7 @@ above it, so a new finding fails the build.
 | `tests/completion.sh` | 35 | Completion lists derived from the shared SSH inventory, invalidation after a config edit, `ssh`/`sshp` destinations including `user@`, every per-command completion, and the shared resolver registration |
 | `tests/history.sh` | 26 | `history_dedupe`, serialized writers, stale-lock recovery, timestamped/multi-line/timestamp-less files, the shipped `HISTORY_DEDUPE_LIVE=0` default, live rewrite, and the `prompt-core.sh` guard |
 | `tests/install.sh` | 30 | The generated loader, the backup, `printf %q` quoting of a path with spaces, the whole-tree `bash -n` gate including `lib/`, `completions/` and `local.sh`, and that `bashrc.sh` stays inert in a non-interactive shell |
-| `tests/known-hosts-clean.sh` | 39 | `known-hosts --clean`: dry run, `--apply` with backups, rejected combinations, the removed `known-hosts-clean` alias, and the completion |
+| `tests/known-hosts-clean.sh` | 49 | `known-hosts --clean`: dry run, `--apply` with backups, the shared cache sweep after `--apply` and `--refresh`, rejected combinations, the removed `known-hosts-clean` alias, and the completion |
 | `tests/known-hosts.sh` | 15 | The `known_hosts` parser, filter/process behaviour, and automatic invalidation after an SSH config edit |
 | `tests/listing.sh` | 18 | The `ll` header, dropped summary line, hidden files, names with spaces, option pass-through and `ls` exit-status propagation |
 | `tests/prompt-core.sh` | 40 | Central string/array `PROMPT_COMMAND` composition plus the clock, duration formatting, exit-code capture, shared text helpers, and window-title escaping |
@@ -342,7 +362,7 @@ above it, so a new finding fails the build.
 | `tests/remote-prompt.sh` | 31 | `prompt.sh`: the pre-4.2 fallback builder and the remote Gruvbox wiring, including deliberate removal of inherited server `PROMPT_COMMAND` hooks |
 | `tests/prompt-selection.sh` | 9 | The `local.sh` backend selector: Starship, `bash-git-prompt`, Gruvbox, and the fallback warnings |
 | `tests/ssh-by-number.sh` | 19 | `ssh-nr`: help, `--list`, invalid and out-of-range numbers, alias versus raw target, `[host]:port`, markers, `-F` pass-through, both `sshp` call branches |
-| `tests/ssh-config.sh` | 57 | The shared `ssh_config` line tokenizer, scanner behaviour, the shared config/known_hosts inventory, generation invalidation, Include-glob changes, cached `ssh -G`, and removed legacy completion files |
+| `tests/ssh-config.sh` | 64 | The cache invalidation registry, the shared `ssh_config` line tokenizer, scanner behaviour, the shared config/known_hosts inventory, generation invalidation, Include-glob changes, cached `ssh -G`, and removed legacy completion files |
 | `tests/ssh-resolve-backends.sh` | 69 | Every DNS backend of both resolvers against stubbed `getent`, `dig`, `host`, `nslookup` and `powershell.exe`: each tool's output format, the fallback order, the timeout wrapper, positive and negative caching, and the two token extractors |
 | `tests/ssh-resolve-table.sh` | 34 | `__ssh_resolve_table` against a stubbed `ssh -G` and pre-seeded DNS caches: columns, merged references, bracketed IPv6, skipped hashed entries, filter, empty results, cache invalidation, and the full config line syntax reaching the CONFIG column |
 | `tests/ssh-resolve.sh` | 56 | Strict IPv4/IPv6 predicates, compression/scoped/embedded-IPv4 cases, help, argument/timeout validation, and resolver source-time guards |
@@ -536,6 +556,7 @@ exists:
 | Ask `ssh -G` about a target | `__ssh_inventory_target_dump` / `__ssh_inventory_target_field` (raw primitive: `__kh_ssh_config_dump`) |
 | Derive a `known_hosts` lookup name | `__kh_lookup_key` |
 | Host lists for completion | `__ssh_completion_cache_ensure` |
+| Have a cache dropped by `--refresh`/`--apply` | `__ssh_cache_register_invalidator` |
 | A key/value table over config and `known_hosts` | `__ssh_resolve_table` |
 
 Finally add a row to the `rows` table in `bashrc.d/commands.sh` and the name to

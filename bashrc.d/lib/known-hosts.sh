@@ -32,7 +32,9 @@ __kh_cache_invalidate() {
     __kh_target_users=()
     __kh_target_user_explicit=()
     declare -F __kh_groups_reset >/dev/null && __kh_groups_reset
+    return 0
 }
+__ssh_cache_register_invalidator __kh_cache_invalidate
 
 __kh_refresh() {
     local known=$1 config=$2
@@ -381,9 +383,7 @@ ssh_known_hosts() {
         # would not reach this shell. Dropping the caches after a successful
         # --apply is cheap and always correct: they are rebuilt on demand.
         if (( apply && clean_status == 0 )); then
-            declare -F __ssh_inventory_invalidate >/dev/null && __ssh_inventory_invalidate
-            declare -F __kh_cache_invalidate >/dev/null && __kh_cache_invalidate
-            declare -F __ssh_completion_cache_invalidate >/dev/null && __ssh_completion_cache_invalidate
+            __ssh_cache_invalidate_all
         fi
         return "$clean_status"
     fi
@@ -402,13 +402,11 @@ ssh_known_hosts() {
         return $?
     fi
 
+    # Both --refresh and a successful --apply drop the same set: whichever
+    # caches the loaded modules registered. __kh_cache_invalidate resets the
+    # groups along with the rows, so there is nothing to add here.
     if (( refresh )); then
-        __ssh_inventory_invalidate
-        __kh_cache_invalidate
-        __kh_groups_reset
-        __ssh_completion_cache_invalidate
-        declare -F __ssh_resolve_ips_cache_invalidate >/dev/null && __ssh_resolve_ips_cache_invalidate
-        declare -F __ssh_resolve_hosts_cache_invalidate >/dev/null && __ssh_resolve_hosts_cache_invalidate
+        __ssh_cache_invalidate_all
     fi
 
     __kh_groups_build "$known_hosts_file" "$config" || return

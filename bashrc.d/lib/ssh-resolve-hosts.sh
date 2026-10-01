@@ -23,6 +23,7 @@ declare -A __ssh_resolve_hosts_dns_cache=()
 __ssh_resolve_hosts_cache_invalidate() {
     __ssh_resolve_hosts_dns_cache=()
 }
+__ssh_cache_register_invalidator __ssh_resolve_hosts_cache_invalidate
 
 # Extracts a resolvable hostname from a token. Also supports [host]:port.
 # IP literals and patterns are skipped on purpose: the IP side is covered by

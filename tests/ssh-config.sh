@@ -179,6 +179,42 @@ assert_greater 'editing known_hosts advances the same inventory generation' \
 assert_contains 'the shared known_hosts snapshot is refreshed' \
     "$__ssh_inventory_known_content" 'second.example.com'
 
+# --- the cache invalidator registry ----------------------------------------
+
+# known-hosts used to name every other module's cache by hand, in two places
+# that had drifted apart. Modules register their own invalidator instead, and
+# known-hosts just drops whatever is registered.
+
+registry_log=''
+__test_cache_one() { registry_log+='one '; }
+__test_cache_two() { registry_log+='two '; }
+
+registry_before=${#__ssh_cache_invalidators[@]}
+assert_greater 'the shipped modules register their invalidators' \
+    "$registry_before" 0
+assert_contains 'the inventory registers itself' \
+    " ${__ssh_cache_invalidators[*]} " ' __ssh_inventory_invalidate '
+assert_equal 'the inventory is dropped before the caches derived from it' \
+    '__ssh_inventory_invalidate' "${__ssh_cache_invalidators[0]}"
+
+__ssh_cache_register_invalidator __test_cache_one __test_cache_two
+assert_equal 'registering adds one entry per name' \
+    "$((registry_before + 2))" "${#__ssh_cache_invalidators[@]}"
+
+__ssh_cache_register_invalidator __test_cache_one
+assert_equal 'registering the same name twice is a no-op' \
+    "$((registry_before + 2))" "${#__ssh_cache_invalidators[@]}"
+
+# A registered but undefined function must not break the sweep: a test that
+# sources a single lib has a partially loaded tree.
+__ssh_cache_register_invalidator __test_cache_missing
+
+registry_log=''
+assert_status 'a missing invalidator is skipped, not fatal' 0 \
+    __ssh_cache_invalidate_all
+assert_equal 'every registered invalidator ran, in registration order' \
+    'one two ' "$registry_log"
+
 # --- the shared config line tokenizer --------------------------------------
 
 # __kh_parse_config_line is the single place that knows how an ssh_config line

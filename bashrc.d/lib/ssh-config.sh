@@ -136,6 +136,57 @@ __kh_scan_configs() {
 }
 
 # ---------------------------------------------------------------------------
+# Cache invalidation registry
+#
+# Several modules keep a cache: the shared inventory here, the known-hosts
+# rows and groups, the completion lists, and one DNS cache per resolver.
+# "known-hosts --refresh" and a successful "known-hosts --apply" have to drop
+# all of them.
+#
+# known-hosts used to name them one by one, which made the module that merely
+# displays things the module that knows about every other module's cache. The
+# two call sites had already drifted apart: --refresh dropped the DNS caches,
+# --apply did not, and one guarded __ssh_completion_cache_invalidate while the
+# other called it bare.
+#
+# A module now registers its own invalidator next to the function. The registry
+# keeps insertion order, and ssh-tools.sh sources this file first, so the
+# inventory is always dropped before the caches derived from it.
+# ---------------------------------------------------------------------------
+
+declare -a __ssh_cache_invalidators=()
+declare -A __ssh_cache_invalidator_seen=()
+
+# __ssh_cache_register_invalidator FUNCTION...
+#
+# Registering the same name twice is a no-op, so re-sourcing a module does not
+# make its cache be dropped twice.
+__ssh_cache_register_invalidator() {
+    local name
+
+    for name in "$@"; do
+        [[ -n $name && -z ${__ssh_cache_invalidator_seen["$name"]+x} ]] || continue
+        __ssh_cache_invalidator_seen["$name"]=1
+        __ssh_cache_invalidators+=("$name")
+    done
+}
+
+# Drops every registered cache, in registration order. A registered function
+# that is not defined is skipped rather than fatal, so a partially loaded tree
+# — a single lib sourced by a test, say — still works.
+__ssh_cache_invalidate_all() {
+    local name
+
+    ((${#__ssh_cache_invalidators[@]})) || return 0
+
+    for name in "${__ssh_cache_invalidators[@]}"; do
+        declare -F "$name" >/dev/null && "$name"
+    done
+
+    return 0
+}
+
+# ---------------------------------------------------------------------------
 # Shared SSH inventory cache
 #
 # Completion, known-hosts and both resolvers all need the same view of the SSH
@@ -182,6 +233,7 @@ __ssh_inventory_reset() {
 __ssh_inventory_invalidate() {
     __ssh_inventory_reset
 }
+__ssh_cache_register_invalidator __ssh_inventory_invalidate
 
 __ssh_inventory_snapshot_file() {
     local file=$1

@@ -5,7 +5,7 @@
 The modular Bash configuration was verified locally in an isolated Linux test
 environment. All locally executable automated checks passed.
 
-Reproducible part: `bash tests/run-all.sh` — 20 scripts, 710 checks, all passing.
+Reproducible part: `bash tests/run-all.sh` — 20 scripts, 727 checks, all passing.
 CI is configured to run the same suite on the current Ubuntu runner, Git Bash
 on Windows, and explicit Bash 4.2.53, 4.4.23, 5.1.16 and 5.3.20 runtimes. A
 dedicated Bash 3.2.57 job covers the supported legacy remote prompt. The
@@ -61,7 +61,7 @@ line per script, and returns `1` if any of them failed.
 | `tests/completion.sh` | 35 | Completion lists derived from the shared SSH inventory, invalidation after a config edit, `ssh`/`sshp` destinations including `user@`, every per-command completion, and the shared resolver registration |
 | `tests/history.sh` | 26 | `history_dedupe`, serialized concurrent writers, stale-lock recovery, timestamped/multi-line/timestamp-less files, the shipped `HISTORY_DEDUPE_LIVE=0` default, live rewrite, and the `prompt-core.sh` guard |
 | `tests/install.sh` | 30 | The generated loader, the backup, `printf %q` quoting of a path with spaces, the whole-tree `bash -n` gate including `lib/`, `completions/` and `local.sh`, and that `bashrc.sh` stays inert in a non-interactive shell |
-| `tests/known-hosts-clean.sh` | 39 | `known-hosts --clean`: dry run, `--apply` with backups, rejected combinations, the removed `known-hosts-clean` alias, and the completion |
+| `tests/known-hosts-clean.sh` | 49 | `known-hosts --clean`: dry run, `--apply` with backups, the shared cache sweep after `--apply` and `--refresh`, rejected combinations, the removed `known-hosts-clean` alias, and the completion |
 | `tests/known-hosts.sh` | 15 | The `known_hosts` parser, filter/process behaviour, and automatic invalidation after an SSH config edit |
 | `tests/listing.sh` | 18 | The `ll` header, the dropped `ls` summary line, hidden files, names with spaces, option pass-through, and propagation of the underlying `ls` exit status |
 | `tests/prompt-core.sh` | 40 | Central string/array `PROMPT_COMMAND` composition plus the clock, duration formatting, exit-code capture, shared text helpers, and window-title escaping |
@@ -70,7 +70,7 @@ line per script, and returns `1` if any of them failed.
 | `tests/remote-prompt.sh` | 31 | `prompt.sh`: the pre-4.2 fallback builder and the remote Gruvbox wiring, including deliberate removal of inherited server `PROMPT_COMMAND` hooks |
 | `tests/prompt-selection.sh` | 9 | The `local.sh` backend selector: Starship, `bash-git-prompt`, Gruvbox, and the fallback warnings |
 | `tests/ssh-by-number.sh` | 19 | `ssh-nr`: help, `--list`, invalid and out-of-range numbers, alias versus raw target, `[host]:port`, markers, `-F` pass-through, both `sshp` call branches |
-| `tests/ssh-config.sh` | 57 | The shared `ssh_config` line tokenizer, scanner behaviour, the shared config/known_hosts inventory, Include-glob invalidation, cached `ssh -G`, and removed legacy resolver completions |
+| `tests/ssh-config.sh` | 64 | The cache invalidation registry, the shared `ssh_config` line tokenizer, scanner behaviour, the shared config/known_hosts inventory, Include-glob invalidation, cached `ssh -G`, and removed legacy resolver completions |
 | `tests/ssh-resolve-backends.sh` | 69 | Every DNS backend of both resolvers against stubbed `getent`, `dig`, `host`, `nslookup` and `powershell.exe`: each tool's output format, the fallback order, the timeout wrapper, positive and negative caching, and the two token extractors |
 | `tests/ssh-resolve-table.sh` | 34 | `__ssh_resolve_table` against a stubbed `ssh -G` and pre-seeded DNS caches: columns, merged references, bracketed IPv6, skipped hashed entries, filter, empty results, cache invalidation, and the full config line syntax reaching the CONFIG column |
 | `tests/ssh-resolve.sh` | 56 | Strict IPv4/IPv6 predicates including compression, scoped addresses and embedded IPv4, plus help, argument/timeout validation and resolver source-time guards |
@@ -496,7 +496,64 @@ Four mutations confirm it: reducing the remote loop to `prompt.sh`, dropping
 the prepended list, restoring a subset-only installer gate, and making the
 installer stop at the first error — each fails the matching test script.
 
-Result: passed. 20 scripts, 710 checks.
+Result: passed.
+
+### 18. The cache invalidation registry
+
+`known-hosts --refresh` and a successful `known-hosts --clean --apply` both
+have to drop every cache in the tree: the shared inventory, the known-hosts
+rows and groups, the completion lists and one DNS cache per resolver. Both call
+sites named them one by one, which made the module that merely displays things
+the module that knows about every other module's cache — and the two lists had
+already drifted apart:
+
+- `--refresh` dropped the two DNS caches, `--apply` did not;
+- `--refresh` called `__ssh_completion_cache_invalidate` bare, `--apply`
+  guarded it with `declare -F`;
+- `--refresh` also called `__kh_groups_reset`, which
+  `__kh_cache_invalidate` already does.
+
+A module now registers its own invalidator with
+`__ssh_cache_register_invalidator` next to the function, and both call sites
+are one `__ssh_cache_invalidate_all`. The registry lives in `lib/ssh-config.sh`
+and keeps insertion order, which `ssh-tools.sh`'s source order makes
+meaningful: the inventory registers first and is therefore dropped before the
+caches derived from it. Verified in a live shell, the order is
+
+```
+__ssh_inventory_invalidate
+__kh_cache_invalidate
+__ssh_resolve_ips_cache_invalidate
+__ssh_resolve_hosts_cache_invalidate
+__ssh_completion_cache_invalidate
+```
+
+and re-sourcing `ssh-tools.sh` leaves it at five entries.
+
+One behaviour change, in the direction the documentation already claimed:
+`--apply` now drops the two DNS caches as well. The cost is one re-resolution
+on the next resolver call; the gain is that the two paths cannot diverge again.
+Adding a cache is now one registration line in the module that owns it and no
+edit to `known-hosts` at all.
+
+Coverage: `tests/ssh-config.sh` 57 -> 64 for the registry mechanics
+(registration, duplicate names, a registered-but-undefined function being
+skipped rather than fatal, the sweep running in registration order, the
+inventory being first). `tests/known-hosts-clean.sh` 39 -> 49 for the
+behaviour: with all four caches seeded, `--apply` and `--refresh` each leave
+every one of them empty, and the refresh rebuilds the inventory under a new
+generation.
+
+Note for anyone extending that test: the sweep runs in the calling shell, so
+`--apply` must not be wrapped in a command substitution there. `__kh_clean_run`
+already works in a subshell, which is the reason the invalidation sits outside
+it in the first place.
+
+Four mutations confirm it: removing one module's registration, stopping the
+sweep after the first entry, removing the `--apply` sweep (the old drift), and
+removing the duplicate guard — each fails the matching test script.
+
+Result: passed. 20 scripts, 727 checks.
 
 ## Still to be checked manually
 

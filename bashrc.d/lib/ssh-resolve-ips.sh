@@ -24,6 +24,7 @@ declare -A __ssh_resolve_ips_dns_cache=()
 __ssh_resolve_ips_cache_invalidate() {
     __ssh_resolve_ips_dns_cache=()
 }
+__ssh_cache_register_invalidator __ssh_resolve_ips_cache_invalidate
 
 # Extracts the IP from a known_hosts or config token. Also supports [IPv4]:port
 # and [IPv6]:port. Hostnames are ignored; they are ssh-resolve-hosts's business.

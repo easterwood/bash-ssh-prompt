@@ -183,8 +183,11 @@ Results are derived from the shared SSH inventory in `lib/ssh-config.sh`. The
 inventory watches `known_hosts`, the primary config, system config, included
 files and Include-glob matches, so edits to any of them invalidate the mapping
 automatically. Cached `ssh -G` results are shared with completion and both
-resolvers. `--refresh` drops the inventory, both derived views and both resolver
-DNS caches in one go.
+resolvers. `--refresh` drops every cache in the tree in one go — the inventory,
+both derived views and both resolver DNS caches — and so does a successful
+`--clean --apply`. Neither names them: each module registers its own
+invalidator, so the two stay in step. See
+[architecture.md#the-invalidation-registry](architecture.md#the-invalidation-registry).
 
 ---
 
@@ -400,8 +403,9 @@ The first available backend that returns an answer wins:
 
 Each is wrapped in `timeout <n>s` when `timeout` is available. Results are
 cached per shell, including negative results, so repeated calls are fast.
-`--refresh` clears the DNS cache; `known_hosts` and the SSH config are re-read
-on every call regardless.
+`--refresh` clears the DNS cache, and so do `known-hosts --refresh` and
+`known-hosts --clean --apply`; `known_hosts` and the SSH config are re-read on
+every call regardless.
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -470,8 +474,9 @@ targets alongside the addresses, and those are dropped rather than displayed as
 an address.
 
 Results are cached per shell, negative answers included, so repeated calls are
-free. `--refresh` clears the cache, and so does `known-hosts --refresh`.
-`known_hosts` and the config are re-read on every call regardless.
+free. `--refresh` clears the cache, and so do `known-hosts --refresh` and
+`known-hosts --clean --apply`. `known_hosts` and the config are re-read on
+every call regardless.
 
 | Variable | Default | Purpose |
 |---|---|---|

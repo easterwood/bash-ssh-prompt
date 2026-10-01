@@ -156,6 +156,52 @@ overview=$(ssh_known_hosts)
 assert_contains 'overview still lists the live host' "$overview" 'alive.example.com'
 assert_not_contains 'overview drops the removed host' "$overview" 'dead.example.com'
 
+# --- the cache sweep after --apply -----------------------------------------
+
+# --apply and --refresh used to drop different sets of caches: --refresh
+# cleared the two DNS caches, --apply did not, and the guards differed. Both
+# now sweep whatever the loaded modules registered.
+#
+# The call must not be wrapped in a command substitution. --apply does its work
+# in a subshell already and only the invalidation afterwards runs in this
+# shell, so capturing its output would hide exactly what is asserted here.
+declare -A __ssh_resolve_ips_dns_cache
+declare -A __ssh_resolve_hosts_dns_cache
+__ssh_resolve_ips_dns_cache[203.0.113.9]='stale.example.com'
+__ssh_resolve_hosts_dns_cache[stale.example.com]='203.0.113.9'
+__ssh_completion_cache_ensure
+assert_greater 'the completion cache is populated beforehand' \
+    "${#__ssh_completion_connect_hosts[@]}" 0
+assert 'the inventory is populated beforehand' test -n "$__ssh_inventory_cache_id"
+
+ssh_known_hosts --clean --apply >/dev/null 2>&1
+
+assert_equal 'apply drops the reverse DNS cache' 0 \
+    "${#__ssh_resolve_ips_dns_cache[@]}"
+assert_equal 'apply drops the forward DNS cache' 0 \
+    "${#__ssh_resolve_hosts_dns_cache[@]}"
+assert_equal 'apply drops the completion cache' 0 \
+    "${#__ssh_completion_connect_hosts[@]}"
+assert_equal 'apply drops the shared inventory' '' "$__ssh_inventory_cache_id"
+
+# --refresh drops exactly the same set.
+__ssh_resolve_ips_dns_cache[203.0.113.9]='stale.example.com'
+__ssh_resolve_hosts_dns_cache[stale.example.com]='203.0.113.9'
+__ssh_completion_cache_ensure
+generation_before=$__ssh_inventory_generation
+ssh_known_hosts --refresh >/dev/null 2>&1
+
+assert_equal 'refresh drops the reverse DNS cache' 0 \
+    "${#__ssh_resolve_ips_dns_cache[@]}"
+assert_equal 'refresh drops the forward DNS cache' 0 \
+    "${#__ssh_resolve_hosts_dns_cache[@]}"
+assert_equal 'refresh drops the completion cache' 0 \
+    "${#__ssh_completion_connect_hosts[@]}"
+# The display rebuilds the inventory on the way out, which is what a new
+# generation proves it really was discarded first.
+assert_greater 'refresh rebuilds the inventory under a new generation' \
+    "$__ssh_inventory_generation" "$generation_before"
+
 # --- completion ------------------------------------------------------------
 
 COMP_WORDS=(known-hosts --clean --a)
@@ -173,4 +219,4 @@ COMP_CWORD=1
 _ssh_known_hosts_completion
 assert_contains 'completion offers --clean itself' " ${COMPREPLY[*]} " ' --clean '
 
-pass 'dry run, apply with backups, rejected combinations, removed alias, completion'
+pass 'dry run, apply with backups, the shared cache sweep, rejected combinations, removed alias, completion'
