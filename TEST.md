@@ -5,7 +5,7 @@
 The modular Bash configuration was verified locally in an isolated Linux test
 environment. All locally executable automated checks passed.
 
-Reproducible part: `bash tests/run-all.sh` — 19 scripts, 593 checks, all passing.
+Reproducible part: `bash tests/run-all.sh` — 20 scripts, 662 checks, all passing.
 CI is configured to run the same suite on the current Ubuntu runner, Git Bash
 on Windows, and explicit Bash 4.2.53, 4.4.23, 5.1.16 and 5.3.20 runtimes. A
 dedicated Bash 3.2.57 job covers the supported legacy remote prompt. The
@@ -71,6 +71,7 @@ line per script, and returns `1` if any of them failed.
 | `tests/prompt-selection.sh` | 9 | The `local.sh` backend selector: Starship, `bash-git-prompt`, Gruvbox, and the fallback warnings |
 | `tests/ssh-by-number.sh` | 19 | `ssh-nr`: help, `--list`, invalid and out-of-range numbers, alias versus raw target, `[host]:port`, markers, `-F` pass-through, both `sshp` call branches |
 | `tests/ssh-config.sh` | 37 | Scanner behaviour plus the shared config/known_hosts inventory, Include-glob invalidation, cached `ssh -G`, and removed legacy resolver completions |
+| `tests/ssh-resolve-backends.sh` | 69 | Every DNS backend of both resolvers against stubbed `getent`, `dig`, `host`, `nslookup` and `powershell.exe`: each tool's output format, the fallback order, the timeout wrapper, positive and negative caching, and the two token extractors |
 | `tests/ssh-resolve-table.sh` | 27 | `__ssh_resolve_table` against a stubbed `ssh -G` and pre-seeded DNS caches: columns, merged references, bracketed IPv6, skipped hashed entries, filter, empty results, cache invalidation |
 | `tests/ssh-resolve.sh` | 56 | Strict IPv4/IPv6 predicates including compression, scoped addresses and embedded IPv4, plus help, argument/timeout validation and resolver source-time guards |
 | `tests/sshp.sh` | 79 | The `sshp` argument parser, configurable/version-gated `WarnWeakCrypto`, `SSHP_SYNC_STATUS`, terminal-only spinner phases, silent cache hits, effective `ssh -G` cache identity, per-port/config state separation, equivalent-alias cache sharing, staged remote publication/rollback safety, `--force`, `--`, remote-command rejection, and missing sync files |
@@ -385,7 +386,35 @@ assignment was replaced by the loop form used elsewhere in the tree.
   hex in `starship.toml`. `tests/starship-config.sh` now converts and compares
   them, so drift fails the build.
 
-Result: passed. 19 scripts, 593 checks.
+Result: passed.
+
+### 15. The resolver DNS backends
+
+The backend chain was the last part of the resolvers with no coverage at
+all. `tests/ssh-resolve.sh` returns before any lookup and
+`tests/ssh-resolve-table.sh` pre-seeds the caches, so roughly 170 lines of
+`awk` over five tools' output formats, in two directions, were never
+executed by a test — while being the code most exposed to platform
+differences, since `getent`, `dig`, `host`, `nslookup` and PowerShell word
+their answers differently on every target the project supports.
+
+`tests/ssh-resolve-backends.sh` stubs all five tools. Each stub records its
+invocation and answers from a fixture file, so a scenario is set up by
+writing fixtures rather than by rewriting stubs, and the fallback order can
+be asserted instead of only the final result. Covered per direction: each
+tool's own output format, the order in which they are tried, the complete
+failure when none of them answers, the `timeout` wrapper cutting off a
+hanging backend, positive and negative caching including the `\x1e`
+sentinel, cache invalidation, and the deduplication and IPv4-before-IPv6
+ordering of the forward lookup. The test opens no network connection.
+
+Four deliberate mutations were used to confirm the test actually binds:
+removing the `Name:` branch of the reverse `nslookup` parser, dropping the
+IPv4-first ordering, removing the `tr -d '\r'` behind the PowerShell
+backend, and no longer storing the negative sentinel. Each one failed the
+suite, with a message naming the behaviour that broke.
+
+Result: passed. 20 scripts, 662 checks.
 
 ## Still to be checked manually
 

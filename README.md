@@ -183,6 +183,7 @@ tests/
   ssh-by-number.sh         ssh-nr target resolution
   ssh-resolve.sh           IP predicates, resolver options, load-order guards
   ssh-resolve-table.sh     The shared resolver table end to end
+  ssh-resolve-backends.sh  Every DNS backend of both resolvers, stubbed offline
   sshp.sh                  sshp argument parser and guards
   commands.sh              bash-commands listing and self-check
   completion.sh            Host cache and all completion functions
@@ -217,7 +218,7 @@ bash tests/history.sh       # or a single script
 bash-commands --check       # every documented command is really defined
 ```
 
-Currently 19 scripts with 593 checks, all passing locally. CI runs the same
+Currently 20 scripts with 662 checks, all passing locally. CI runs the same
 suite on the current Ubuntu runner, on Git Bash under `windows-latest`, and in
 official Bash containers for 4.2.53, 4.4.23, 5.1.16 and 5.3.20. A separate
 Bash 3.2.57 job exercises only the supported pre-4.2 remote fallback. The
