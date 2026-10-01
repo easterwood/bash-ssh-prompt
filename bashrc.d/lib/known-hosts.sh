@@ -367,6 +367,14 @@ ssh_known_hosts() {
             printf 'known-hosts: --clean cannot be combined with FILTER, --lines, --refresh or --fingerprints.\n' >&2
             return 2
         fi
+        # --clean lives in lib/known-hosts-clean.sh, which ssh-tools.sh
+        # sources after this file. A source-time guard is therefore impossible
+        # here; say what is missing instead of "command not found".
+        declare -F __kh_clean_run >/dev/null || {
+            printf 'known-hosts: --clean needs lib/known-hosts-clean.sh, which is not loaded.\n' >&2
+            return 1
+        }
+
         __kh_clean_run "$apply"
         clean_status=$?
 

@@ -17,6 +17,7 @@ set -u
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." || exit 1
 
 TEST_NAME='known-hosts --clean'
+test_root=$PWD
 # shellcheck source=tests/lib.sh
 source tests/lib.sh
 test_sandbox
@@ -201,6 +202,25 @@ assert_equal 'refresh drops the completion cache' 0 \
 # generation proves it really was discarded first.
 assert_greater 'refresh rebuilds the inventory under a new generation' \
     "$__ssh_inventory_generation" "$generation_before"
+
+# --- the dispatch guard ----------------------------------------------------
+
+# --clean lives in the file ssh-tools.sh sources after known-hosts.sh, so
+# known-hosts cannot guard on it at source time the way every other module
+# does. Without a call-site guard a partially loaded tree answered with
+# "command not found".
+guard_output=$(bash -c '
+    cd "$1" || exit 1
+    source bashrc.d/lib/options.sh
+    source bashrc.d/lib/ssh-config.sh
+    source bashrc.d/lib/known-hosts.sh
+    ssh_known_hosts --clean
+' _ "$test_root" 2>&1)
+guard_status=$?
+assert_equal 'a missing --clean implementation fails cleanly' 1 "$guard_status"
+assert_contains 'the error names the missing file' "$guard_output" 'known-hosts-clean.sh'
+assert_not_contains 'the shell does not report a missing command' \
+    "$guard_output" 'command not found'
 
 # --- completion ------------------------------------------------------------
 

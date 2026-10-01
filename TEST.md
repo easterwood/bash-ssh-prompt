@@ -5,7 +5,7 @@
 The modular Bash configuration was verified locally in an isolated Linux test
 environment. All locally executable automated checks passed.
 
-Reproducible part: `bash tests/run-all.sh` — 20 scripts, 745 checks, all passing.
+Reproducible part: `bash tests/run-all.sh` — 20 scripts, 749 checks, all passing.
 CI is configured to run the same suite on the current Ubuntu runner, Git Bash
 on Windows, and explicit Bash 4.2.53, 4.4.23, 5.1.16 and 5.3.20 runtimes. A
 dedicated Bash 3.2.57 job covers the supported legacy remote prompt. The
@@ -52,16 +52,17 @@ bash tests/history.sh       # a single script
 ```
 
 `run-all.sh` runs every `*.sh` in `tests/` except itself and `lib.sh`, prints one
-line per script, and returns `1` if any of them failed.
+line per script, sums the check counts into the total printed at the end, and
+returns `1` if any of them failed.
 
 | Script | Checks | Covers |
 |---|---|---|
 | `tests/bashrc-integration.sh` | 4 | Full `bashrc.sh` composition: prompt hooks survive all backends and source-time settings load before `history.sh` |
 | `tests/commands.sh` | 38 | `bash-commands`: listing, `--details`, the `--check` self-test including a deliberately stale row, filter, rejected combinations |
-| `tests/completion.sh` | 35 | Completion lists derived from the shared SSH inventory, invalidation after a config edit, `ssh`/`sshp` destinations including `user@`, every per-command completion, and the shared resolver registration |
+| `tests/completion.sh` | 36 | A probe for globals leaked by the refresh, completion lists derived from the shared SSH inventory, invalidation after a config edit, `ssh`/`sshp` destinations including `user@`, every per-command completion, and the shared resolver registration |
 | `tests/history.sh` | 26 | `history_dedupe`, serialized concurrent writers, stale-lock recovery, timestamped/multi-line/timestamp-less files, the shipped `HISTORY_DEDUPE_LIVE=0` default, live rewrite, and the `prompt-core.sh` guard |
 | `tests/install.sh` | 30 | The generated loader, the backup, `printf %q` quoting of a path with spaces, the whole-tree `bash -n` gate including `lib/`, `completions/` and `local.sh`, and that `bashrc.sh` stays inert in a non-interactive shell |
-| `tests/known-hosts-clean.sh` | 49 | `known-hosts --clean`: dry run, `--apply` with backups, the shared cache sweep after `--apply` and `--refresh`, rejected combinations, the removed `known-hosts-clean` alias, and the completion |
+| `tests/known-hosts-clean.sh` | 52 | `known-hosts --clean`: dry run, `--apply` with backups, the shared cache sweep after `--apply` and `--refresh`, rejected combinations, the removed `known-hosts-clean` alias, and the completion |
 | `tests/known-hosts.sh` | 15 | The `known_hosts` parser, filter/process behaviour, and automatic invalidation after an SSH config edit |
 | `tests/listing.sh` | 18 | The `ll` header, the dropped `ls` summary line, hidden files, names with spaces, option pass-through, and propagation of the underlying `ls` exit status |
 | `tests/prompt-core.sh` | 40 | Central string/array `PROMPT_COMMAND` composition plus the clock, duration formatting, exit-code capture, shared text helpers, and window-title escaping |
@@ -626,7 +627,43 @@ chain no longer skipping uninstalled tools, the reverse direction losing its
 trailing-dot strip, `__opt_filter_set` accepting a second filter, and the `--`
 branch no longer consuming its word.
 
-Result: passed. 20 scripts, 745 checks.
+Result: passed.
+
+### 20. Loose ends
+
+Three small things the review left over, none of them worth its own section
+until now.
+
+**A leaked global.** `__ssh_completion_refresh` read `known_hosts` with
+`while IFS= read -r _line`, and `_line` was missing from the function's `local`
+list. The refresh runs on every TAB in an interactive shell, so the variable
+became a permanent part of the user's environment. Harmless in practice,
+exactly the kind of thing nobody notices.
+
+The regression test does not name that variable. It snapshots the whole global
+namespace across a refresh and reports anything new that is neither
+`__`-prefixed — the convention for module-owned names — nor a known shared
+out-parameter. So the next forgotten `local` fails the build too, whatever it
+is called. The probe runs in a fresh shell on purpose: `tests/completion.sh`
+has already called the refresh several times by then, so a name leaked earlier
+would sit in the "before" snapshot as well and the comparison would see
+nothing. That is not hypothetical — the first version of this test, taken in
+the dirtied shell, passed with the bug deliberately put back.
+
+**A missing guard.** `--clean` is implemented in `lib/known-hosts-clean.sh`,
+which `ssh-tools.sh` sources *after* `lib/known-hosts.sh`. The source-time
+`declare -F ... || return 1` guard every other module uses is therefore
+impossible here, and `ssh_known_hosts --clean` dispatched into the other file
+unguarded: a partially loaded tree answered `command not found`. It now says
+which file is missing and returns 1. Checked by sourcing exactly the three
+libraries that come before the `--clean` implementation and calling it.
+
+**The check count.** README, TEST.md and architecture.md each quote the total,
+and it had already drifted once (586 against 593) because it was maintained by
+hand. `tests/run-all.sh` now sums the per-script counts and prints the total
+itself.
+
+Result: passed. 20 scripts, 749 checks.
 
 ## Still to be checked manually
 

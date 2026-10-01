@@ -14,14 +14,24 @@ cd -- "$(dirname -- "${BASH_SOURCE[0]}")" || exit 1
 
 failed=0
 total=0
+checks=0
+line=''
 
 for script in *.sh; do
     # lib.sh is sourced by the tests, not run.
     [[ $script != lib.sh && $script != run-all.sh ]] || continue
 
     total=$((total + 1))
-    if ! bash "$script"; then
+
+    # Each script prints its own PASS line with its check count. Summing them
+    # here keeps the figure quoted in README.md, TEST.md and architecture.md
+    # off a human's addition; it had already drifted once.
+    if line=$(bash "$script"); then
+        printf '%s\n' "$line"
+        [[ ! $line =~ \(([0-9]+)\ checks\) ]] || checks=$((checks + BASH_REMATCH[1]))
+    else
         failed=$((failed + 1))
+        [[ -z $line ]] || printf '%s\n' "$line"
     fi
 done
 
@@ -31,4 +41,4 @@ if (( failed )); then
     exit 1
 fi
 
-printf 'All %d test scripts passed.\n' "$total"
+printf 'All %d test scripts passed, %d checks.\n' "$total" "$checks"

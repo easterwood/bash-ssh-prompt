@@ -220,7 +220,7 @@ bash tests/history.sh       # or a single script
 bash-commands --check       # every documented command is really defined
 ```
 
-Currently 20 scripts with 745 checks, all passing locally. CI runs the same
+Currently 20 scripts with 749 checks, all passing locally. CI runs the same
 suite on the current Ubuntu runner, on Git Bash under `windows-latest`, and in
 official Bash containers for 4.2.53, 4.4.23, 5.1.16 and 5.3.20. A separate
 Bash 3.2.57 job exercises only the supported pre-4.2 remote fallback. The

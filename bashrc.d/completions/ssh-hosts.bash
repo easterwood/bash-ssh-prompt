@@ -71,7 +71,7 @@ __ssh_completion_resolve_user() {
 
 __ssh_completion_refresh() {
     local known=$1 config=$2
-    local host hosts user
+    local host hosts user line
     local -a host_list=()
 
     __ssh_inventory_ensure "$known" "$config"
@@ -94,8 +94,8 @@ __ssh_completion_refresh() {
     # known_hosts is useful for filtering. For ssh/sshp only plain hostnames
     # are added; entries such as [host]:2222 are not valid ssh destinations.
     if (( __ssh_inventory_known_readable )); then
-        while IFS= read -r _line || [[ -n $_line ]]; do
-            __kh_parse_known_line "$_line" || continue
+        while IFS= read -r line || [[ -n $line ]]; do
+            __kh_parse_known_line "$line" || continue
             (( ! __kh_line_hashed )) || continue
             hosts=$__kh_line_hosts
             IFS=',' read -r -a host_list <<< "$hosts"

@@ -371,7 +371,9 @@ bash tests/history.sh       # a single script
 
 `tests/run-all.sh` executes every `*.sh` in `tests/` except itself and
 `lib.sh`, prints one `PASS` line per script with its check count, and returns
-`1` if any script failed. Current state: 20 scripts, 745 checks, all passing.
+`1` if any script failed. It sums those counts and prints the total, so the
+figure quoted here and in `README.md` and `TEST.md` does not depend on anyone
+adding it up by hand. Current state: 20 scripts, 749 checks, all passing.
 The same suite runs in CI on every push, together with the `bash -n` gate over
 the whole tree, `bash-commands --check` and ShellCheck; see
 `.github/workflows/ci.yml`. ShellCheck is clean and blocking: every suppression
@@ -382,10 +384,10 @@ above it, so a new finding fails the build.
 |---|---|---|
 | `tests/bashrc-integration.sh` | 4 | Full `bashrc.sh` composition: history survives all prompt backends and source-time settings are loaded before `history.sh` |
 | `tests/commands.sh` | 38 | `bash-commands`: listing, `--details`, the `--check` self-test including a deliberately stale row, filter, rejected combinations |
-| `tests/completion.sh` | 35 | Completion lists derived from the shared SSH inventory, invalidation after a config edit, `ssh`/`sshp` destinations including `user@`, every per-command completion, and the shared resolver registration |
+| `tests/completion.sh` | 36 | A probe for globals leaked by the refresh, completion lists derived from the shared SSH inventory, invalidation after a config edit, `ssh`/`sshp` destinations including `user@`, every per-command completion, and the shared resolver registration |
 | `tests/history.sh` | 26 | `history_dedupe`, serialized writers, stale-lock recovery, timestamped/multi-line/timestamp-less files, the shipped `HISTORY_DEDUPE_LIVE=0` default, live rewrite, and the `prompt-core.sh` guard |
 | `tests/install.sh` | 30 | The generated loader, the backup, `printf %q` quoting of a path with spaces, the whole-tree `bash -n` gate including `lib/`, `completions/` and `local.sh`, and that `bashrc.sh` stays inert in a non-interactive shell |
-| `tests/known-hosts-clean.sh` | 49 | `known-hosts --clean`: dry run, `--apply` with backups, the shared cache sweep after `--apply` and `--refresh`, rejected combinations, the removed `known-hosts-clean` alias, and the completion |
+| `tests/known-hosts-clean.sh` | 52 | `known-hosts --clean`: dry run, `--apply` with backups, the shared cache sweep after `--apply` and `--refresh`, rejected combinations, the removed `known-hosts-clean` alias, and the completion |
 | `tests/known-hosts.sh` | 15 | The `known_hosts` parser, filter/process behaviour, and automatic invalidation after an SSH config edit |
 | `tests/listing.sh` | 18 | The `ll` header, dropped summary line, hidden files, names with spaces, option pass-through and `ls` exit-status propagation |
 | `tests/prompt-core.sh` | 40 | Central string/array `PROMPT_COMMAND` composition plus the clock, duration formatting, exit-code capture, shared text helpers, and window-title escaping |

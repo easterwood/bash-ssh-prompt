@@ -16,6 +16,7 @@ set -u
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." || exit 1
 
 TEST_NAME='completion'
+test_root=$PWD
 # shellcheck source=tests/lib.sh
 source tests/lib.sh
 test_sandbox
@@ -202,6 +203,35 @@ assert_contains 'ssh-resolve-hosts offers --refresh' "$reply" '--refresh'
 
 reply=$(complete_with _ssh_resolve_completion ssh-resolve-ips --help '')
 assert_equal 'no second argument is offered' '  ' "$reply"
+
+# --- no stray globals ------------------------------------------------------
+
+# The refresh runs on every TAB in an interactive shell, so a loop variable it
+# forgets to declare local becomes a permanent global in the user's session.
+# __ssh_completion_refresh leaked `_line` that way. Rather than naming that one
+# variable, compare the whole global namespace across a refresh: module-owned
+# names are `__`-prefixed by convention, and REPLY is the shared out-parameter,
+# so anything else appearing is a leak.
+#
+# The probe runs in a fresh shell on purpose: this script has already called
+# the refresh several times, so a name leaked earlier would be in the "before"
+# snapshot too and the comparison would see nothing.
+globals_leaked=$(bash -c '
+    cd "$1" || exit 1
+    source bashrc.d/lib/options.sh
+    source bashrc.d/lib/ssh-config.sh
+    source bashrc.d/completions/ssh-hosts.bash
+
+    before=""
+    after=""
+    before=$(compgen -v | sort)
+    __ssh_completion_cache_ensure
+    after=$(compgen -v | sort)
+
+    comm -13 <(printf "%s\n" "$before") <(printf "%s\n" "$after") |
+        grep -v "^__\|^REPLY$\|^BASH_REMATCH$\|^PIPESTATUS$\|^_$" || true
+' _ "$test_root" 2>&1)
+assert_equal 'the completion refresh leaks no globals' '' "$globals_leaked"
 
 assert_equal 'ssh-resolve-ips is registered' '_ssh_resolve_completion' \
     "$(complete -p ssh-resolve-ips | awk '{print $3}')"
