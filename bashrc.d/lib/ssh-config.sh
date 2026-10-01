@@ -32,7 +32,7 @@ __kh_scan_file() {
     local file=$1 base=$2 track_includes=${3:-0} track_direct_users=${4:-0}
     local line keyword token match alias
     local stanza_hostname='' stanza_user=''
-    local -a words stanza_aliases=()
+    local -a stanza_aliases=()
 
     [[ -r $file && -z ${__kh_scan_file_seen["$file"]+x} ]] || return 0
 
@@ -40,13 +40,8 @@ __kh_scan_file() {
     __kh_scan_files+=("$file")
 
     while IFS= read -r line || [[ -n $line ]]; do
-        line=${line%$'\r'}
-        line=${line%%#*}
-        line=${line/=/ }
-        read -r -a words <<< "$line"
-        ((${#words[@]})) || continue
-
-        keyword=${words[0],,}
+        __kh_parse_config_line "$line" || continue
+        keyword=$__kh_config_keyword
 
         case $keyword in
             host|match)
@@ -56,10 +51,10 @@ __kh_scan_file() {
                 ;;
         esac
 
-        for token in "${words[@]:1}"; do
-            token=${token#\"}
-            token=${token%\"}
-
+        # The Include branch below recurses and overwrites the parser's
+        # globals. That is safe: $keyword is a local copy and Bash expands the
+        # word list once, before the first iteration.
+        for token in "${__kh_config_words[@]:1}"; do
             case $keyword in
                 host)
                     [[ -n $token && $token != -* &&
@@ -340,6 +335,50 @@ __ssh_inventory_target_field() {
 # bug, and CRLF configs, marker entries and hashed entries behave identically
 # everywhere.
 # ---------------------------------------------------------------------------
+
+# __kh_parse_config_line LINE
+#
+# Tokenizes one ssh_config line. Returns 1 for blank lines and lines that are
+# nothing but a comment, so callers can "|| continue".
+#
+# This is the one place that knows how an ssh_config line is spelled: a CRLF
+# ending from a Windows editor, a "#" comment, the "Keyword=value" form
+# OpenSSH accepts next to "Keyword value", the keyword's arbitrary case, and
+# the optional quotes around a token. It used to live here and, character for
+# character, inside __ssh_resolve_table as well.
+#
+#   __kh_config_keyword   the lowercased keyword
+#   __kh_config_words     keyword plus its arguments; the arguments are
+#                         unquoted, so callers read them as [@]:1
+#
+# Quoting follows the scanner's historical behaviour: one leading and one
+# trailing quote are removed per token, and a quoted value containing spaces
+# still arrives as several tokens.
+__kh_config_keyword=''
+declare -a __kh_config_words=()
+
+__kh_parse_config_line() {
+    local line=${1%$'\r'} index
+    local -a words=()
+
+    __kh_config_keyword=''
+    __kh_config_words=()
+
+    line=${line%%#*}
+    # Only the first "=" separates keyword from value; later ones belong to it.
+    line=${line/=/ }
+    read -r -a words <<< "$line"
+    ((${#words[@]})) || return 1
+
+    __kh_config_keyword=${words[0],,}
+    __kh_config_words=("${words[@]}")
+    for ((index = 1; index < ${#__kh_config_words[@]}; index++)); do
+        __kh_config_words[index]=${__kh_config_words[index]#\"}
+        __kh_config_words[index]=${__kh_config_words[index]%\"}
+    done
+
+    return 0
+}
 
 # __kh_parse_known_line LINE
 #

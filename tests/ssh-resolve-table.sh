@@ -130,4 +130,31 @@ after=$(ssh_resolve_ips | plain)
 assert_not_contains 'refresh discards the DNS cache' "$after" 'ptr-one.example.com'
 assert_contains 'refresh keeps the inventory' "$after" '10.0.0.1'
 
-pass 'the shared table: columns, merging, filter, empty results, cache'
+# --- shared config line syntax ---------------------------------------------
+
+# The table used to carry its own copy of the ssh_config line parser. It now
+# goes through __kh_parse_config_line, the same one the scanner uses, so the
+# full line syntax has to reach the CONFIG column from this side as well: a
+# CRLF file, the "Keyword=value" form, quoted values and an arbitrary keyword
+# case. The scanner side of the same contract is in tests/ssh-config.sh.
+printf 'Host syntax01\r\n  HostName=syntax-equals.example.com\r\n' > "$HOME/.ssh/config"
+printf 'HOST syntax02\r\n  hostname "syntax-quoted.example.com"  # trailing\r\n' >> "$HOME/.ssh/config"
+printf 'Host 198.51.100.77\r\n' >> "$HOME/.ssh/config"
+
+__ssh_resolve_ips_cache_invalidate
+__ssh_resolve_hosts_cache_invalidate
+
+syntax=$(ssh_resolve_hosts | plain)
+assert_contains 'the Keyword=value form reaches the table' \
+    "$syntax" 'syntax-equals.example.com'
+assert_contains 'the alias of an = line is attributed' "$syntax" 'syntax01'
+assert_contains 'a quoted value is unquoted' "$syntax" 'syntax-quoted.example.com'
+assert_contains 'an upper-case keyword is recognised' "$syntax" 'syntax02'
+assert_not_contains 'the quotes do not survive into the column' "$syntax" '"syntax-quoted'
+assert_not_contains 'a trailing comment is not a hostname' "$syntax" 'trailing'
+
+syntax_ips=$(ssh_resolve_ips | plain)
+assert_contains 'an IP literal used as a Host pattern is still a key' \
+    "$syntax_ips" '198.51.100.77'
+
+pass 'the shared table: columns, merging, filter, empty results, cache, config line syntax'

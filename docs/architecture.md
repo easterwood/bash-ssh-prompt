@@ -181,11 +181,12 @@ and completion. `__kh_scan_configs` remains the low-level scanner;
 config, `/etc/ssh/ssh_config`, every included file, every Include glob and
 `known_hosts`.
 
-`__kh_scan_file` reads a config file line by line in pure Bash:
+`__kh_scan_file` reads a config file line by line in pure Bash. How a line is
+spelled is not its business: it hands every line to `__kh_parse_config_line`
+(see below), which strips `\r` from CRLF configs and `#` comments, normalises a
+single `=` to a space, lowercases the keyword so `HostName`, `hostname` and
+`HOSTNAME` are equal, and unquotes the tokens. What the scanner adds on top:
 
-- strips `\r` (CRLF configs from Windows) and `#` comments, and normalises a
-  single `=` to a space;
-- lowercases the keyword, so `HostName`, `hostname` and `HOSTNAME` are equal;
 - collects only **concrete** `Host` tokens — anything containing `*`, `?`, `!`,
   whitespace or control characters, or starting with `-`, is skipped;
 - follows `Include` recursively, supporting `~/`, absolute paths, paths relative
@@ -217,14 +218,17 @@ resolved-target entries automatically.
 
 ### Shared primitives in the same file
 
-Reading a `known_hosts` line and asking `ssh -G` about a target used to be
-copy-pasted into every command that needed it: `known-hosts` twice, the
-grouping model, `--clean` three times, and both resolvers. They now live next
+Reading a `known_hosts` line, tokenizing an `ssh_config` line and asking
+`ssh -G` about a target used to be copy-pasted into every command that needed
+them: `known-hosts` twice, the grouping model, `--clean` three times, both
+resolvers, and — for the config line syntax — `__kh_scan_file` and
+`__ssh_resolve_table` in parallel. They now live next
 to the scanner, so a parser fix lands everywhere at once and CRLF files,
 marker entries and hashed entries behave identically in every command.
 
 | Function | Purpose |
 |---|---|
+| `__kh_parse_config_line LINE` | Tokenizes one `ssh_config` line into `__kh_config_keyword` (lowercased) and `__kh_config_words` (keyword plus unquoted arguments, read as `[@]:1`). Strips `\r` and `#` comments and normalises the first `=` to a space. Returns `1` for blank and comment-only lines, so callers can `\|\| continue` |
 | `__kh_parse_known_line LINE` | Splits a line into `__kh_line_marker`, `__kh_line_hosts`, `__kh_line_keytype`, `__kh_line_key` and `__kh_line_hashed`. Strips `\r`. Returns `1` for comments, blank lines and lines without a host field, so callers can `|| continue` |
 | `__kh_split_host_port TOKEN` | Unwraps `[host]:port` into `__kh_host` and `__kh_port`; a bare token yields port `22` |
 | `__kh_ssh_config_dump CONFIG TARGET [QUIET]` | Runs `ssh -G -T` into `REPLY`, adding `-F` only for a non-default config path. `QUIET=1` discards stderr for callers that treat a failure as "skip" |
@@ -282,7 +286,9 @@ which tokens count as a key, which direction they ask DNS, and what the two
 leading columns are called. Everything else — option handling, inventory
 consumption, deduplication, the filter, the column widths and the output — is
 `__ssh_resolve_table`. The table reads the user-config subset and `known_hosts`
-from the shared inventory instead of rescanning files itself.
+from the shared inventory instead of rescanning files itself, and tokenizes the
+config lines it does read with `__kh_parse_config_line`, the same parser the
+scanner uses, so the two can never disagree about what a line says.
 
 A command configures it by setting locals before the call; Bash's dynamic
 scoping makes them visible inside:
@@ -313,7 +319,7 @@ bash tests/history.sh       # a single script
 
 `tests/run-all.sh` executes every `*.sh` in `tests/` except itself and
 `lib.sh`, prints one `PASS` line per script with its check count, and returns
-`1` if any script failed. Current state: 20 scripts, 662 checks, all passing.
+`1` if any script failed. Current state: 20 scripts, 689 checks, all passing.
 The same suite runs in CI on every push, together with the `bash -n` gate over
 the whole tree, `bash-commands --check` and ShellCheck; see
 `.github/workflows/ci.yml`. ShellCheck is clean and blocking: every suppression
@@ -336,9 +342,9 @@ above it, so a new finding fails the build.
 | `tests/remote-prompt.sh` | 31 | `prompt.sh`: the pre-4.2 fallback builder and the remote Gruvbox wiring, including deliberate removal of inherited server `PROMPT_COMMAND` hooks |
 | `tests/prompt-selection.sh` | 9 | The `local.sh` backend selector: Starship, `bash-git-prompt`, Gruvbox, and the fallback warnings |
 | `tests/ssh-by-number.sh` | 19 | `ssh-nr`: help, `--list`, invalid and out-of-range numbers, alias versus raw target, `[host]:port`, markers, `-F` pass-through, both `sshp` call branches |
-| `tests/ssh-config.sh` | 37 | Scanner behaviour plus the shared config/known_hosts inventory, generation invalidation, Include-glob changes, cached `ssh -G`, and removed legacy completion files |
+| `tests/ssh-config.sh` | 57 | The shared `ssh_config` line tokenizer, scanner behaviour, the shared config/known_hosts inventory, generation invalidation, Include-glob changes, cached `ssh -G`, and removed legacy completion files |
 | `tests/ssh-resolve-backends.sh` | 69 | Every DNS backend of both resolvers against stubbed `getent`, `dig`, `host`, `nslookup` and `powershell.exe`: each tool's output format, the fallback order, the timeout wrapper, positive and negative caching, and the two token extractors |
-| `tests/ssh-resolve-table.sh` | 27 | `__ssh_resolve_table` against a stubbed `ssh -G` and pre-seeded DNS caches: columns, merged references, bracketed IPv6, skipped hashed entries, filter, empty results, cache invalidation |
+| `tests/ssh-resolve-table.sh` | 34 | `__ssh_resolve_table` against a stubbed `ssh -G` and pre-seeded DNS caches: columns, merged references, bracketed IPv6, skipped hashed entries, filter, empty results, cache invalidation, and the full config line syntax reaching the CONFIG column |
 | `tests/ssh-resolve.sh` | 56 | Strict IPv4/IPv6 predicates, compression/scoped/embedded-IPv4 cases, help, argument/timeout validation, and resolver source-time guards |
 | `tests/sshp.sh` | 86 | The `sshp` parser, weak-crypto and sync-status policies, TTY-only spinner phases, silent cache hits, connection-aware cache identity, staged remote publication, preservation on validation failure, `--force`, `--`, remote-command rejection and missing sync files |
 | `tests/starship-config.sh` | 23 | `starship.toml`: the removed helper script, the constant bg1 field on line one, the rounded caps on line two, and the palette matching `prompt-gruvbox.sh` |
@@ -529,6 +535,7 @@ exists:
 |---|---|
 | Parse/cache SSH config and `known_hosts` inventory | `__ssh_inventory_ensure` (low level: `__kh_scan_configs` / `__kh_scan_file`) |
 | Read a `known_hosts` line | `__kh_parse_known_line` |
+| Tokenize an `ssh_config` line | `__kh_parse_config_line` |
 | Unwrap `[host]:port` | `__kh_split_host_port` |
 | Ask `ssh -G` about a target | `__ssh_inventory_target_dump` / `__ssh_inventory_target_field` (raw primitive: `__kh_ssh_config_dump`) |
 | Derive a `known_hosts` lookup name | `__kh_lookup_key` |

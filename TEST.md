@@ -5,7 +5,7 @@
 The modular Bash configuration was verified locally in an isolated Linux test
 environment. All locally executable automated checks passed.
 
-Reproducible part: `bash tests/run-all.sh` — 20 scripts, 662 checks, all passing.
+Reproducible part: `bash tests/run-all.sh` — 20 scripts, 689 checks, all passing.
 CI is configured to run the same suite on the current Ubuntu runner, Git Bash
 on Windows, and explicit Bash 4.2.53, 4.4.23, 5.1.16 and 5.3.20 runtimes. A
 dedicated Bash 3.2.57 job covers the supported legacy remote prompt. The
@@ -70,9 +70,9 @@ line per script, and returns `1` if any of them failed.
 | `tests/remote-prompt.sh` | 31 | `prompt.sh`: the pre-4.2 fallback builder and the remote Gruvbox wiring, including deliberate removal of inherited server `PROMPT_COMMAND` hooks |
 | `tests/prompt-selection.sh` | 9 | The `local.sh` backend selector: Starship, `bash-git-prompt`, Gruvbox, and the fallback warnings |
 | `tests/ssh-by-number.sh` | 19 | `ssh-nr`: help, `--list`, invalid and out-of-range numbers, alias versus raw target, `[host]:port`, markers, `-F` pass-through, both `sshp` call branches |
-| `tests/ssh-config.sh` | 37 | Scanner behaviour plus the shared config/known_hosts inventory, Include-glob invalidation, cached `ssh -G`, and removed legacy resolver completions |
+| `tests/ssh-config.sh` | 57 | The shared `ssh_config` line tokenizer, scanner behaviour, the shared config/known_hosts inventory, Include-glob invalidation, cached `ssh -G`, and removed legacy resolver completions |
 | `tests/ssh-resolve-backends.sh` | 69 | Every DNS backend of both resolvers against stubbed `getent`, `dig`, `host`, `nslookup` and `powershell.exe`: each tool's output format, the fallback order, the timeout wrapper, positive and negative caching, and the two token extractors |
-| `tests/ssh-resolve-table.sh` | 27 | `__ssh_resolve_table` against a stubbed `ssh -G` and pre-seeded DNS caches: columns, merged references, bracketed IPv6, skipped hashed entries, filter, empty results, cache invalidation |
+| `tests/ssh-resolve-table.sh` | 34 | `__ssh_resolve_table` against a stubbed `ssh -G` and pre-seeded DNS caches: columns, merged references, bracketed IPv6, skipped hashed entries, filter, empty results, cache invalidation, and the full config line syntax reaching the CONFIG column |
 | `tests/ssh-resolve.sh` | 56 | Strict IPv4/IPv6 predicates including compression, scoped addresses and embedded IPv4, plus help, argument/timeout validation and resolver source-time guards |
 | `tests/sshp.sh` | 79 | The `sshp` argument parser, configurable/version-gated `WarnWeakCrypto`, `SSHP_SYNC_STATUS`, terminal-only spinner phases, silent cache hits, effective `ssh -G` cache identity, per-port/config state separation, equivalent-alias cache sharing, staged remote publication/rollback safety, `--force`, `--`, remote-command rejection, and missing sync files |
 | `tests/starship-config.sh` | 23 | `starship.toml`: the removed helper script, the constant bg1 field on line one, the rounded caps on line two, and the palette matching `prompt-gruvbox.sh` |
@@ -414,7 +414,49 @@ IPv4-first ordering, removing the `tr -d '\r'` behind the PowerShell
 backend, and no longer storing the negative sentinel. Each one failed the
 suite, with a message naming the behaviour that broke.
 
-Result: passed. 20 scripts, 662 checks.
+Result: passed.
+
+### 16. The `ssh_config` line syntax
+
+The tokenizer that turns one `ssh_config` line into a keyword and its arguments
+existed twice: in `__kh_scan_file` and, character for character with the
+identifiers renamed, inside `__ssh_resolve_table`. Both copies strip `\r` from
+CRLF files, cut `#` comments, normalise the `Keyword=value` form to
+`Keyword value`, lowercase the keyword and remove one layer of quotes per
+token. That is the same class of split-brain defect section 13 removed for the
+`known_hosts` parser, where a missing `\r` strip on one side made a CRLF file
+behave differently depending on which command read it.
+
+Both now call `__kh_parse_config_line` in `lib/ssh-config.sh`, next to
+`__kh_parse_known_line`. It reports the lowercased keyword in
+`__kh_config_keyword` and the keyword plus its unquoted arguments in
+`__kh_config_words`, which callers read as `[@]:1` — the same expansion the
+scanner already used, so nothing changes for the Bash 4.2 target.
+
+| File | Before | After |
+|---|---|---|
+| `lib/ssh-config.sh` | 316 | 329 |
+| `lib/ssh-resolve.sh` | 261 | 253 |
+
+Code lines, comments excluded. The change is deliberately not a line-count win:
+the shared function costs more than the nine inlined lines it replaces on each
+side, because it has to publish its result. What it buys is that the line
+syntax has exactly one definition.
+
+No behaviour change was intended and none was observed: the whole suite passed
+unchanged before new checks were added. Coverage was then pinned down from both
+sides — 20 new checks in `tests/ssh-config.sh` for the tokenizer itself (blank,
+comment-only and inline-comment lines, keyword case, `Keyword=value` with a
+second `=` inside the value, quoted values, CRLF endings, collapsed
+whitespace, a keyword without a value) and 7 in `tests/ssh-resolve-table.sh`
+proving the same syntax reaches the resolver's CONFIG column.
+
+Three mutations of the shared tokenizer confirm both consumers really go
+through it: dropping the `\r` strip, dropping the unquoting, and dropping the
+`=` normalisation each fail `tests/ssh-config.sh` **and**
+`tests/ssh-resolve-table.sh`.
+
+Result: passed. 20 scripts, 689 checks.
 
 ## Still to be checked manually
 

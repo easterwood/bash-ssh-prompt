@@ -179,6 +179,58 @@ assert_greater 'editing known_hosts advances the same inventory generation' \
 assert_contains 'the shared known_hosts snapshot is refreshed' \
     "$__ssh_inventory_known_content" 'second.example.com'
 
+# --- the shared config line tokenizer --------------------------------------
+
+# __kh_parse_config_line is the single place that knows how an ssh_config line
+# is spelled. The scanner above and __ssh_resolve_table both go through it, so
+# the contract is pinned down here rather than once per consumer.
+
+assert_status 'a blank line is rejected' 1 __kh_parse_config_line ''
+assert_status 'a whitespace-only line is rejected' 1 __kh_parse_config_line '   '
+assert_status 'a comment-only line is rejected' 1 __kh_parse_config_line '  # Host nope'
+assert_status 'an inline comment leaves the keyword' 0 \
+    __kh_parse_config_line 'Host web01 # the web server'
+
+__kh_parse_config_line 'Host web01 # the web server'
+assert_equal 'an inline comment is stripped' 2 "${#__kh_config_words[@]}"
+assert_equal 'the token before an inline comment survives' 'web01' \
+    "${__kh_config_words[1]}"
+
+__kh_parse_config_line 'HostName web.example.com'
+assert_equal 'the keyword is lowercased' 'hostname' "$__kh_config_keyword"
+assert_equal 'the value is the second word' 'web.example.com' \
+    "${__kh_config_words[1]}"
+
+__kh_parse_config_line 'HOSTNAME web.example.com'
+assert_equal 'an upper-case keyword is lowercased too' 'hostname' "$__kh_config_keyword"
+
+__kh_parse_config_line 'HostName=web.example.com'
+assert_equal 'the Keyword=value form yields the keyword' 'hostname' "$__kh_config_keyword"
+assert_equal 'the Keyword=value form yields the value' 'web.example.com' \
+    "${__kh_config_words[1]}"
+
+__kh_parse_config_line 'ProxyCommand=nc %h %p'
+assert_equal 'only the first = is a separator' 'proxycommand' "$__kh_config_keyword"
+assert_equal 'a later = stays inside the value' 'nc' "${__kh_config_words[1]}"
+
+__kh_parse_config_line 'HostName "quoted.example.com"'
+assert_equal 'surrounding quotes are stripped from a value' 'quoted.example.com' \
+    "${__kh_config_words[1]}"
+
+__kh_parse_config_line $'Host crlf01\r'
+assert_equal 'a CRLF line ending is stripped' 'crlf01' "${__kh_config_words[1]}"
+
+__kh_parse_config_line '  Host  web01   web02  '
+assert_equal 'indentation and repeated spaces collapse' 3 "${#__kh_config_words[@]}"
+assert_equal 'the first alias is read' 'web01' "${__kh_config_words[1]}"
+assert_equal 'the second alias is read' 'web02' "${__kh_config_words[2]}"
+
+__kh_parse_config_line 'Host web01'
+__kh_parse_config_line 'Compression'
+assert_equal 'a keyword without a value keeps only itself' 1 "${#__kh_config_words[@]}"
+assert_equal 'a rejected line does not leak the previous keyword' 'compression' \
+    "$__kh_config_keyword"
+
 assert_status 'legacy ssh-resolve-ips completion file is removed' 1 \
     test -e bashrc.d/completions/ssh-resolve-ips.bash
 assert_status 'legacy ssh-resolve-hosts completion file is removed' 1 \

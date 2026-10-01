@@ -194,7 +194,7 @@ __ssh_resolve_table() {
     local line line_number token key value resolved host
     local file config_line config_line_number keyword alias ref display_file hostname
     local search filter_lc
-    local -a host_tokens=() words=() current_aliases=() selected=()
+    local -a host_tokens=() current_aliases=() selected=()
     local -A key_seen=() config_ref_seen=() known_line_seen=()
     local -a key_order=()
     local -A config_refs=() known_lines=() values=()
@@ -254,19 +254,16 @@ __ssh_resolve_table() {
 
         while IFS= read -r config_line || [[ -n $config_line ]]; do
             ((config_line_number+=1))
-            config_line=${config_line%$'\r'}
-            config_line=${config_line%%#*}
-            config_line=${config_line/=/ }
-            read -r -a words <<< "$config_line"
-            ((${#words[@]})) || continue
+            # CRLF endings, comments, the "Keyword=value" form, keyword case
+            # and token quoting are lib/ssh-config.sh's business, so this table
+            # and the scanner can never disagree about what a line says.
+            __kh_parse_config_line "$config_line" || continue
 
-            keyword=${words[0],,}
+            keyword=$__kh_config_keyword
             case $keyword in
                 host)
                     current_aliases=()
-                    for token in "${words[@]:1}"; do
-                        token=${token#\"}
-                        token=${token%\"}
+                    for token in "${__kh_config_words[@]:1}"; do
                         [[ -n $token ]] || continue
 
                         if (( resolve_scan_host_tokens )) &&
@@ -284,9 +281,7 @@ __ssh_resolve_table() {
                     ;;
 
                 hostname)
-                    hostname=${words[1]-}
-                    hostname=${hostname#\"}
-                    hostname=${hostname%\"}
+                    hostname=${__kh_config_words[1]-}
                     [[ -n $hostname ]] || continue
                     # %h and friends would have to be expanded with OpenSSH's
                     # own substitution rules, so such tokens are left alone.
